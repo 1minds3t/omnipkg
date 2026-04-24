@@ -82,6 +82,7 @@ import json
 import logging
 import os
 import platform
+import re
 import socket
 import struct
 import sys
@@ -293,6 +294,9 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         self._flag            = watch_flag
         self._invalidate_fn   = invalidate_fn
         self._sp_path         = Path(site_packages_path).resolve()
+        # Label for log lines: extract python version from path, e.g. "py3.11"
+        _m = re.search(r'python(\d+\.\d+)', site_packages_path)
+        self._label = f"[py{_m.group(1)}]" if _m else f"[{self._sp_path.parent.name}]"
         self._debounce_lock   = threading.Lock()
         self._pending_timer: Optional[threading.Timer] = None
         self._last_our_write  = 0   # monotonic ms of last known FFI write
@@ -339,21 +343,24 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             if name.lower() not in official:
                 log.info("[fs_watcher] 🚨 EXTERNAL CULPRIT during op: %s", name)
                 culprit_count += 1
+                parsed = self._parse_dist_info_name(p)
+                culprit_installed = [list(parsed)] if (parsed and created) else []
+                culprit_removed   = [list(parsed)] if (parsed and not created) else []
                 try:
                     self._invalidate_fn(
                         site_packages_path=str(self._sp_path),
-                        installed=[],
-                        removed=[],
+                        installed=culprit_installed,
+                        removed=culprit_removed,
                     )
                 except Exception as exc:
-                    log.warning("[fs_watcher] culprit invalidation failed: %s", exc)
+                    log.warning("[fs_watcher] culprit patch failed: %s", exc)
                 finally:
                     self._flag.mark_clean()
             else:
                 log.debug("[fs_watcher] Verified change: %s was Omnipkg", name)
 
-        log.info("[fs_watcher] Op validated in %s. %d events, %d culprits.",
-                 self._sp_path, len(pending), culprit_count)
+        log.info("[fs_watcher] %s Op validated in %s. %d events, %d culprits.",
+                 self._label, self._sp_path, len(pending), culprit_count)
 
     def set_omnipkg_op_status(self, in_progress: bool):
         """Low-level setter — prefer start_omnipkg_op / end_omnipkg_op for daemon control."""
@@ -521,11 +528,12 @@ class SitePackagesEventHandler(FileSystemEventHandler):
 
         # 3. This is a REAL external change. Log it and invalidate.
         log.info(
-            "[fs_watcher] 🚨 EXTERNAL CHANGE in %s\n"
+            "[fs_watcher] %s 🚨 EXTERNAL CHANGE in %s\n"
             "   - Installed: %s\n"
             "   - Removed:   %s\n"
             "   - Triggered by: %s",
-            self._sp_path, installed, removed, list(created | deleted)[0].name
+            self._label, self._sp_path, installed, removed,
+            list(created | deleted)[0].name,
         )
 
         self._flag.mark_dirty()
@@ -611,6 +619,16 @@ class MtimeFallbackWatcher:
         self._pending_validation_events = set()  # (is_created: bool, path: str)
         self._last_op_end_time = 0.0             # Timestamp of last Omnipkg op
 
+
+    @staticmethod
+    def _dir_label(d: Path) -> str:
+        """Return a short label like '[py3.12]' derived from the watched dir path."""
+        for part in reversed(d.parts):
+            m = re.search(r'python(\d+\.\d+)', part)
+            if m:
+                return f"[py{m.group(1)}]"
+        return f"[{d.parent.name}]"
+
     def _current_mtime(self, path: Path) -> float:
         try:
             return path.stat().st_mtime
@@ -691,76 +709,173 @@ class MtimeFallbackWatcher:
                                 f.write(f"[{time.time()}] Ignored mtime change in {d} (was our own FFI write)\n")
                             continue   # our own FFI write, skip
                     
+                    # Parse name+version from each changed .dist-info dirname.
+                    # Skip ~ prefixed temp names — pip/uv write these atomically
+                    # (e.g. ~v_ffi-x.y.z.dist-info → uv_ffi-x.y.z.dist-info).
+                    # If we poll mid-rename we'd see the temp name as a real change;
+                    # ignore it and let the next poll catch the final name.
+                    installed_delta = []
+                    removed_delta   = []
                     for item in diff:
-                        msg = f"[{time.time()}] 🚨 EXTERNAL CHANGE: {item} in {d}\n"
+                        if item.startswith("~"):
+                            log.debug("%s Skipping temp rename artifact: %s", self._dir_label(d), item)
+                            continue
+                        parsed = SitePackagesEventHandler._parse_dist_info_name(Path(item))
+                        is_created = item in current_items
+                        msg = f"[{time.time()}] {self._dir_label(d)} 🚨 EXTERNAL CHANGE ({'CREATED' if is_created else 'REMOVED'}): {item} in {d}\n"
                         with open(debug_file, "a", encoding="utf-8") as f:
                             f.write(msg)
                         log.info(msg.strip())
                         print(msg.strip(), file=sys.stderr)
-                    
+                        if parsed:
+                            if is_created:
+                                installed_delta.append(list(parsed))
+                            else:
+                                removed_delta.append(list(parsed))
+
+                    # If every item in diff was a ~ temp artifact, nothing real changed.
+                    if not installed_delta and not removed_delta:
+                        continue
+
                     self._flag.mark_dirty()
                     try:
-                        self._invalidate(str(d), [], [])
+                        self._invalidate(str(d), installed_delta, removed_delta)
+                        patch_summary = f"installed={installed_delta} removed={removed_delta}"
+                        log.info(
+                            "[fs_watcher] %s ✅ patch sent: %s",
+                            self._dir_label(d), patch_summary,
+                        )
                         with open(debug_file, "a", encoding="utf-8") as f:
-                            f.write(f"[{time.time()}] Sent invalidation to daemon successfully.\n")
+                            f.write(f"[{time.time()}] Sent patch to daemon: {patch_summary}\n")
+
+
                     except Exception as exc:
+                        log.warning("[fs_watcher] %s ❌ Patch send failed: %s", self._dir_label(d), exc)
                         with open(debug_file, "a", encoding="utf-8") as f:
-                            f.write(f"[{time.time()}] Invalidation failed: {exc}\n")
+                            f.write(f"[{time.time()}] Patch failed: {exc}\n")
                     finally:
                         self._flag.mark_clean()
 
     def start_omnipkg_op(self):
-        log.info("[fs_watcher] Omnipkg operation START signal received. Entering collection mode.")
-        self._omnipkg_op_in_progress = True
+        """
+        Called when omnipkg signals it's about to start an FFI install.
+
+        We force an immediate snapshot refresh here — before the FFI touches
+        any dist-info — so our pre-op baseline is at most milliseconds old,
+        not up to 500ms stale from the poll cycle.  This costs one os.listdir()
+        per watched dir (~0.1ms total on NVMe) and runs in the watcher thread,
+        not on the install path.
+
+        The refreshed snapshot becomes _pre_op_snapshot.  end_omnipkg_op diffs
+        it against the post-op state to detect any external changes that snuck
+        in during the op window, comparing against the FFI's official changelog.
+        """
+        log.info("[fs_watcher] Omnipkg op START — refreshing snapshot baseline. (dirs=%s)",
+                 [self._dir_label(d) for d in self._dirs])
         self._pending_validation_events.clear()
 
-    def end_omnipkg_op(self, installed: list, removed: list):
-        # 🔥 TRUTH-TRACKING: Log exactly what the watcher received
-        log.info(f"[WATCHER-RECEIVER] Received end_op: INST={installed}, REM={removed}")
-
-        # NOTE: _omnipkg_op_in_progress is cleared LAST (after snapshot refresh)
-        # so the poll loop never wakes up to a cleared flag with a stale snapshot.
-
-        # 1. Log the official changelog provided by the FFI.
-        if installed or removed:
-            inst_str = ", ".join([f"{n}=={v}" for n, v in installed])
-            rem_str = ", ".join([f"{n}=={v}" for n, v in removed])
-            log.info(f"[fs_watcher] Omnipkg official changes: [INSTALLED: {inst_str or 'none'}] [REMOVED: {rem_str or 'none'}]")
-
-        official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
-        culprit_count = 0
-        for created, path_str in self._pending_validation_events:
-            p = Path(path_str)
-            stem = p.name[:-11] if p.name.endswith(".dist-info") else p.name
-            name = stem.rsplit("-", 1)[0] if "-" in stem else stem
-            if name.lower() not in official:
-                log.info("[fs_watcher] EXTERNAL CULPRIT: %s changed during op", name)
-                culprit_count += 1
-                self._flag.mark_dirty()
-                try: self._invalidate(str(p.parent), [], [])
-                finally: self._flag.mark_clean()
-            else:
-                log.debug("[fs_watcher] Verified change: %s was Omnipkg", name)
-
-        log.info("[fs_watcher] Omnipkg op FINISHED. Validated %d events, found %d culprits.",
-                 len(self._pending_validation_events), culprit_count)
-        self._pending_validation_events.clear()
-        self._last_op_end_time = time.monotonic()
-
-        # 🔥 Update snapshot+mtime BEFORE clearing the in_progress flag.
-        # The poll loop checks `_omnipkg_op_in_progress` first; if we cleared it
-        # before refreshing the snapshot it would see the old dist-info set and
-        # immediately fire a spurious "EXTERNAL CHANGE" for our own install.
+        # Force-refresh snapshot before marking in_progress so the poll loop
+        # doesn't race and overwrite with a stale read.
         for d in self._dirs:
             key = str(d)
-            if Path(d).exists():
+            if d.exists():
                 self._snapshot[key] = {
                     n for n in os.listdir(d)
                     if n.endswith(".dist-info") or n.endswith(".data")
                 }
                 self._mtimes[key] = self._current_mtime(d)
 
-        # ✅ Clear flag LAST — poll loop is now safe to run with fresh snapshot.
+        # Freeze a copy as the pre-op baseline AFTER the fresh read.
+        self._pre_op_snapshot: Dict[str, Set[str]] = {
+            key: set(val) for key, val in self._snapshot.items()
+        }
+
+        self._omnipkg_op_in_progress = True
+        log.debug("[fs_watcher] Snapshot baseline locked. Entering collection mode.")
+
+    def end_omnipkg_op(self, installed: list, removed: list):
+        """
+        Called with the FFI's official changelog once the op completes.
+
+        We diff _pre_op_snapshot against the freshly-read post-op state.
+        Anything in the diff that matches the official changelog → verified ours.
+        Anything that doesn't → external culprit, patch it out immediately.
+
+        For fast ops (<500ms) the poll never fired, so _pending_validation_events
+        is empty — but the snapshot diff still captures everything because we took
+        a fresh baseline at start_omnipkg_op.
+        """
+        log.info("[WATCHER-RECEIVER] Received end_op: INST=%s, REM=%s", installed, removed)
+
+        inst_str = ", ".join([f"{n}=={v}" for n, v in installed])
+        rem_str  = ", ".join([f"{n}=={v}" for n, v in removed])
+        log.debug("[fs_watcher] Omnipkg official changes: [INSTALLED: %s] [REMOVED: %s]",
+                 inst_str or "none", rem_str or "none")
+
+        official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
+
+        # Refresh snapshot post-op BEFORE clearing in_progress.
+        # The poll loop checks _omnipkg_op_in_progress first — if we cleared it
+        # before refreshing we'd get a spurious EXTERNAL CHANGE for our own install.
+        for d in self._dirs:
+            key = str(d)
+            if d.exists():
+                self._snapshot[key] = {
+                    n for n in os.listdir(d)
+                    if n.endswith(".dist-info") or n.endswith(".data")
+                }
+                self._mtimes[key] = self._current_mtime(d)
+
+        # Diff pre-op baseline against post-op state.
+        # Union with any events the poll managed to queue during a slow op.
+        pre_op = getattr(self, "_pre_op_snapshot", {})
+        disk_events: Set[tuple] = set()
+        for key, old_items in pre_op.items():
+            d = Path(key)
+            current_items = self._snapshot.get(key, old_items)
+            for item in (current_items - old_items):
+                disk_events.add((True,  str(d / item)))
+            for item in (old_items - current_items):
+                disk_events.add((False, str(d / item)))
+
+        all_events: Set[tuple] = self._pending_validation_events | disk_events
+
+        culprit_count  = 0
+        verified_count = 0
+        for created, path_str in all_events:
+            p    = Path(path_str)
+            if p.name.startswith("~"):
+                log.debug("[fs_watcher] Skipping temp rename artifact in culprit scan: %s", p.name)
+                continue
+            stem = p.name[:-len(".dist-info")] if p.name.endswith(".dist-info") else p.name
+            name = stem.rsplit("-", 1)[0] if "-" in stem else stem
+            if name.lower() not in official:
+                log.info("[fs_watcher] 🚨 EXTERNAL CULPRIT during op: %s", name)
+                culprit_count += 1
+                parsed = SitePackagesEventHandler._parse_dist_info_name(p)
+                c_inst = [list(parsed)] if (parsed and created)     else []
+                c_rem  = [list(parsed)] if (parsed and not created) else []
+                self._flag.mark_dirty()
+                try:
+                    log.info("[fs_watcher] patch→ site_packages=%s inst=%s rem=%s", str(p.parent), c_inst, c_rem)
+                    self._invalidate(str(p.parent), c_inst, c_rem)
+                    log.info("[fs_watcher] ✅ Culprit patch sent: %s", name)
+                except Exception as exc:
+                    log.warning("[fs_watcher] ❌ Culprit patch failed: %s", exc)
+                finally:
+                    self._flag.mark_clean()
+            else:
+                log.debug("[fs_watcher] ✓ Verified: %s was our change", name)
+                verified_count += 1
+
+        log.info("[fs_watcher] Op FINISHED. %d disk change(s): "
+                 "%d ours (verified), %d external culprit(s). patch target=%s",
+                 len(all_events), verified_count, culprit_count,
+                 [self._dir_label(Path(path_str)) for _, path_str in all_events],
+        )
+        self._pending_validation_events.clear()
+        self._last_op_end_time = time.monotonic()
+        # ✅ Clear LAST — poll loop is now safe with fresh snapshot.
         self._omnipkg_op_in_progress = False
         
     def stop(self):
@@ -783,21 +898,33 @@ class DaemonPatchSender:
         self._socket_path = socket_path
 
     def __call__(self, site_packages_path: str, installed: list, removed: list):
-        # existing patch_cache message
-        patch_msg = json.dumps({
-            "type": "patch_site_packages_cache",
-            "site_packages_path": site_packages_path,
-            "installed": installed,
-            "removed": removed,
-        })
-        # new sentinel piggyback — zero extra connections, worker has warm Redis
-        sentinel_msg = json.dumps({
-            "type": "kb_sentinel",
-            "installed": installed,   # [["numpy", "2.3.5"], ...]
-            "removed":   removed,
-        })
+        if installed or removed:
+            # Surgical delta patch — ~25µs in Rust, no disk I/O
+            patch_msg = json.dumps({
+                "type": "patch_site_packages_cache",
+                "site_packages_path": site_packages_path,
+                "installed": installed,
+                "removed": removed,
+            })
+            # Piggyback KB sentinel on same connection
+            sentinel_msg = json.dumps({
+                "type": "kb_sentinel",
+                "installed": installed,
+                "removed":   removed,
+            })
+            msgs = [patch_msg, sentinel_msg]
+        else:
+            # Delta unavailable (unparseable dist-info name or edge case) — full rescan
+            log.warning(
+                "[fs_watcher] No parseable delta for %s — falling back to full invalidate",
+                site_packages_path,
+            )
+            msgs = [json.dumps({
+                "type": "invalidate_site_packages_cache",
+                "site_packages_path": site_packages_path,
+            })]
         try:
-            for msg in (patch_msg, sentinel_msg):
+            for msg in msgs:
                 payload = len(msg).to_bytes(8, "big") + msg.encode()
                 if platform.system() == "Windows":
                     self._send_windows(payload)
@@ -805,6 +932,14 @@ class DaemonPatchSender:
                     self._send_unix(payload)
         except Exception as exc:
             log.warning("[fs_watcher] daemon message failed: %s", exc)
+
+    def _send_raw(self, msg: str):
+        """Send an arbitrary JSON message string to the daemon socket."""
+        payload = len(msg).to_bytes(8, "big") + msg.encode()
+        if platform.system() == "Windows":
+            self._send_windows(payload)
+        else:
+            self._send_unix(payload)
 
     def _send_unix(self, payload: bytes):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
