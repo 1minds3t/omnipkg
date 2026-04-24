@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to build wheels for (e.g., v2.0.7)'
+        description: 'Release tag to build wheels for (e.g., v3.1.0)'
         required: true
         type: string
       upload_to_pypi:
@@ -26,126 +26,117 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # --- LINUX x86_64 ---
-          - { platform: linux_x86_64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          - { platform: linux_x86_64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false }
-          # --- LINUX ARM64 ---
-          - { platform: linux_aarch64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - { platform: linux_aarch64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          # --- LINUX ARMv7 ---
-          - { platform: linux_armv7, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          # --- LINUX ppc64le ---
-          - { platform: linux_ppc64le, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - { platform: linux_ppc64le, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          # --- LINUX s390x ---
-          - { platform: linux_s390x, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - { platform: linux_s390x, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          # --- LINUX riscv64 ---
-          - { platform: linux_riscv64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - { platform: linux_riscv64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          # --- LINUX i686 ---
-          - { platform: linux_i686, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - { platform: linux_i686, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          # --- macOS x86_64 ---
-          - { platform: macos_x86_64, py_ver: "3.7",  py_tag: "cp37",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.8",  py_tag: "cp38",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.9",  py_tag: "cp39",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.10", py_tag: "cp310", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.11", py_tag: "cp311", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.12", py_tag: "cp312", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.13", py_tag: "cp313", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.14", py_tag: "cp314", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          - { platform: macos_x86_64, py_ver: "3.15", py_tag: "cp315", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false }
-          # --- macOS ARM64 ---
-          - { platform: macos_arm64, py_ver: "3.7",  py_tag: "cp37",  runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.8",  py_tag: "cp38",  runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.9",  py_tag: "cp39",  runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.10", py_tag: "cp310", runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.11", py_tag: "cp311", runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.12", py_tag: "cp312", runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.13", py_tag: "cp313", runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.14", py_tag: "cp314", runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          - { platform: macos_arm64, py_ver: "3.15", py_tag: "cp315", runner: macos-15, cibw_archs: arm64, use_qemu: false }
-          # --- WINDOWS x64 ---
-          - { platform: win_amd64, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - { platform: win_amd64, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          # --- WINDOWS ARM64 ---
-          - { platform: win_arm64, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          - { platform: win_arm64, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-          # --- WINDOWS 32-bit ---
-          - { platform: win32, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: Win32, use_qemu: false }
-          - { platform: win32, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: Win32, use_qemu: false }
+          # ── LINUX x86_64 ───────────────────────────────────────────────────
+          - { platform: linux_x86_64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
+          - { platform: linux_x86_64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: true  }
+          - { platform: linux_x86_64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: true  }
+          # ── LINUX aarch64 ──────────────────────────────────────────────────
+          - { platform: linux_aarch64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
+          - { platform: linux_aarch64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: true  }
+          - { platform: linux_aarch64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: true  }
+          # ── LINUX armv7l ───────────────────────────────────────────────────
+          - { platform: linux_armv7, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
+          - { platform: linux_armv7, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: true  }
+          - { platform: linux_armv7, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: true  }
+          # ── LINUX ppc64le ──────────────────────────────────────────────────
+          - { platform: linux_ppc64le, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
+          - { platform: linux_ppc64le, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: true  }
+          - { platform: linux_ppc64le, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: true  }
+          # ── LINUX s390x ────────────────────────────────────────────────────
+          - { platform: linux_s390x, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
+          - { platform: linux_s390x, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: true  }
+          - { platform: linux_s390x, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: true  }
+          # ── LINUX i686 ─────────────────────────────────────────────────────
+          - { platform: linux_i686, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
+          - { platform: linux_i686, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: true  }
+          - { platform: linux_i686, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: true  }
+          # ── LINUX riscv64 — only 3.10+ have prebuilt QEMU images ───────────
+          - { platform: linux_riscv64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
+          - { platform: linux_riscv64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
+          - { platform: linux_riscv64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
+          - { platform: linux_riscv64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
+          # ── macOS x86_64 ───────────────────────────────────────────────────
+          - { platform: macos_x86_64, py_ver: "3.7",  py_tag: "cp37",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.8",  py_tag: "cp38",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.9",  py_tag: "cp39",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.10", py_tag: "cp310", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.11", py_tag: "cp311", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.12", py_tag: "cp312", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.13", py_tag: "cp313", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
+          - { platform: macos_x86_64, py_ver: "3.14", py_tag: "cp314", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: true  }
+          - { platform: macos_x86_64, py_ver: "3.15", py_tag: "cp315", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: true  }
+          # ── macOS arm64 ────────────────────────────────────────────────────
+          - { platform: macos_arm64, py_ver: "3.7",  py_tag: "cp37",  runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.8",  py_tag: "cp38",  runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.9",  py_tag: "cp39",  runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.10", py_tag: "cp310", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.11", py_tag: "cp311", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.12", py_tag: "cp312", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.13", py_tag: "cp313", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
+          - { platform: macos_arm64, py_ver: "3.14", py_tag: "cp314", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: true  }
+          - { platform: macos_arm64, py_ver: "3.15", py_tag: "cp315", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: true  }
+          # ── Windows AMD64 ──────────────────────────────────────────────────
+          - { platform: win_amd64, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
+          - { platform: win_amd64, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: true  }
+          - { platform: win_amd64, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: true  }
+          # ── Windows ARM64 — only 3.9+ supported ───────────────────────────
+          - { platform: win_arm64, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
+          - { platform: win_arm64, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
+          - { platform: win_arm64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
+          - { platform: win_arm64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
+          - { platform: win_arm64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
+          - { platform: win_arm64, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: true  }
+          - { platform: win_arm64, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: true  }
+          # ── Windows x86 32-bit — cibw uses 'x86' not 'Win32' ──────────────
+          - { platform: win32, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
+          - { platform: win32, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
+          - { platform: win32, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
+          - { platform: win32, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
+          - { platform: win32, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
+          - { platform: win32, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
+          - { platform: win32, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
 
     steps:
       - name: Checkout at release tag
@@ -159,6 +150,17 @@ jobs:
         with:
           platforms: all
 
+      # Compute CIBW_ENABLE — prerelease pythons need explicit opt-in in 2.21+
+      - name: Set cibw enable flags
+        id: cibw_flags
+        shell: bash
+        run: |
+          if [ "${{ matrix.prerelease }}" = "true" ]; then
+            echo "enable=cpython-prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "enable=" >> $GITHUB_OUTPUT
+          fi
+
       # ── Attempt 1: full build with C extension ────────────────────────────
       - name: Build wheel (attempt 1 — with C ext)
         id: build_attempt1
@@ -166,13 +168,16 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
-          CIBW_PRERELEASE_PYTHONS: "1"
-          CIBW_BUILD: ${{ matrix.py_tag }}-*
-          CIBW_ARCHS: ${{ matrix.cibw_archs }}
+          CIBW_BUILD: "${{ matrix.py_tag }}-*"
+          CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
+          CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
           CIBW_TEST_COMMAND: "omnipkg --version"
+          # Skip test on i686/x86 — cryptography dep has no prebuilt i386 wheels
+          # and building from source requires Rust which isn't in the test venv
+          CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} || cp {wheel} {dest_dir}"
-          # Use newer images to avoid musllinux locale.getencoding() bug
+          # Newer images fix musllinux locale.getencoding() bug in 2025.02.28-1
           CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
           CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
           CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
@@ -184,18 +189,19 @@ jobs:
           CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:latest"
           CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:latest"
 
-      # ── Attempt 2: fallback — pure Python wheel (SKIP_C_EXT=1) ───────────
-      - name: Build wheel (attempt 2 — pure Python fallback)
+      # ── Attempt 2: pure Python fallback (SKIP_C_EXT=1) ───────────────────
+      - name: Build wheel (attempt 2 — SKIP_C_EXT=1 fallback)
         id: build_attempt2
         if: steps.build_attempt1.outcome == 'failure'
         uses: pypa/cibuildwheel@v2.23.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=1"
-          CIBW_PRERELEASE_PYTHONS: "1"
-          CIBW_BUILD: ${{ matrix.py_tag }}-*
-          CIBW_ARCHS: ${{ matrix.cibw_archs }}
+          CIBW_BUILD: "${{ matrix.py_tag }}-*"
+          CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
+          CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
           CIBW_TEST_COMMAND: "omnipkg --version"
+          CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} || cp {wheel} {dest_dir}"
           CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
           CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
@@ -208,16 +214,17 @@ jobs:
           CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:latest"
           CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:latest"
 
-      # ── Report which attempt succeeded ────────────────────────────────────
       - name: Report build result
         if: always()
+        shell: bash
         run: |
           if [ "${{ steps.build_attempt1.outcome }}" = "success" ]; then
-            echo "✅ Built with C extension (attempt 1)"
+            echo "✅ Built with C extension — ${{ matrix.platform }} py${{ matrix.py_ver }}"
           elif [ "${{ steps.build_attempt2.outcome }}" = "success" ]; then
-            echo "⚠️  Built pure-Python fallback (C ext failed) — platform: ${{ matrix.platform }} py: ${{ matrix.py_ver }}"
+            echo "⚠️  Pure-Python fallback used — ${{ matrix.platform }} py${{ matrix.py_ver }}"
           else
-            echo "❌ Both attempts failed — platform: ${{ matrix.platform }} py: ${{ matrix.py_ver }}"
+            echo "❌ Both attempts failed — ${{ matrix.platform }} py${{ matrix.py_ver }}"
+            exit 1
           fi
 
       - name: Upload wheel as artifact
