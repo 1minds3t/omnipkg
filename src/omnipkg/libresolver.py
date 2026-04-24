@@ -1,3 +1,4 @@
+import ast
 from __future__ import annotations
 
 from omnipkg.common_utils import safe_print
@@ -521,7 +522,7 @@ safe_print("OMNIPKG_TEST_RESULT:" + str(result))
             # Parse result
             for line in proc.stdout.splitlines():
                 if line.startswith("OMNIPKG_TEST_RESULT:"):
-                    return eval(line.split(":", 1)[1])
+                    return ast.literal_eval(line.split(":", 1)[1])
 
             return {
                 "success": False,
