@@ -5,14 +5,30 @@ run(cmd) -> (rc, installed, removed, err)
   removed:   list of (name, version) tuples
   err:       error string (empty on success)
 """
-import os as _os
-import sys as _sys
-_sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '_native'))
-from uv_ffi import run as _run_native
+try:
+    # Prefer the properly installed wheel
+    from uv_ffi.uv_ffi import (
+        run as _run_native,
+        get_site_packages_cache,
+        invalidate_site_packages_cache,
+        patch_site_packages_cache,
+        clear_registry_cache,
+    )
+except ImportError:
+    # Fall back to vendored .so
+    import os as _os, sys as _sys
+    _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '_native'))
+    from uv_ffi import (
+        run as _run_native,
+        get_site_packages_cache,
+        invalidate_site_packages_cache,
+        patch_site_packages_cache,
+        clear_registry_cache,
+    )
 
 def run(cmd: str) -> tuple:
     """Call uv FFI directly — returns (rc, installed, removed, err).
-    Gracefully handles old 3-tuple .so builds by padding err='' ."""
+    Gracefully handles old 3-tuple .so builds by padding err=''."""
     result = _run_native(cmd)
     if len(result) == 3:
         return (result[0], result[1], result[2], '')
@@ -26,32 +42,12 @@ try:
 except Exception:
     __version__ = "unknown"
 
-# ── Optional exports: present only if the .so was built with them ────────────
-# Imported lazily so that an older .so without these functions doesn't cause
-# an ImportError on the whole module and break FFI availability detection.
-
-def _try_import(name: str):
-    try:
-        import uv_ffi as _m
-        return getattr(_m, name)
-    except (ImportError, AttributeError):
-        return None
-
-_invalidate = _try_import('invalidate_site_packages_cache')
-if _invalidate is not None:
-    invalidate_site_packages_cache = _invalidate
-
-_patch = _try_import('patch_site_packages_cache')
-if _patch is not None:
-    patch_site_packages_cache = _patch
-_gspc = _try_import('get_site_packages_cache')
-if _gspc is not None:
-    get_site_packages_cache = _gspc
-
-_clear_reg = _try_import('clear_registry_cache')
-if _clear_reg is not None:
-    clear_registry_cache = _clear_reg
-
-_clear_reg = _try_import('clear_registry_cache')
-if _clear_reg is not None:
-    clear_registry_cache = _clear_reg
+__all__ = [
+    "run",
+    "run_capture",
+    "get_site_packages_cache",
+    "invalidate_site_packages_cache",
+    "patch_site_packages_cache",
+    "clear_registry_cache",
+    "__version__",
+]
