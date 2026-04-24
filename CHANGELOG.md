@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.0] — 2026-04-24
+
+The Unified Daemon & IPC Synchronization Release
+
+**The Unified Daemon & IPC Synchronization Release**
+
+This release resolves critical synchronization bugs between the master daemon and managed worker subprocesses, ensuring perfect cache coherency and file system tracking across all supported Python versions (3.7 - 3.15).
+
+* **Per-Interpreter Native Extensions:** Removed the static FFI import fallback. Omnipkg now dynamically searches the running interpreter's `site-packages` and natively loads the correct `uv_ffi.abi3.so` wheel for that specific Python version. This guarantees the FFI engine operates on the correct memory space and layout for the target environment, rather than blindly defaulting to the daemon's native extension.
+
+* **Unified Socket Routing:** Fixed a bug where managed worker subprocesses would attempt to compute their own isolated daemon hash (which didn't exist) instead of communicating with the master daemon. All managed workers now inherit `OMNIPKG_ENV_ID_OVERRIDE`, ensuring they route their `start_omnipkg_op` and `end_omnipkg_op` signals directly to the native master daemon.
+* **Microsecond Filesystem Snapshots:** Overhauled the `MtimeFallbackWatcher`. It now takes a high-precision snapshot of the environment *immediately* upon receiving the `START` signal. At the `END` signal, it diffs this baseline against the post-op state and unions the result with the official FFI changelog. This guarantees zero dropped events and completely eliminates false-positive "External Culprit" warnings during ultra-fast (<100ms) FFI installs.
+* **Surgical Cache Patching:** The Python wrapper now sends precise, name+version parsed deltas to the daemon for `patch_site_packages_cache`, avoiding expensive full-cache invalidations whenever possible.
+
+* **Submodule Versioning:** Bumped the `uv-ffi` floor requirement to `v0.10.8.post7`. The Python wrapper has been cleaned up and strictly expects the modern 4-tuple return signature (`rc, inst, rem, err`).
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/_vendor/uv_ffi/__init__.py (92 lines changed)
+- UPDATE: src/omnipkg/core.py (134 lines changed)
+- UPDATE: src/omnipkg/isolation/fs_watcher.py (257 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (1 lines changed)
+
+**⚙️ Configuration:**
+- pyproject.toml (2 lines)
+
+**Additional Changes:**
+- chore: update toml to prepare for release
+- feat: fix uv-ffi per-interpreter .so loading and daemon IPC for managed workers
+
+**Bug Fixes:**
+- fix: resolve daemon interactivity and stream fileno crashes
+- fix: rename locale -> locales to prevent stdlib shadowing on py3.11
+- fix: prevent setup-miniconda from nuking host shell profiles on self-hosted runner
+
+**Updates:**
+- Update macOS runners and Python versions in workflow
+- Update build requirements in meta-platforms.yaml
+- Update cibuildwheel version to v2.23.0
+- Update publish2.yml
+- Update GitHub Actions workflow for wheel building
+- Update Python versions and improve wheel build process
+- Update ARM32 verification workflow with permissions
+
+_72 files changed, 926 insertions(+), 801 deletions(-)_
+
 ## [3.0.0] — 2026-04-16
 
 The Reproducible State Engine & Native C-Dispatcher Update
