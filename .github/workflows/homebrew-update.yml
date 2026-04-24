@@ -36,7 +36,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const workflow_id = 'publish-to-pypi.yml';  // <-- CHANGE TO YOUR ACTUAL FILENAME
+            const workflow_id = 'publish.yml';  // <-- CHANGE TO YOUR ACTUAL FILENAME
             const version = '${{ steps.set-version.outputs.version }}';
             const max_wait_minutes = 60;               // Adjust if your builds are very long
             const check_interval = 30000;              // 30 seconds
