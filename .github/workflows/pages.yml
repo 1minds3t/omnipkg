@@ -4,24 +4,19 @@ on:
   push:
     branches:
       - main
-    # Only trigger when docs or config files change
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
       - '.readthedocs.yaml'
       - 'docs/requirements.txt'
-      - '.github/workflows/pages.yml'  # Update this to match your actual filename
-  
-  # Allow manual trigger from Actions tab
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -32,12 +27,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Cache pip dependencies
         uses: actions/cache@v3
         with:
@@ -45,14 +40,114 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('docs/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-      
+
       - name: Install MkDocs and dependencies
-        run: |
-          pip install -r docs/requirements.txt
-      
+        run: pip install -r docs/requirements.txt
+
       - name: Build MkDocs site
         run: mkdocs build
-      
+
+      # Inject wheel index AFTER mkdocs build so MkDocs can't clobber it.
+      # Wheels are served at: https://1minds3t.github.io/omnipkg/wheels/
+      # pip install cmd:  pip install omnipkg --extra-index-url https://1minds3t.github.io/omnipkg/wheels/
+      - name: Inject PEP 503 wheel index into site/wheels/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'EOF'
+          import os, json, urllib.request
+
+          repo  = os.environ["REPO"]
+          token = os.environ["GH_TOKEN"]
+
+          PKG_SLUG  = "omnipkg"
+          PKG_PYPI  = "omnipkg"
+          SITE_DIR  = "site"
+          INDEX_DIR = f"{SITE_DIR}/wheels"
+
+          def gh(url):
+              req = urllib.request.Request(
+                  url, headers={"Authorization": f"token {token}",
+                  "Accept": "application/vnd.github+json"})
+              try:
+                  return json.loads(urllib.request.urlopen(req).read())
+              except Exception as e:
+                  print(f"GH API error: {e}")
+                  return None
+
+          def pypi_wheels(pkg):
+              try:
+                  req = urllib.request.Request(f"https://pypi.org/pypi/{pkg}/json")
+                  data = json.loads(urllib.request.urlopen(req).read())
+                  out = []
+                  for ver, files in data["releases"].items():
+                      for f in files:
+                          if f["filename"].endswith(".whl"):
+                              out.append((ver, f["filename"], f["url"]))
+                  return out
+              except Exception as e:
+                  print(f"PyPI fetch skipped ({e})")
+                  return []
+
+          gh_wheels = []
+          page = 1
+          while True:
+              rels = gh(f"https://api.github.com/repos/{repo}/releases?per_page=50&page={page}")
+              if not rels:
+                  break
+              for rel in rels:
+                  for asset in rel.get("assets", []):
+                      if asset["name"].endswith(".whl"):
+                          gh_wheels.append((rel["tag_name"], asset["name"], asset["browser_download_url"]))
+              if len(rels) < 50:
+                  break
+              page += 1
+
+          pip_wheels = pypi_wheels(PKG_PYPI)
+
+          seen = {}
+          for tag, name, url in pip_wheels:
+              seen[name] = (tag, name, url)
+          for tag, name, url in gh_wheels:
+              seen[name] = (tag, name, url)
+          all_wheels = sorted(seen.values(), key=lambda x: (x[0], x[1]))
+
+          os.makedirs(f"{INDEX_DIR}/{PKG_SLUG}", exist_ok=True)
+
+          links = "\n".join(
+              f'  <a href="{url}" data-requires-python=">=3.8">{name}</a><br>'
+              for _, name, url in all_wheels
+          )
+          pkg_html = (
+              "<!DOCTYPE html>\n<html>\n"
+              f"  <head><title>Links for {PKG_SLUG}</title></head>\n"
+              "  <body>\n"
+              f"    <h1>Links for {PKG_SLUG}</h1>\n"
+              + links + "\n"
+              "  </body>\n</html>\n"
+          )
+          with open(f"{INDEX_DIR}/{PKG_SLUG}/index.html", "w") as f:
+              f.write(pkg_html)
+
+          root_html = (
+              "<!DOCTYPE html>\n<html>\n"
+              f"  <head><title>{PKG_SLUG} wheel index</title></head>\n"
+              "  <body>\n"
+              f"    <h1>{PKG_SLUG} wheel index</h1>\n"
+              f'    <p>Mainstream wheels: <a href="https://pypi.org/project/{PKG_PYPI}/">PyPI</a></p>\n'
+              "    <p>Extra platform wheels (exotic/extended) are hosted here.</p>\n"
+              f'    <pre>pip install {PKG_SLUG} --extra-index-url https://1minds3t.github.io/omnipkg/wheels/</pre>\n'
+              f'    <p><a href="{PKG_SLUG}/">Browse all {len(all_wheels)} wheels</a>'
+              f' ({len(pip_wheels)} PyPI + {len(gh_wheels)} GH Releases)</p>\n'
+              "  </body>\n</html>\n"
+          )
+          with open(f"{INDEX_DIR}/index.html", "w") as f:
+              f.write(root_html)
+
+          print(f"Wheel index: {len(all_wheels)} wheels -> {INDEX_DIR}/")
+          EOF
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
