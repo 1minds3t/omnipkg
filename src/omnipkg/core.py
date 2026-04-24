@@ -16052,6 +16052,9 @@ print(json.dumps(results))
         
         🔥 CRITICAL FIX: Added --no-cache-dir to prevent /tmp bloat from pip's cache!
         """
+        _dbg_flag = os.environ.get("OMNIPKG_DEBUG") == "1"
+        def _dbg_print(msg, **kwargs):
+            if _dbg_flag: print(f"[DEBUG-CORE] {msg}", flush=True, **kwargs)
         if not packages:
             return 0, {"stdout": "", "stderr": ""}
 
@@ -16082,6 +16085,10 @@ print(json.dumps(results))
 
         # ── UV INSTALL: FFI → daemon → subprocess → pip ──────────────
         # Cache uv_exe and cache_dir on self — never pay for shutil.which() twice
+        _target_py = self.config.get("python_executable", sys.executable)
+        _ffi_cache_attr = f"_uv_ffi_run_{_target_py.replace('/', '_').replace('.', '_')}"
+        if hasattr(self, _ffi_cache_attr):
+            self._uv_ffi_run = getattr(self, _ffi_cache_attr)
         if not hasattr(self, "_uv_exe_cached"):
             import shutil as _shutil_init
             _exe = self.config.get("uv_executable") or _shutil_init.which("uv") or ""
@@ -16107,8 +16114,11 @@ print(json.dumps(results))
                 os.environ["UV_TMPDIR"] = _tf.gettempdir()
             # Pre-import and cache FFI + failure detector — never pay import cost on hot path
             try:
-                from omnipkg._vendor.uv_ffi import run as _ffi_run
-                self._uv_ffi_run = _ffi_run
+                import omnipkg._vendor.uv_ffi as _uv_ffi_mod
+                self._uv_ffi_run = _uv_ffi_mod.run
+                self._uv_ffi_so_path = getattr(_uv_ffi_mod, '_loaded_so_path', 'unknown')
+                _dbg_print(f"[UV-FFI-IDENTITY] loaded .so: {self._uv_ffi_so_path}", file=sys.stderr)
+                _dbg_print(f"[UV-FFI-IDENTITY] worker python: {sys.executable}", file=sys.stderr)
             except ImportError:
                 self._uv_ffi_run = None
             try:
@@ -16168,7 +16178,7 @@ print(json.dumps(results))
                 else:
                     _uv_packages.append(_p)
             _uv_args += _uv_packages
-            _dbg(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
+            _dbg_print(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
             # ── PATH 1: FFI in-process ─────────────────────────────────
             if self._uv_ffi_run is not None:
                 daemon_client = None
@@ -16190,9 +16200,11 @@ print(json.dumps(results))
 
                         from omnipkg.isolation.worker_daemon import DaemonClient
                         daemon_client = DaemonClient(auto_start=False)
-                        daemon_client.start_omnipkg_op()
+                        _dbg_print(f"[FS-WATCHER-CLIENT] socket_path={__import__('omnipkg.isolation.worker_daemon', fromlist=['']).DEFAULT_SOCKET}")
+                        _start_result = daemon_client.start_omnipkg_op()
+                        _dbg_print(f"[FS-WATCHER-CLIENT] start_op result={_start_result} for {_sp_path}")
                     except Exception as e:
-                        _dbg(f"[FS-WATCHER-CLIENT] Failed to signal start_op: {e}")
+                        _dbg_print(f"[FS-WATCHER-CLIENT] Failed to signal start_op: {e}")
                         daemon_client = None
 
                 try:
@@ -16202,7 +16214,9 @@ print(json.dumps(results))
                     _ffi_cmd = " ".join(_uv_args)
                     import time as _t_imp
                     _t_pre_ffi = _t_imp.perf_counter()
+                    _py_target = next((a for i, a in enumerate(_uv_args) if _uv_args[i-1] == "--python"), "NOT SET")
                     safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
+                    _dbg_print(f"[UV-FFI-IDENTITY] .so={getattr(self, '_uv_ffi_so_path', 'cached')} | worker={sys.executable} | targeting --python={_py_target}", file=sys.stderr)
                     _t0 = _t_imp.perf_counter()
 
                     # ── START CAPTURE (fd-level, catches Rust writes) ──
@@ -16289,6 +16303,7 @@ print(json.dumps(results))
             try:
                 from omnipkg.isolation.worker_daemon import DaemonClient
                 _dc = DaemonClient(auto_start=False)
+                _dbg_print(f"[FS-WATCHER-CLIENT] socket_path={__import__('omnipkg.isolation.worker_daemon', fromlist=['']).DEFAULT_SOCKET}")
                 _req = {
                     "type":       "run_uv",
                     "uv_exe":     uv_exe,

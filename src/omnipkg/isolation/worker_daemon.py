@@ -2200,6 +2200,7 @@ class PersistentWorker:
             env["OMNIPKG_SITE_PACKAGES"] = self.site_packages
         if os.environ.get("UV_FFI_PROFILE"):
             env["UV_FFI_PROFILE"] = "1"
+        env["OMNIPKG_ENV_ID_OVERRIDE"] = _VENV_TEMP_DIR.split(os.sep)[-1]
         # 🔑 ENSURE per-interpreter config file exists next to this interpreter.
         # Without this, the worker falls back to global config (wrong multiversion_base).
         # _ensure_worker_config writes a lightweight JSON that ConfigManager finds first.
