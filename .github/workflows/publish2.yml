@@ -166,8 +166,10 @@ jobs:
         continue-on-error: true
         uses: pypa/cibuildwheel@v2.23.0
         env:
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
-          CIBW_BEFORE_BUILD: "pip install --upgrade pip 'packaging>=23.0' 'setuptools>=50.0,<70.0' 'wheel>=0.43.0'"
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0 PYTHONSTARTUP=/tmp/locale_shim.py"
+          CIBW_BEFORE_BUILD: >
+            echo "import locale; locale.getencoding = lambda: 'UTF-8'" > /tmp/locale_shim.py &&
+            pip install --upgrade pip 'packaging>=23.0' 'setuptools>=50.0,<70.0' 'wheel>=0.43.0'
           CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation -v"
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
