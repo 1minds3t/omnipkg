@@ -2,6 +2,12 @@
 """
 Minimal setup.py bridge for Python 3.7 compatibility.
 """
+# Compatibility shim — locale.getencoding() added in Python 3.11
+# Without this, C dispatcher compilation silently skips in manylinux containers
+import locale
+if not hasattr(locale, 'getencoding'):
+    locale.getencoding = lambda: 'UTF-8'
+
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools.command.install import install
