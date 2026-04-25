@@ -167,12 +167,20 @@ jobs:
         continue-on-error: true
         uses: pypa/cibuildwheel@v2.23.0
         env:
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           CIBW_BEFORE_BUILD: "pip install 'packaging>=23.0'"
+          CIBW_ENVIRONMENT: >
+            OMNIPKG_SKIP_C_EXT=0
+            PIP_EXTRA_INDEX_URL=""
+            CIBW_BEFORE_BUILD: >
+            pip install --upgrade pip 'packaging>=23.0' 'wheel>=0.43.0' &&
+            python -c "import locale; locale.getencoding = lambda: 'UTF-8'" 2>/dev/null || true
+            pip install --upgrade 'packaging>=23.0' pip &&
+            pip install --upgrade 'packaging>=23.0' --target /tmp/pip-build-env-*/overlay/ 2>/dev/null || true
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
           CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
+          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
           CIBW_TEST_COMMAND: "omnipkg --version"
           # Skip test on i686/x86 — cryptography dep has no prebuilt i386 wheels
           # and building from source requires Rust which isn't in the test venv
