@@ -1,5 +1,5 @@
-import ast
 from __future__ import annotations
+import ast
 
 from omnipkg.common_utils import safe_print
 
