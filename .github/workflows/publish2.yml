@@ -161,32 +161,21 @@ jobs:
             echo "enable=" >> $GITHUB_OUTPUT
           fi
 
-      # ── Attempt 1: full build with C extension ────────────────────────────
       - name: Build wheel (attempt 1 — with C ext)
         id: build_attempt1
         continue-on-error: true
         uses: pypa/cibuildwheel@v2.23.0
         env:
-          CIBW_BEFORE_BUILD: "pip install 'packaging>=23.0'"
-          CIBW_ENVIRONMENT: >
-            OMNIPKG_SKIP_C_EXT=0
-            PIP_EXTRA_INDEX_URL=""
-            CIBW_BEFORE_BUILD: >
-            pip install --upgrade pip 'packaging>=23.0' 'wheel>=0.43.0' &&
-            python -c "import locale; locale.getencoding = lambda: 'UTF-8'" 2>/dev/null || true
-            pip install --upgrade 'packaging>=23.0' pip &&
-            pip install --upgrade 'packaging>=23.0' --target /tmp/pip-build-env-*/overlay/ 2>/dev/null || true
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
+          CIBW_BEFORE_BUILD: "pip install --upgrade pip 'packaging>=23.0' 'wheel>=0.43.0'"
+          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
           CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
-          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
           CIBW_TEST_COMMAND: "omnipkg --version"
-          # Skip test on i686/x86 — cryptography dep has no prebuilt i386 wheels
-          # and building from source requires Rust which isn't in the test venv
           CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
-          # Newer images fix musllinux locale.getencoding() bug in 2025.02.28-1
           CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
           CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
           CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
@@ -198,13 +187,14 @@ jobs:
           CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
           CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
 
-      # ── Attempt 2: pure Python fallback (SKIP_C_EXT=1) ───────────────────
       - name: Build wheel (attempt 2 — SKIP_C_EXT=1 fallback)
         id: build_attempt2
         if: steps.build_attempt1.outcome == 'failure'
         uses: pypa/cibuildwheel@v2.23.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=1"
+          CIBW_BEFORE_BUILD: "pip install --upgrade pip 'packaging>=23.0' 'wheel>=0.43.0'"
+          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
@@ -222,6 +212,7 @@ jobs:
           CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:2025.02.28-1"
           CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
           CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
+          
       - name: Report build result
         if: always()
         shell: bash
