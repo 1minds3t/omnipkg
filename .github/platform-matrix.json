@@ -1,12 +1,12 @@
 {
   "arm32": {
     "verified": true,
-    "version": "3.0.0",
-    "python_versions": "3.9 (Bullseye), 3.11 (Bookworm), 3.13 (Trixie)",
-    "cp39_bullseye":  true,
+    "version": "3.1.1",
+    "python_versions": "3.11 (Bookworm), 3.13 (Trixie)",
+    "cp39_bullseye":  false,
     "cp311_bookworm": true,
     "cp313_trixie":   true,
-    "install_command": "pip3 install omnipkg==3.0.0",
+    "install_command": "pip3 install omnipkg==3.1.1",
     "platforms": ["Raspberry Pi", "Raspbian Bullseye", "Raspbian Bookworm", "Raspbian Trixie"]
   }
 }
