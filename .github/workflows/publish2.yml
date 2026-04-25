@@ -168,7 +168,7 @@ jobs:
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           CIBW_BEFORE_BUILD: "pip install --upgrade pip 'packaging>=23.0' 'setuptools>=50.0,<70.0' 'wheel>=0.43.0'"
-          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
+          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation -v"
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
