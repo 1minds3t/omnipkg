@@ -157,35 +157,22 @@ jobs:
             echo "enable=" >> $GITHUB_OUTPUT
           fi
 
-<<<<<<< Updated upstream
-      - name: Build wheel (attempt 1 — with C ext)
-        id: build_attempt1
-        continue-on-error: true
-=======
       # ── Build wheel — hard fail, no fallback ─────────────────────────────
       - name: Build wheel
->>>>>>> Stashed changes
         uses: pypa/cibuildwheel@v2.23.0
         env:
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0 PYTHONSTARTUP=/tmp/locale_shim.py"
-          CIBW_BEFORE_BUILD: >
-            echo "import locale; locale.getencoding = lambda: 'UTF-8'" > /tmp/locale_shim.py &&
-            pip install --upgrade pip 'packaging>=23.0' 'setuptools>=50.0,<70.0' 'wheel>=0.43.0'
-          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation -v"
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
+          CIBW_BEFORE_BUILD: "pip install 'packaging>=23.0'"
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
           CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
           CIBW_TEST_COMMAND: "omnipkg --version"
           CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
-<<<<<<< Updated upstream
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
-=======
           # auditwheel: pass through if no ELF (pure wheel) instead of dying
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
             auditwheel repair -w {dest_dir} {wheel} ||
             (auditwheel show {wheel} 2>&1 | grep -q 'no ELF' && cp {wheel} {dest_dir})
->>>>>>> Stashed changes
           CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
           CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
           CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
@@ -197,51 +184,7 @@ jobs:
           CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
           CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
 
-<<<<<<< Updated upstream
-      - name: Build wheel (attempt 2 — SKIP_C_EXT=1 fallback)
-        id: build_attempt2
-        if: steps.build_attempt1.outcome == 'failure'
-        uses: pypa/cibuildwheel@v2.23.0
-        env:
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=1"
-          CIBW_BEFORE_BUILD: "pip install --upgrade pip 'packaging>=23.0' 'wheel>=0.43.0'"
-          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
-          CIBW_BUILD: "${{ matrix.py_tag }}-*"
-          CIBW_ARCHS: "${{ matrix.cibw_archs }}"
-          CIBW_SKIP: "pp*"
-          CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
-          CIBW_TEST_COMMAND: "omnipkg --version"
-          CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
-          CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
-          CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
-          CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
-          CIBW_MANYLINUX_PPC64LE_IMAGE:  "quay.io/pypa/manylinux_2_28_ppc64le:latest"
-          CIBW_MANYLINUX_S390X_IMAGE:    "quay.io/pypa/manylinux_2_28_s390x:latest"
-          CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:2025.02.28-1"
-          CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:2025.02.28-1"
-          CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:2025.02.28-1"
-          CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
-          CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
-          
-      - name: Report build result
-        if: always()
-        shell: bash
-        run: |
-          if [ "${{ steps.build_attempt1.outcome }}" = "success" ]; then
-            echo "✅ Built with C extension — ${{ matrix.platform }} py${{ matrix.py_ver }}"
-          elif [ "${{ steps.build_attempt2.outcome }}" = "success" ]; then
-            echo "⚠️  Pure-Python fallback used — ${{ matrix.platform }} py${{ matrix.py_ver }}"
-          else
-            echo "❌ Both attempts failed — ${{ matrix.platform }} py${{ matrix.py_ver }}"
-            exit 1
-          fi
-
-      - name: Upload wheel as artifact
-        if: steps.build_attempt1.outcome == 'success' || steps.build_attempt2.outcome == 'success'
-=======
       - name: Upload wheel artifact
->>>>>>> Stashed changes
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.platform }}-py${{ matrix.py_ver }}
