@@ -37,15 +37,14 @@ requirements:
     - rich >=10.0.0
     - filelock >=3.20.3
     - packaging >=23.0
-    - tomli >=1.0.0                     # [py<311]
-    - typing_extensions >=4.0.0         # [py<310]
+    - tomli >=1.0.0
+    - typing_extensions >=4.0.0
     - authlib >=1.6.9
     - aiohttp >=3.13.5
     - pip-audit >=2.0.0
     - urllib3 >=2.6.3
     - flask >=3.0.3
     - flask-cors >=3.0
-    # uv is optional (for 6x faster '8pkg run') - recommend installing separately
 
 test:
   requires:
