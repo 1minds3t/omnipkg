@@ -3,11 +3,11 @@
     <img src="https://raw.githubusercontent.com/1minds3t/omnipkg/main/.github/logo.svg" alt="omnipkg Logo" width="150">
   </a>
 </p>
-<h1 align="center">omnipkg – Universal Python Runtime Orchestrator</h1>
+<h1 align="center">omnipkg – Python Runtime Hypervisor </h1>
 <p align="center">
   <p align="center">
     <p align="center">
-  <strong><strong>One environment. Infinite Pythons and packages. <1ms zero-copy IPC. </strong>
+  <strong><strong> Run infinite Python package & interpreter versions concurrently in one environment in milliseconds. </strong>
     
 <p align="center">
   <!-- Core Project Info -->
