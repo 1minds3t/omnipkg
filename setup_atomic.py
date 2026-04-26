@@ -21,7 +21,8 @@ if system == "Linux":
 module = Extension(
     'omnipkg.isolation.omnipkg_atomic',
     sources=['src/omnipkg/isolation/atomic_ops.c'],
-    extra_compile_args=_c_args
+    extra_compile_args=_c_args,
+    py_limited_api=True,
 )
 
 setup(

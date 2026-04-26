@@ -207,3 +207,4 @@ src/omnipkg/_vendor/wheels/
 .hunk_merger_state.json
 .gitattributes
 .omnipkg_baseline
+ci-wheel-cache/
