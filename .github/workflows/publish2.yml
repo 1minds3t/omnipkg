@@ -161,7 +161,10 @@ jobs:
       - name: Build wheel
         uses: pypa/cibuildwheel@v2.23.0
         env:
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
+          CIBW_ENVIRONMENT: >-
+            OMNIPKG_SKIP_C_EXT=0
+            PIP_EXTRA_INDEX_URL=https://1minds3t.github.io/uv-ffi/
+            PIP_ONLY_BINARY=uv_ffi,cryptography,psutil,markupsafe,msgpack
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_BUILD: "pip install packaging>=23.0"
           # Pre-seed uv-ffi wheel into the test venv from the GH extra index
@@ -170,7 +173,6 @@ jobs:
             pip install
             --extra-index-url https://1minds3t.github.io/uv-ffi/
             uv-ffi>=0.10.8.post7
-            cryptography>=46.0.7
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
