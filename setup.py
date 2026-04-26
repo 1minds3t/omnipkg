@@ -39,7 +39,6 @@ def _install_dispatcher_binary(install_dir=None):
         print("  [dispatcher] gcc not found, skipping binary install (Python dispatcher will be used)")
         return
 
-    # Where to put the binary — same dir as the 8pkg wrapper script
     if install_dir is None:
         install_dir = Path(sys.executable).parent  # $VENV/bin
 
@@ -52,16 +51,13 @@ def _install_dispatcher_binary(install_dir=None):
         )
         if result.returncode != 0:
             print(f"  [dispatcher] Compilation failed, using Python dispatcher:")
-            # Pass -v to gcc to see the full linker invocation
-            result = subprocess.run(
+            subprocess.run(
                 ["gcc", "-v", "-O2", "-o", str(binary_out), str(c_source)],
-                capture_output=False, # This will stream the output directly to the GHA console
+                capture_output=False,
                 text=True
             )
             return
 
-        # Overwrite the pip-generated wrapper scripts
-        # Retry loop: editable installs may not have written scripts yet
         import time
         print(f"  [dispatcher] Looking for scripts in: {install_dir}")
         print(f"  [dispatcher] Files in dir: {list(Path(install_dir).glob('*pkg*'))}")
@@ -77,7 +73,7 @@ def _install_dispatcher_binary(install_dir=None):
                 break
             time.sleep(0.5)
 
-        binary_out.unlink()  # clean up temp, the copies are the real ones
+        binary_out.unlink()
         if replaced:
             print(f"  [dispatcher] ✅ Fast C dispatcher installed in {install_dir}")
         else:
@@ -87,75 +83,11 @@ def _install_dispatcher_binary(install_dir=None):
         print(f"  [dispatcher] Skipping C dispatcher: {e}")
 
 
-class InstallWithDispatcher(install):
-    def run(self):
-        super().run()
-        _install_dispatcher_binary(self.install_scripts)
-
-
-class DevelopWithDispatcher(develop):
-    def run(self):
-        super().run()
-        # In editable installs, scripts go next to sys.executable
-        _install_dispatcher_binary(Path(sys.executable).parent)
-
-
-# ── Existing C extension setup (unchanged) ──────────────────────────────────
-
-if SKIP_C_EXTENSIONS:
-    print("=" * 60)
-    print("NOARCH BUILD MODE: Skipping C extension compilation")
-    print("Pure Python fallback will be used for atomic operations")
-    print("=" * 60)
-    ext_modules = []
-    cmdclass = {}
-else:
-    import platform
-    
-    # Use hardware-specific instructions where supported
-    # Linux: -march=native enables AVX/AVX2/Atom
-    # macOS: -march=native fails on Universal (dual-arch) builds
-    # Windows: Uses MSVC flags (handled separately)
-    
-    import platform
-    
-    _c_args = ["-O3"]
-    
-    # ⬇️ THIS IS THE FIX ⬇️
-    # Only enable native optimization on Linux.
-    # macOS universal builds will fail with -march=native.
-    if platform.system() == "Linux":
-        _c_args.append("-march=native")
-
-    atomic_extension = Extension(
-        name="omnipkg.isolation.omnipkg_atomic",
-        sources=["src/omnipkg/isolation/atomic_ops.c"],
-        extra_compile_args=_c_args,  # <--- Use our new conditional args
-        optional=True,
-    )
-
-    class OptionalBuildExt(build_ext):
-        def build_extension(self, ext):
-            try:
-                super().build_extension(ext)
-            except Exception as e:
-                print(f"\n{'!'*60}")
-                print(f"WARNING: OmniPkg Hardware Atomics failed to compile.")
-                print(f"Reason: {e}")
-                print(f"Installing successfully with Python-speed fallback.")
-                print(f"{'!'*60}\n")
-
-    ext_modules = [atomic_extension]
-    cmdclass = {'build_ext': OptionalBuildExt}
-
 def _build_uv_ffi(install_dir=None):
     """
     Build the uv_ffi PyO3 extension via maturin and install the .so
     into the active environment. Silently skips if Rust/maturin not available.
     """
-    import shutil, subprocess, sys
-    from pathlib import Path
-
     crate = Path(__file__).parent / "src/omnipkg/_vendor/uv/crates/uv-ffi"
     if not crate.exists():
         print("  [uv-ffi] crate not found, skipping")
@@ -166,7 +98,6 @@ def _build_uv_ffi(install_dir=None):
         return
 
     if not shutil.which("maturin"):
-        # Try to install maturin quietly
         try:
             subprocess.run([sys.executable, "-m", "pip", "install", "maturin", "-q"],
                            check=True)
@@ -188,6 +119,62 @@ def _build_uv_ffi(install_dir=None):
         print(f"  [uv-ffi] Skipping: {e}")
 
 
+# ── Atomic extension ─────────────────────────────────────────────────────────
+
+if SKIP_C_EXTENSIONS:
+    print("=" * 60)
+    print("NOARCH BUILD MODE: Skipping C extension compilation")
+    print("Pure Python fallback will be used for atomic operations")
+    print("=" * 60)
+    ext_modules = []
+    cmdclass = {}
+else:
+    import platform
+
+    _c_args = ["-O3"]
+
+    machine = platform.machine().lower()
+    system  = platform.system()
+
+    if system == "Linux":
+        # -march=native is UNSAFE in QEMU cross-compile: the host CPU feature
+        # set leaks through QEMU into the container, producing march strings
+        # (e.g. lse128+gcs) that the container's GCC doesn't know.
+        # Use explicit safe baselines per architecture instead.
+        if machine in ("x86_64", "i686", "i386"):
+            _c_args.append("-march=x86-64")      # SSE2 baseline, safe everywhere
+        elif machine == "aarch64":
+            _c_args.append("-march=armv8-a")      # base AArch64, no exotic extensions
+        elif machine == "armv7l":
+            _c_args.append("-march=armv7-a")
+        # ppc64le, s390x, riscv64: no -march flag, let GCC pick its own default
+    # macOS: no -march flag (Universal builds break with -march=native)
+    # Windows: MSVC flags handled separately
+
+    atomic_extension = Extension(
+        name="omnipkg.isolation.omnipkg_atomic",
+        sources=["src/omnipkg/isolation/atomic_ops.c"],
+        extra_compile_args=_c_args,
+        optional=True,
+    )
+
+    class OptionalBuildExt(build_ext):
+        def build_extension(self, ext):
+            try:
+                super().build_extension(ext)
+            except Exception as e:
+                print(f"\n{'!'*60}")
+                print(f"WARNING: OmniPkg Hardware Atomics failed to compile.")
+                print(f"Reason: {e}")
+                print(f"Installing successfully with Python-speed fallback.")
+                print(f"{'!'*60}\n")
+
+    ext_modules = [atomic_extension]
+    cmdclass = {'build_ext': OptionalBuildExt}
+
+
+# ── Combined install/develop commands (single definition) ────────────────────
+
 class InstallWithDispatcher(install):
     def run(self):
         super().run()
@@ -202,7 +189,6 @@ class DevelopWithDispatcher(develop):
         _build_uv_ffi(Path(sys.executable).parent)
 
 
-# Inject dispatcher commands (always, regardless of SKIP_C_EXTENSIONS)
 cmdclass['install'] = InstallWithDispatcher
 cmdclass['develop'] = DevelopWithDispatcher
 
