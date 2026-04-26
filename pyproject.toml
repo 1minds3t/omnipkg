@@ -162,9 +162,9 @@ exclude = [
 
 [tool.setuptools.package-data]
 omnipkg = [
-    "locale/**/*.mo",
-    "locale/**/*.pot",
-    "dispatcher.c",        # ← ADD THIS
+    "locales/**/*.mo",
+    "locales/**/*.pot",
+    "dispatcher.c",
 ]
 
 [tool.setuptools]

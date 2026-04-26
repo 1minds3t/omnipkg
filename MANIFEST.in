@@ -12,11 +12,12 @@ include COMMERCIAL_LICENSE.md
 recursive-include licenses *.txt
 
 # Locale files (inside src/omnipkg/)
-recursive-include src/omnipkg/locale *.mo
-recursive-include src/omnipkg/locale *.pot
+recursive-include src/omnipkg/locales *.mo
+recursive-include src/omnipkg/locales *.pot
 
 # Tests package (inside src/tests/)
 recursive-include src/tests *.py
 
 # Top-level module list
-include top_level.txtinclude build_hooks.py
+include top_level.txt
+include build_hooks.py
