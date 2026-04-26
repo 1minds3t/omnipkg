@@ -156,6 +156,7 @@ else:
         sources=["src/omnipkg/isolation/atomic_ops.c"],
         extra_compile_args=_c_args,
         optional=True,
+        py_limited_api=True,   # ← add this
     )
 
     class OptionalBuildExt(build_ext):
@@ -168,6 +169,40 @@ else:
                 print(f"Reason: {e}")
                 print(f"Installing successfully with Python-speed fallback.")
                 print(f"{'!'*60}\n")
+            finally:
+                _print_exotic_platform_hint()
+
+    def _print_exotic_platform_hint():
+        import platform, sys
+        machine = platform.machine().lower()
+        if machine not in ("armv7l", "armv7", "s390x", "riscv64"):
+            return
+        # Detect musl
+        is_musl = False
+        try:
+            with open("/proc/self/maps") as f:
+                is_musl = "musl" in f.read()
+        except Exception:
+            pass
+        if not is_musl:
+            return
+        print()
+        print("=" * 60)
+        print(f"  EXOTIC PLATFORM DETECTED: {platform.machine()} / musl")
+        print()
+        print("  Some dependencies (cryptography, psutil) have no")
+        print("  prebuilt wheels for this platform on PyPI and will")
+        print("  attempt to compile from source, which requires Rust")
+        print("  and can take 20-40 minutes or fail entirely.")
+        print()
+        print("  Pre-built wheels available at:")
+        print("  https://1minds3t.github.io/exotic-wheels/")
+        print()
+        print("  For a faster install run:")
+        print(f"  pip install omnipkg \\")
+        print(f"    --extra-index-url https://1minds3t.github.io/exotic-wheels/")
+        print("=" * 60)
+        print()
 
     ext_modules = [atomic_extension]
     cmdclass = {'build_ext': OptionalBuildExt}
