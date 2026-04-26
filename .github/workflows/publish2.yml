@@ -163,22 +163,19 @@ jobs:
         env:
           CIBW_ENVIRONMENT: >-
             OMNIPKG_SKIP_C_EXT=0
-            PIP_EXTRA_INDEX_URL=https://1minds3t.github.io/uv-ffi/
-            PIP_ONLY_BINARY=uv_ffi,cryptography,psutil,markupsafe,msgpack
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_BUILD: "pip install packaging>=23.0"
-          # Pre-seed uv-ffi wheel into the test venv from the GH extra index
-          # so pip never falls back to building it from the sdist (slow Rust build).
           CIBW_BEFORE_TEST: >-
             pip install
             --extra-index-url https://1minds3t.github.io/uv-ffi/
-            uv-ffi>=0.10.8.post7
+            --extra-index-url https://exotic-wheels.github.io/
+            uv-ffi>=0.10.8.post7 cryptography>=46.0.7 psutil
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
-          CIBW_SKIP: "pp*"
+          # CIBW_SKIP: "pp*"
           CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
           CIBW_TEST_COMMAND: "omnipkg --version"
-          CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
+          # CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
           # auditwheel: pass through if no ELF (pure wheel) instead of dying
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
             auditwheel repair -w {dest_dir} {wheel} ||
