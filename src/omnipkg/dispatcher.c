@@ -189,6 +189,7 @@ static void winsock_init(void) {
 #  include <dlfcn.h>
 #  include <fcntl.h>
 #  include <glob.h>
+#  include <sys/time.h>   /* struct timeval */
 #  define PATH_SEPARATOR ":"
 #  define sock_read(s,b,n)   read(s,b,n)
 #  define sock_write(s,b,n)  write(s,b,n)

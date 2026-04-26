@@ -1,4 +1,5 @@
 #include <Python.h>
+#include <stdint.h>  /* uintptr_t — pointer-sized integer, safe on 32-bit and 64-bit */
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -7,22 +8,24 @@
 #pragma intrinsic(_InterlockedExchange64)
 
 static PyObject* atomic_cas64(PyObject* self, PyObject* args) {
-    long long buffer_addr, expected, desired;
-    if (!PyArg_ParseTuple(args, "LLL", &buffer_addr, &expected, &desired)) return NULL;
+    uintptr_t buffer_addr;
+    long long expected, desired;
+    if (!PyArg_ParseTuple(args, "kLL", &buffer_addr, &expected, &desired)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
     long long prev = _InterlockedCompareExchange64(ptr, desired, expected);
     return PyBool_FromLong(prev == expected);
 }
 static PyObject* atomic_store64(PyObject* self, PyObject* args) {
-    long long buffer_addr, value;
-    if (!PyArg_ParseTuple(args, "LL", &buffer_addr, &value)) return NULL;
+    uintptr_t buffer_addr;
+    long long value;
+    if (!PyArg_ParseTuple(args, "kL", &buffer_addr, &value)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
     _InterlockedExchange64(ptr, value);
     Py_RETURN_NONE;
 }
 static PyObject* atomic_load64(PyObject* self, PyObject* args) {
-    long long buffer_addr;
-    if (!PyArg_ParseTuple(args, "L", &buffer_addr)) return NULL;
+    uintptr_t buffer_addr;
+    if (!PyArg_ParseTuple(args, "k", &buffer_addr)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
     long long val = _InterlockedExchangeAdd64((volatile long long*)ptr, 0);
     return PyLong_FromLongLong(val);
@@ -31,22 +34,24 @@ static PyObject* atomic_load64(PyObject* self, PyObject* args) {
 #else
 /* GCC/Clang path */
 static PyObject* atomic_cas64(PyObject* self, PyObject* args) {
-    long long buffer_addr, expected, desired;
-    if (!PyArg_ParseTuple(args, "LLL", &buffer_addr, &expected, &desired)) return NULL;
+    uintptr_t buffer_addr;
+    long long expected, desired;
+    if (!PyArg_ParseTuple(args, "kLL", &buffer_addr, &expected, &desired)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
     int success = __sync_bool_compare_and_swap(ptr, expected, desired);
     return PyBool_FromLong(success);
 }
 static PyObject* atomic_store64(PyObject* self, PyObject* args) {
-    long long buffer_addr, value;
-    if (!PyArg_ParseTuple(args, "LL", &buffer_addr, &value)) return NULL;
+    uintptr_t buffer_addr;
+    long long value;
+    if (!PyArg_ParseTuple(args, "kL", &buffer_addr, &value)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
     __atomic_store_n(ptr, value, __ATOMIC_RELEASE);
     Py_RETURN_NONE;
 }
 static PyObject* atomic_load64(PyObject* self, PyObject* args) {
-    long long buffer_addr;
-    if (!PyArg_ParseTuple(args, "L", &buffer_addr)) return NULL;
+    uintptr_t buffer_addr;
+    if (!PyArg_ParseTuple(args, "k", &buffer_addr)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
     long long val = __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
     return PyLong_FromLongLong(val);
