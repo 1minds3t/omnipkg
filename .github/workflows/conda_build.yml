@@ -281,19 +281,46 @@ jobs:
           fi
           echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
-      - name: Request re-render
+      - name: Request re-render and wait for bot commit
         if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-          
-          echo "🔄 Requesting re-render..."
-          gh pr comment $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --body "@conda-forge-admin, please rerender"
-          
-          sleep 600
+          REPO="conda-forge/omnipkg-feedstock"
+
+          wait_for_rerender() {
+            # Poll PR commits for a new commit whose message starts with "MNT:"
+            # That's the conda-forge-webservices bot re-render commit.
+            local MAX_WAIT=600
+            local INTERVAL=20
+            local ELAPSED=0
+            while [ $ELAPSED -lt $MAX_WAIT ]; do
+              RENDERED=$(gh pr view $PR_NUMBER \
+                --repo $REPO \
+                --json commits \
+                --jq '[.commits[] | select(.messageHeadline | startswith("MNT:"))] | length')
+              if [ "$RENDERED" -gt 0 ]; then
+                echo "✅ Re-render commit detected"
+                return 0
+              fi
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+              echo "  ... ${ELAPSED}s — no re-render commit yet"
+            done
+            return 1
+          }
+
+          echo "🔄 Requesting re-render (attempt 1)..."
+          gh pr comment $PR_NUMBER --repo $REPO --body "@conda-forge-admin, please rerender"
+          if wait_for_rerender; then exit 0; fi
+
+          echo "⚠️  No re-render commit after 10min, retrying once..."
+          gh pr comment $PR_NUMBER --repo $REPO --body "@conda-forge-admin, please rerender"
+          if wait_for_rerender; then exit 0; fi
+
+          echo "❌ Re-render did not happen after 2 attempts — CI will fail without it"
+          exit 1
 
       - name: Wait for checks
         if: env.skip_pr != 'true'
@@ -301,43 +328,38 @@ jobs:
           GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-          
+          REPO="conda-forge/omnipkg-feedstock"
+
           echo "⏳ Waiting for checks to start..."
           sleep 120
-          
+
           ATTEMPT=0
           MAX_ATTEMPTS=60
-          
+
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
-            
-            PENDING=$(gh pr view $PR_NUMBER \
-              --repo conda-forge/omnipkg-feedstock \
+
+            PENDING=$(gh pr view $PR_NUMBER --repo $REPO \
               --json statusCheckRollup \
               --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
-            
-            TOTAL=$(gh pr view $PR_NUMBER \
-              --repo conda-forge/omnipkg-feedstock \
+            TOTAL=$(gh pr view $PR_NUMBER --repo $REPO \
               --json statusCheckRollup \
               --jq '.statusCheckRollup | length')
-            
-            FAILED=$(gh pr view $PR_NUMBER \
-              --repo conda-forge/omnipkg-feedstock \
+            FAILED=$(gh pr view $PR_NUMBER --repo $REPO \
               --json statusCheckRollup \
               --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
-            
-            echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
-            
+
+            echo "📊 Attempt $ATTEMPT: $((TOTAL - PENDING))/$TOTAL done, $FAILED failed"
+
             if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
               if [ "$FAILED" -gt 0 ]; then
-                echo "❌ Some checks failed"
+                echo "❌ Some checks failed — leaving PR open for inspection"
                 exit 1
               else
                 echo "✅ All checks passed!"
                 break
               fi
             fi
-            
             sleep 120
           done
 
@@ -347,14 +369,13 @@ jobs:
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
           VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-          
-          echo "🎯 Merging PR #$PR_NUMBER..."
+
           gh pr merge $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
             --squash \
             --subject "Build for $VERSION (noarch)" \
             --body ""
-          
+
           echo "✅ Noarch build merged!"
 
   # ═══════════════════════════════════════════════════════════════════
@@ -496,18 +517,44 @@ jobs:
           fi
           echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
-      - name: Request re-render
+      - name: Request re-render and wait for bot commit
         if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-          
-          gh pr comment $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --body "@conda-forge-admin, please rerender"
-          
-          sleep 600
+          REPO="conda-forge/omnipkg-feedstock"
+
+          wait_for_rerender() {
+            local MAX_WAIT=600
+            local INTERVAL=20
+            local ELAPSED=0
+            while [ $ELAPSED -lt $MAX_WAIT ]; do
+              RENDERED=$(gh pr view $PR_NUMBER \
+                --repo $REPO \
+                --json commits \
+                --jq '[.commits[] | select(.messageHeadline | startswith("MNT:"))] | length')
+              if [ "$RENDERED" -gt 0 ]; then
+                echo "✅ Re-render commit detected"
+                return 0
+              fi
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+              echo "  ... ${ELAPSED}s — no re-render commit yet"
+            done
+            return 1
+          }
+
+          echo "🔄 Requesting re-render (attempt 1)..."
+          gh pr comment $PR_NUMBER --repo $REPO --body "@conda-forge-admin, please rerender"
+          if wait_for_rerender; then exit 0; fi
+
+          echo "⚠️  No re-render commit after 10min, retrying once..."
+          gh pr comment $PR_NUMBER --repo $REPO --body "@conda-forge-admin, please rerender"
+          if wait_for_rerender; then exit 0; fi
+
+          echo "❌ Re-render did not happen after 2 attempts — CI will fail without it"
+          exit 1
 
       - name: Wait for checks
         if: env.skip_pr != 'true'
@@ -515,44 +562,39 @@ jobs:
           GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-          
+          REPO="conda-forge/omnipkg-feedstock"
+
           echo "⏳ Waiting for checks..."
           sleep 300
-          
+
           ATTEMPT=0
           MAX_ATTEMPTS=60
-          
+
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
-            
-            PENDING=$(gh pr view $PR_NUMBER \
-              --repo conda-forge/omnipkg-feedstock \
+
+            PENDING=$(gh pr view $PR_NUMBER --repo $REPO \
               --json statusCheckRollup \
               --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
-            
-            TOTAL=$(gh pr view $PR_NUMBER \
-              --repo conda-forge/omnipkg-feedstock \
+            TOTAL=$(gh pr view $PR_NUMBER --repo $REPO \
               --json statusCheckRollup \
               --jq '.statusCheckRollup | length')
-            
-            FAILED=$(gh pr view $PR_NUMBER \
-              --repo conda-forge/omnipkg-feedstock \
+            FAILED=$(gh pr view $PR_NUMBER --repo $REPO \
               --json statusCheckRollup \
               --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
-            
+
             echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
-            
+
             if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
               if [ "$FAILED" -gt 0 ]; then
-                echo "❌ Some checks failed"
-                gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
+                echo "❌ Some checks failed — leaving PR open for inspection"
+                gh pr view $PR_NUMBER --repo $REPO --json statusCheckRollup
                 exit 1
               else
                 echo "✅ All checks passed!"
                 break
               fi
             fi
-            
             sleep 120
           done
 
@@ -563,11 +605,33 @@ jobs:
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
           VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-          
+
           gh pr merge $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
             --squash \
             --subject "Build for $VERSION (platforms)" \
             --body ""
-          
+
           echo "✅ Platforms build merged!"
+
+      - name: Close stale fork PRs
+        if: always() && env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          for BRANCH in "update-platforms-v$VERSION" "update-noarch-v$VERSION"; do
+            PR=$(gh pr list \
+              --repo 1minds3t/omnipkg-feedstock \
+              --state open \
+              --json number,headRefName \
+              --jq ".[] | select(.headRefName == \"$BRANCH\") | .number")
+            if [ -n "$PR" ]; then
+              echo "🗑️  Closing stale fork PR #$PR ($BRANCH)"
+              gh pr close $PR \
+                --repo 1minds3t/omnipkg-feedstock \
+                --comment "Closed automatically after feedstock merge" \
+                --delete-branch || true
+            fi
+          done
+          echo "✅ Fork cleanup done"
