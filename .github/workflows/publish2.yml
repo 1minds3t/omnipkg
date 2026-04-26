@@ -162,7 +162,14 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
+          CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_BUILD: "pip install 'packaging>=23.0'"
+          # Pre-seed uv-ffi wheel into the test venv from the GH extra index
+          # so pip never falls back to building it from the sdist (slow Rust build).
+          CIBW_BEFORE_TEST: >
+            pip install
+            --extra-index-url https://1minds3t.github.io/uv-ffi/
+            "uv-ffi>=0.10.8.post7"
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
           CIBW_SKIP: "pp*"
@@ -211,3 +218,36 @@ jobs:
           name: wheels-noarch
           path: ./wheelhouse/*.whl
           if-no-files-found: error
+  publish:
+    name: "Publish all wheels to PyPI + GH Release"
+    needs: [build-wheels, build-noarch]
+    runs-on: ubuntu-latest
+    # Only publish when ref looks like a version tag (v3.1.1, v2.5.0, etc.).
+    # Running from main, a branch, or a bare SHA -> skipped automatically.
+    if: startsWith(inputs.ref, 'v')
+    permissions:
+      contents: write  # required to upload assets to the GH Release
+      id-token: write  # required for PyPI trusted publishing (OIDC)
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List wheels to be published
+        run: ls -lh dist/
+
+      - name: Upload wheels to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.ref }}
+          files: dist/*.whl
+          fail_on_unmatched_files: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true   # idempotent — safe to re-run if some already uploaded
