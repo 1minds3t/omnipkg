@@ -10,6 +10,12 @@ Referenced in pyproject.toml:
   build-backend = "build_hooks"
   backend-path = ["."]          ← tells pip to look in repo root for this module
 """
+# Compatibility shim for Python < 3.11 — locale.getencoding() added in 3.11
+# Without this, packaging/_musllinux.py crashes in manylinux containers
+import locale
+if not hasattr(locale, 'getencoding'):
+    locale.getencoding = lambda: 'UTF-8'
+
 # Re-export everything from the real setuptools backend
 from setuptools.build_meta import (
     build_wheel,
