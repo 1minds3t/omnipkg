@@ -1909,7 +1909,7 @@ def sync_lock(
                     print("\nAborted.")
                     return
 
-                if choice == "1" or choice == "":
+                if choice in ("1", ""):
                     print("   Nothing to do.")
                     return
                 elif choice == "2":

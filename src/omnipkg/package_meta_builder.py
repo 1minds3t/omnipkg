@@ -996,7 +996,7 @@ class omnipkgMetadataGatherer:
                             self.omnipkg_instance._scan_and_heal_distributions([_target_di.parent])
                             dist = PathDistribution(_target_di)  # retry after heal
                         _base_ver = version.split("+")[0]
-                        if dist.metadata.get("Name") and (dist.version == version or dist.version == _base_ver):
+                        if dist.metadata.get("Name") and dist.version in (version, _base_ver):
                             found_dists.append(dist)
                             if _dbg:
                                 print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
@@ -1863,11 +1863,7 @@ class omnipkgMetadataGatherer:
         if "_vendor/" in path_str or ".vendor/" in path_str:
             try:
                 parent_path = dist_path
-                while (
-                    parent_path != site_packages
-                    and parent_path != multiversion_base
-                    and parent_path.parent != parent_path
-                ):
+                while parent_path not in (site_packages, multiversion_base, parent_path.parent):
                     parent_dist_info = next(parent_path.glob("*.dist-info"), None)
                     if parent_dist_info and ("_vendor" not in str(parent_dist_info)):
                         parent_dist = importlib.metadata.Distribution.at(parent_dist_info)

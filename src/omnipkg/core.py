@@ -3736,7 +3736,7 @@ class BubbleIsolationManager:
                         shutil.rmtree(dest)
                     shutil.copytree(item, dest)
                     files_copied += 1
-                elif item.is_file() and (item.suffix == ".pth" or item.suffix == ".py"):
+                elif item.is_file() and item.suffix in (".pth", ".py"):
                     shutil.copy2(item, final_bubble_path / item.name)
                     files_copied += 1
             except Exception as e:
@@ -6825,7 +6825,7 @@ class omnipkg:
                 _all_di = list(site_packages.glob("omnipkg-*.dist-info")) + list(site_packages.glob("__editable__.omnipkg-*.dist-info"))
                 conflicting_installs = [
                     p for p in _all_di
-                    if p.name != expected_dist_info and p.name != expected_editable_dist_info
+                    if p.name not in (expected_dist_info, expected_editable_dist_info)
                 ]
 
                 has_egg_link = (site_packages / "omnipkg.egg-link").exists()
