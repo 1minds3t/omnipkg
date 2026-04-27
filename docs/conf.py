@@ -1,4 +1,3 @@
-# Configuration file for the Sphinx documentation builder.
 
 # -- Project information -----------------------------------------------------
 project = "omnipkg"
@@ -21,8 +20,6 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # -- Options for HTML output -------------------------------------------------
 # Modern, beautiful theme - pick one:
 html_theme = "furo"  # Recommended - clean, modern, mobile-friendly
-# html_theme = 'sphinx_rtd_theme'  # Alternative - ReadTheDocs style
-# html_theme = 'pydata_sphinx_theme'  # Alternative - PyData style
 
 html_static_path = ["_static"]
 
