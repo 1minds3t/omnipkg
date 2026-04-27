@@ -199,7 +199,6 @@ def show_full_omnipkg_run():
 
 def run_demo():
     """Runs the automated http command auto-healing demo."""
-    global _  # ADD THIS LINE
     config_manager = None
     original_strategy = None
     original_urllib3_version = None
