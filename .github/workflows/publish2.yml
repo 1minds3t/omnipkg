@@ -167,7 +167,7 @@ jobs:
           CIBW_BEFORE_BUILD: "pip install packaging>=23.0"
           CIBW_BEFORE_TEST: >-
             pip install
-            --extra-index-url https://exotic-wheels.github.io/
+            --extra-index-url https://exotic-wheels.github.io/simple/
             uv-ffi>=0.10.8.post7 cryptography>=46.0.7 psutil
           CIBW_BUILD: "${{ matrix.py_tag }}-*"
           CIBW_ARCHS: "${{ matrix.cibw_archs }}"
