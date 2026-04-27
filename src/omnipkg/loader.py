@@ -939,7 +939,7 @@ class omnipkgLoader:
                         try:
                             # Simple cleanup of the name to find the target
                             # e.g., aiohttp.123_omnipkg_cloaked -> aiohttp
-                            newest_cloak = sorted(cloaks, key=lambda p: str(p), reverse=True)[0]
+                            newest_cloak = sorted(cloaks, key=str, reverse=True)[0]
                             original_name = re.sub(
                                 r"\.\d+_omnipkg_cloaked.*$", "", newest_cloak.name
                             )
@@ -2071,7 +2071,7 @@ class omnipkgLoader:
                     self.multiversion_base.glob(f"{pkg_name}-{version_form}.*_omnipkg_cloaked")
                 )
                 if cloaked_bubbles:
-                    target = sorted(cloaked_bubbles, key=lambda p: str(p), reverse=True)[0]
+                    target = sorted(cloaked_bubbles, key=str, reverse=True)[0]
                     if not self.quiet:
                         safe_print(_('   🔓 Found CLOAKED bubble {}, restoring...').format(target.name))
                     try:
