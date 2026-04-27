@@ -1011,8 +1011,9 @@ def get_conda_forge_mapping(import_name):
     Checks the conda-forge 'County Fair' mapping for import_name -> pypi_name.
     Downloads, caches to disk, and loads into memory to maintain lightning speed.
     """
+    global _CF_CACHE_LOADED, _CF_MAPPING_CACHE
     import os, time, urllib.request, re
-
+    
     # Return instantly if we already loaded it this session
     if _CF_CACHE_LOADED:
         return _CF_MAPPING_CACHE.get(import_name)
