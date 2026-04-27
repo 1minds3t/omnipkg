@@ -12415,9 +12415,8 @@ class omnipkg:
                         # If we get here, package is truly not satisfied anywhere
                         kb_satisfied = False
                         break  # ✅ ADD THIS BREAK
-                    else:
-                        safe_print(_('✅ {} already satisfied (nested)').format(pkg_spec))
-                        processed_packages.append(pkg_spec)
+                    safe_print(_('✅ {} already satisfied (nested)').format(pkg_spec))
+                    processed_packages.append(pkg_spec)
 
                 all_packages_satisfied = kb_satisfied
 
