@@ -698,8 +698,7 @@ class omnipkgMetadataGatherer:
                 # A. Main Site Packages (The active environment)
                 # B. The specific bubble directory for this package version
                 
-                surgical_roots = []
-                surgical_roots.append(main_site_packages)
+                surgical_roots = [main_site_packages]
                 
                 expected_bubble = multiversion_base / f"{name}-{version}"
                 if os.environ.get("OMNIPKG_DEBUG") == "1":

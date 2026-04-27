@@ -699,9 +699,7 @@ safe_print("OMNIPKG_TEST_RESULT:" + str(result))
 
     def get_compatibility_report(self, package_name: str = None) -> str:
         """Generate a human-readable compatibility report."""
-        report = []
-        report.append("🔍 OMNIPKG COMPATIBILITY MATRIX REPORT")
-        report.append("=" * 50)
+        report = ["🔍 OMNIPKG COMPATIBILITY MATRIX REPORT", "=" * 50]
 
         total_tests = len(self.compatibility_matrix["tested_combinations"])
         working_tests = sum(
