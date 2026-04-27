@@ -5111,11 +5111,8 @@ class BubbleIsolationManager:
             "import sys",
             "import importlib",
             "import traceback",
-            "results = []",
+            "results = []",f"sys.path.insert(0, r'{bubble_path}')"
         ]
-
-        # Add the bubble path to Python path for testing
-        script_lines.append(f"sys.path.insert(0, r'{bubble_path}')")
 
         # Test each import candidate
         for candidate in import_candidates:
@@ -16370,8 +16367,7 @@ print(json.dumps(results))
             except Exception as _sub_ex:
                 safe_print(f"   ⚠️  uv subprocess unavailable ({_sub_ex}), falling back to pip...")
 
-        cmd = [self.config["python_executable"], "-u", "-m", "pip", "install"]
-        cmd.append("--no-cache-dir")
+        cmd = [self.config["python_executable"], "-u", "-m", "pip", "install", "--no-cache-dir"]
 
         # Add index URLs if present
         if index_url:
