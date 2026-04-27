@@ -930,7 +930,7 @@ def chaos_test_4_memory_madness():
             safe_print(f"🧠 numpy {ver}: Allocated {mem_mb:.1f}MB at {addr}")
 
     safe_print(_('\n🎯 Total allocations: {}').format(len(allocations)))
-    safe_print(_('🎯 Unique memory addresses: {}').format(len(set((a[2] for a in allocations)))))
+    safe_print(_('🎯 Unique memory addresses: {}').format(len({a[2] for a in allocations})))
     safe_print("✅ MEMORY CHAOS CONTAINED!\n")
 
 def chaos_test_5_race_condition_roulette():
