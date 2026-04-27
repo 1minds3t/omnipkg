@@ -154,7 +154,6 @@ def add_custom_nuke_pattern(pattern: str):
     Args:
         pattern: Regex pattern (case-insensitive) to filter from stderr
     """
-    global _compiled_patterns
     _compiled_patterns.append(re.compile(pattern, re.IGNORECASE))
 
 

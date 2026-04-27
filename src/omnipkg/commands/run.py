@@ -1011,7 +1011,6 @@ def get_conda_forge_mapping(import_name):
     Checks the conda-forge 'County Fair' mapping for import_name -> pypi_name.
     Downloads, caches to disk, and loads into memory to maintain lightning speed.
     """
-    global _CF_CACHE_LOADED, _CF_MAPPING_CACHE
     import os, time, urllib.request, re
     
     # Return instantly if we already loaded it this session
@@ -1883,8 +1882,6 @@ def heal_with_bubble(
     # STEP 4: Execute with Bubbles
     # ═══════════════════════════════════════════════════════════
     safe_print(_("\n✅ Bubbles ready. Activating: {}").format(final_specs))
-
-    global _initial_run_time_ns
 
     return run_with_healing_wrapper(
         final_specs,
