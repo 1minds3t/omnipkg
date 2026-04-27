@@ -3720,7 +3720,7 @@ class WorkerPoolDaemon:
                             if isinstance(raw, list) and raw:
                                 state = {pair[0].lower(): pair[1] for pair in raw if len(pair) >= 2}
                                 break
-                            elif isinstance(raw, dict) and raw:
+                            if isinstance(raw, dict) and raw:
                                 state = raw
                                 break
                     except Exception:
