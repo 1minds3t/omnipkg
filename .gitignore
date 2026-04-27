@@ -208,3 +208,4 @@ src/omnipkg/_vendor/wheels/
 .gitattributes
 .omnipkg_baseline
 ci-wheel-cache/
+build/
