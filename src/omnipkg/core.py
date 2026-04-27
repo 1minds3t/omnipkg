@@ -776,12 +776,6 @@ class ConfigManager:
         Forwarding to simple registration for backward compatibility during migration.
         """
         return self._ensure_interpreter_registered(interpreter_path, version)
-        # At the very end, after registration is confirmed successful:
-        safe_print(_("   - ✅ Registered Python {} without copying").format(version))
-        
-        # 🎯 ADD THIS HERE - Right after successful registration
-        if platform.system() != "Windows":
-            self._create_symlink_for_version(version)
 
     def _find_python_executable(self, version: str) -> Optional[Path]:
         """
