@@ -1484,7 +1484,6 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
         env_prefix = f"({conda_env}) " if conda_env else ""
         _tf.write(f'\n# Show conda env + python version in prompt\n')
-        _# NEW
         if "zsh" in shell_name:
             _tf.write(f'export PROMPT="{env_prefix}(py{version}) %n@%m:%~%# "\n')
         else:
