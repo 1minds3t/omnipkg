@@ -14,7 +14,6 @@ import subprocess
 import sys
 import tempfile
 import struct  # <--- ADDED for control block packing
-# import psutil  # Made lazy
 import threading
 import time
 from collections import defaultdict
@@ -5269,7 +5268,6 @@ class SmartGPUIPC:
         return self.receive(meta)
 
 
-# import torch
 
 
 class IPCMode(Enum):
