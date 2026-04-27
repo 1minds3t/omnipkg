@@ -2477,51 +2477,6 @@ class PersistentWorker:
 
             return json.loads(response_line.strip())
 
-            # Monitor activity
-            try:
-                cpu_percent = ps_process.cpu_percent(interval=0.1)
-                memory_mb = ps_process.memory_info().rss / 1024 / 1024
-
-                # Activity detection
-                activity_detected = False
-
-                if cpu_percent > 1.0:  # CPU active
-                    activity_detected = True
-
-                if abs(memory_mb - last_memory_mb) > 1.0:  # Memory changing
-                    activity_detected = True
-
-                # Check I/O activity (reading/writing data)
-                io_counters = ps_process.io_counters()
-                if hasattr(self, "_last_io"):
-                    last_io = self._last_io
-                    if (
-                        io_counters.read_bytes > last_io.read_bytes
-                        or io_counters.write_bytes > last_io.write_bytes
-                    ):
-                        activity_detected = True
-                self._last_io = io_counters
-
-                if activity_detected:
-                    last_activity_time = time.time()
-                    last_cpu_percent = cpu_percent
-                    last_memory_mb = memory_mb
-
-                # Check idle timeout
-                idle_duration = time.time() - last_activity_time
-
-                if idle_duration > timeout_idle_seconds:
-                    raise TimeoutError(
-                        f"Task timed out: No activity for {idle_duration:.1f}s\n"
-                        f"Last CPU: {last_cpu_percent:.1f}%, Memory: {memory_mb:.1f}MB\n"
-                        f"Task may be deadlocked or waiting indefinitely"
-                    )
-
-            except psutil.NoSuchProcess:
-                raise RuntimeError("Worker process crashed during task execution")
-
-            time.sleep(0.1)
-
     def _discover_cuda_paths(self) -> List[str]:
         """
         Discover CUDA library paths for this package spec.
@@ -6800,16 +6755,6 @@ class DaemonProxy:
             except Exception:
                 pass
         return {"success": False, "error": res.get("error", "parse error")}
-        # Send evict request to daemon so the worker process is actually killed
-        try:
-            self.client._send({
-                "type": "evict_worker",
-                "spec": self.spec,
-                "python_exe": self.python_exe or "",
-                "worker_tag": "",
-            })
-        except Exception:
-            pass
         
     def get_version(self, package_name):
         import json as _json
