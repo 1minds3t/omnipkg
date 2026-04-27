@@ -1972,7 +1972,6 @@ def _auto_inject_stdlibs(code: str) -> str:
         if re.search(usage_pattern, code):
             # Check if the specific class/function is already imported
             import_patterns = [
-                # from pathlib import Path
                 rf"^\s*from\s+{lib}\s+import\s+.*\b{indicator}\b",
                 # import pathlib (then use pathlib.Path)
                 rf"^\s*import\s+{lib}\b",

@@ -1678,7 +1678,6 @@ def _dict_to_toml(data: dict) -> str:
 
     lines: list[str] = []
 
-    # [meta]
     lines.append("[meta]")
     for k, v in data["meta"].items():
         if isinstance(v, bool):

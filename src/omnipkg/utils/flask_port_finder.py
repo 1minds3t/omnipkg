@@ -435,7 +435,6 @@ if __name__ == "__main__":
         def test_2_concurrent_allocation(self):
             def allocate_port(thread_id):
                 port = find_free_port(reserve=True)
-                # safe_print(f"  Thread {thread_id}: Allocated port {port}")
                 time.sleep(0.05)
                 release_port(port)
                 return port
