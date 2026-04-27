@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.1] — 2026-04-27
+
+Critical bugfix (yanks v3.1.0, v3.2.0)
+
+Bubble installs silently succeeded but were immediately unusable. Any `8pkg run`
+invocation that triggered an on-demand bubble install would fail with:
+
+  RuntimeError: Installation reported success but <pkg>==<ver> not found. Found version: None
+
+A CI workaround introduced in v3.1.0 (`Set fixed Omnipkg Environment ID for CI`)
+injected `OMNIPKG_ENV_ID_OVERRIDE` into every worker subprocess. The value was
+computed with a different hash function (sha1) and different inputs than
+ConfigManager's canonical env_id (md5 of normalized sys.prefix). Workers wrote
+KB entries under the wrong env_id; the loader looked them up under the correct
+one and found nothing.
+
+- Introduced `OMNIPKG_DAEMON_TEMP_ID` for log/socket/pid path consolidation (daemon-internal only)
+- `OMNIPKG_ENV_ID_OVERRIDE` is no longer injected into worker subprocesses
+- `_get_venv_temp_dir()` now uses identical hash logic to ConfigManager
+
+v3.1.0, v3.2.0 — both yanked. Upgrade immediately.
+
+pip install --upgrade omnipkg
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (21 lines changed)
+
+_1 file changed, 9 insertions(+), 12 deletions(-)_
+
 ## [3.2.0] — 2026-04-26
 
 Infrastructure Overhaul & Exotic Platform Stability
