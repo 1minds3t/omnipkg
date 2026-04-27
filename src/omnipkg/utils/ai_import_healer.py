@@ -14,7 +14,7 @@ This intercepts code before execution and removes lines like:
     from your_file_name import calculate
     from my_script import function
     from placeholder_module import main
-    
+
 Safety Features:
 - Only removes obvious placeholders (not real package names)
 - Checks against known PyPI packages

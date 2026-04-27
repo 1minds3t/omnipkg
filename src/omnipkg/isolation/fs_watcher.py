@@ -148,7 +148,7 @@ class SharedWatchFlag:
             old.unlink()
         except Exception:
             pass
-            
+
         try:
             shm = shared_memory.SharedMemory(create=True, size=SHM_FLAG_SIZE,
                                              name=SHM_FLAG_NAME)
@@ -161,7 +161,7 @@ class SharedWatchFlag:
             ver, _, _ = struct.unpack_from(_FLAG_STRUCT, shm.buf, 0)
             # Reset dirty=0, update watcher_pid=current PID, keep existing version
             struct.pack_into(_FLAG_STRUCT, shm.buf, 0, ver, 0, os.getpid())
-            
+
         return cls(shm)
 
     @classmethod
@@ -340,7 +340,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             p = Path(path_str)
             stem = p.name[:-len(".dist-info")] if p.name.endswith(".dist-info") else p.name
             name = stem.rsplit("-", 1)[0] if "-" in stem else stem
-            
+
             if _norm(name) not in official:
                 log.info("[fs_watcher] 🚨 EXTERNAL CULPRIT during op: %s", name)
                 culprit_count += 1
@@ -567,11 +567,11 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             return
         if not self._is_relevant(event.src_path):
             return
-            
+
         # Log exactly which path triggered the event so we can debug "Why is this firing?"
         log.debug("[fs_watcher] [%s] event: %s %s", 
                   self._sp_path, event.event_type, event.src_path)
-        
+
         created = event.event_type in ("created", "modified")
         self._schedule_invalidation(event.src_path, created=created)
 
@@ -655,7 +655,7 @@ class MtimeFallbackWatcher:
         debug_file = os.path.join(__import__("tempfile").gettempdir(), "omnipkg_watcher_debug.txt")
         with open(debug_file, "a", encoding="utf-8") as f:
             f.write(f"\n--- Fallback Watcher Started. Watching {len(self._dirs)} dirs ---\n")
-            
+
         loop_count = 0
         while not self._stop_event.wait(self.POLL_INTERVAL):
             loop_count += 1
@@ -671,17 +671,17 @@ class MtimeFallbackWatcher:
                 old_mtime = self._mtimes.get(key, 0.0)
                 if new_mtime > old_mtime:
                     self._mtimes[key] = new_mtime
-                    
+
                     # Surgical check: What actually changed in site-packages?
                     current_items = {
                         n for n in os.listdir(d) 
                         if n.endswith(".dist-info") or n.endswith(".data")
                     } if d.exists() else set()
                     old_items = self._snapshot.get(key, set())
-                    
+
                     diff = (current_items - old_items) | (old_items - current_items)
                     self._snapshot[key] = current_items # Update snapshot
-                    
+
                     if not diff:
                         # Windows noise (e.g. .omnipkg_versions changed, but Lib\site-packages mtime updated)
                         continue
@@ -699,7 +699,7 @@ class MtimeFallbackWatcher:
                         for item in diff:
                             self._pending_validation_events.add((item in current_items, str(d / item)))
                         continue
-                        
+
                     # Check grace period via flag's our_write sentinel
                     _, _, pid_slot = struct.unpack_from(_FLAG_STRUCT, self._flag._shm.buf, 0)
                     if pid_slot < 0:
@@ -709,7 +709,7 @@ class MtimeFallbackWatcher:
                             with open(debug_file, "a", encoding="utf-8") as f:
                                 f.write(f"[{time.time()}] Ignored mtime change in {d} (was our own FFI write)\n")
                             continue   # our own FFI write, skip
-                    
+
                     # Parse name+version from each changed .dist-info dirname.
                     # Skip ~ prefixed temp names — pip/uv write these atomically
                     # (e.g. ~v_ffi-x.y.z.dist-info → uv_ffi-x.y.z.dist-info).
@@ -879,7 +879,7 @@ class MtimeFallbackWatcher:
         self._last_op_end_time = time.monotonic()
         # ✅ Clear LAST — poll loop is now safe with fresh snapshot.
         self._omnipkg_op_in_progress = False
-        
+
     def stop(self):
         self._stop_event.set()
 
@@ -962,7 +962,7 @@ class DaemonPatchSender:
             # On Windows, socket_path is a file containing {"port": 12345}
             with open(self._socket_path, "r") as f:
                 port = json.load(f).get("port")
-            
+
             if not port:
                 with open(debug_file, "a", encoding="utf-8") as f: 
                     f.write("Failed to read port from socket file.\n")
@@ -1036,11 +1036,11 @@ class SitePackagesWatcher:
             log.setLevel(logging.DEBUG)
 
         self._flag = SharedWatchFlag.create()
-        
+
         # 🔥 ADD IDENTITY: Tell us exactly which process is running the watcher
         log.info("[fs_watcher] Watcher Process Identity: PID=%s, Python=%s", 
                  os.getpid(), sys.executable)
-        
+
         log.info("[fs_watcher] Shared-memory flag created (name=%s)", SHM_FLAG_NAME)
 
         patch_fn = DaemonPatchSender(self._socket_path)
@@ -1126,22 +1126,22 @@ class SitePackagesWatcher:
                             pass
                 except Exception:
                     pass
-                
+
                 try:
                     self._observer.stop()
                 except Exception:
                     pass
-                
+
                 try:
                     self._observer.join(timeout=2.0)
                 except Exception:
                     pass
-                
+
                 # If still alive after join, it's a daemon thread now so exit won't block
                 self._observer = None
         except Exception:
             pass
-        
+
         # Stop the shared memory flag
         try:
             if self._shm_flag is not None:

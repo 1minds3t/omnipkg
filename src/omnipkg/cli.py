@@ -1240,7 +1240,7 @@ def create_parser():
         metavar="PATH",
         help=_("Override venv root detection"),
     )
-    
+
     # --- sync ---
     sync_parser = subparsers.add_parser(
         "sync",
@@ -1530,7 +1530,7 @@ def main():
                         return 1
                     cm.set("install_strategy", args.value)
                     safe_print(_("✅ install_strategy set to: {}").format(args.value))
-                    
+
                     # Patch the live preloaded core so the daemon worker picks it up immediately
                     # without a restart — cm.set() wrote to disk but the warm core has a stale dict.
                     try:
@@ -1569,7 +1569,7 @@ def main():
                 venv_root=Path(args.venv_root) if args.venv_root else None,
             )
             safe_print(_("📦 Lock file: {}").format(written_path))
-        
+
         elif args.command == "sync":
             from omnipkg.integration.reproducible import sync_lock
             sync_lock(

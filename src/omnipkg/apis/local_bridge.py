@@ -130,7 +130,7 @@ COMMAND_RULES = {
         'allowed_flags': ['--verbose', '-v'],
         'allow_args': False
     },
-    
+
     # Modification commands (need non-interactive flags)
     'demo': {
         'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
@@ -214,14 +214,14 @@ def find_free_port(start_port=5000, max_port=65535):
 def clean_and_validate(cmd_str):
     """
     🔒 ENHANCED VALIDATOR v4 - Non-Interactive Friendly
-    
+
     Security features:
     - Whitelist-based command validation
     - Argument pattern matching
     - Shell injection prevention
     - URL install blocking
     - Path traversal prevention
-    
+
     New features:
     - Supports numeric arguments (for demo selection)
     - Allows non-interactive flags
@@ -229,38 +229,38 @@ def clean_and_validate(cmd_str):
     """
     if not cmd_str or not cmd_str.strip():
         return False, "Empty command.", None, []
-    
+
     clean_str = cmd_str.strip()
-    
+
     # Strip common prefixes
     if clean_str.lower().startswith("8pkg "):
         clean_str = clean_str[5:].strip()
     elif clean_str.lower().startswith("omnipkg "):
         clean_str = clean_str[8:].strip()
-    
+
     # Remove any piping/chaining attempts
     clean_str = clean_str.split('|')[0].split(';')[0].split('&')[0].strip()
-    
+
     try:
         parts = shlex.split(clean_str)
     except ValueError as e:
         return False, _('⛔ Invalid shell syntax: {}').format(e), None, []
-    
+
     if not parts:
         return False, "No command found.", None, []
 
     primary_command = parts[0].lower()
-    
+
     # Check if command is blocked
     if primary_command in BLOCKED_COMMANDS:
         return False, _("⛔ Security: '{}' is disabled via Web.").format(primary_command), None, []
-    
+
     # Check if command is in our rules
     if primary_command not in COMMAND_RULES:
         return False, _("⚠️ Unknown command '{}'.").format(primary_command), None, []
-    
+
     rules = COMMAND_RULES[primary_command]
-    
+
     # Validate each argument
     for arg in parts[1:]:
         # Check if it's a flag
@@ -271,21 +271,21 @@ def clean_and_validate(cmd_str):
             # It's a positional argument
             if not rules.get('allow_args', False):
                 return False, _("⛔ Command '{}' doesn't accept arguments.").format(primary_command), None, []
-            
+
             # Check against pattern
             pattern = rules.get('arg_pattern')
             if pattern and not re.match(pattern, arg):
                 return False, _("⛔ Invalid argument format: '{}'.").format(arg), None, []
-            
+
             # Check blocked patterns (for install commands)
             blocked = rules.get('blocked_patterns', [])
             for blocked_pattern in blocked:
                 if re.search(blocked_pattern, arg):
                     return False, _('⛔ Security: Argument contains blocked pattern.'), None, []
-    
+
     # Get flags to auto-inject
     auto_flags = rules.get('auto_flags', [])
-    
+
     return True, "", clean_str, auto_flags
 
 def execute_omnipkg_command(cmd_str):
@@ -300,15 +300,15 @@ def execute_omnipkg_command(cmd_str):
 
     try:
         args = shlex.split(cleaned_cmd)
-        
+
         # 🤖 AUTO-FLAG INJECTION for safety
         for flag in auto_flags:
             if flag not in args:
                 args.append(flag)
                 logger.info(_('🔧 Auto-injected flag: {}').format(flag))
-        
+
         full_command = [sys.executable, "-m", "omnipkg", *args]
-        
+
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
@@ -331,16 +331,16 @@ def execute_omnipkg_command(cmd_str):
             startupinfo=startupinfo,
             cwd=Path.home()
         )
-        
+
         # Stream output line by line
         for line in process.stdout:
             yield sanitize_output(line)
-        
+
         process.wait(timeout=180)
-        
+
         if process.returncode != 0:
             yield _('\n⚠️ Exit Code {}\n').format(process.returncode)
-        
+
     except subprocess.TimeoutExpired:
         process.kill()
         yield "\n⚠️ Error: Command timed out (exceeded 3 minutes).\n"
@@ -350,7 +350,7 @@ def execute_omnipkg_command(cmd_str):
 def sanitize_output(text):
     """
     🛡️ Removes sensitive information from command outputs.
-    
+
     Redacts:
     - User paths (Windows and Unix)
     - Private IP addresses
@@ -359,18 +359,18 @@ def sanitize_output(text):
     """
     if not text:
         return text
-    
+
     # Redact Windows user paths
     text = re.sub(r'[A-Za-z]:\\Users\\[^\\]+', r'[USER]', text)
-    
+
     # Redact Unix home paths
     text = re.sub(r'/home/[^/\s]+', r'/home/[USER]', text)
-    
+
     # Redact private IPs
     text = re.sub(r'\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
     text = re.sub(r'\b192\.168\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
     text = re.sub(r'\b172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
-    
+
     # Redact secrets
     text = re.sub(
         r'(api[_-]?key|token|password|secret)[\s:=]+[\w-]{16,}', 
@@ -378,12 +378,12 @@ def sanitize_output(text):
         text, 
         flags=re.IGNORECASE
     )
-    
+
     # Truncate if too long
     MAX_LENGTH = 10000
     if len(text) > MAX_LENGTH:
         text = text[:MAX_LENGTH] + "\n\n... [Output truncated for safety]"
-    
+
     return text
 
 def corsify_response(response, origin):
@@ -401,14 +401,14 @@ def create_app(port):
     import sqlite3
     import json
     from datetime import datetime
-    
+
     app = Flask(__name__)
     CORS(app, origins=list(ALLOWED_ORIGINS))
-    
+
     # Silence standard Flask logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
-    
+
     # Initialize telemetry DB
     DB_FILE = OMNIPKG_DIR / "telemetry.db"
     def init_db():
@@ -423,7 +423,7 @@ def create_app(port):
                     meta TEXT
                 )
             ''')
-    
+
     try:
         init_db()
         logger.info(f"📊 Telemetry DB initialized at {DB_FILE}")
@@ -434,14 +434,14 @@ def create_app(port):
     def enforce_origin():
         if request.method == "OPTIONS":
             return
-        
+
         origin = request.headers.get('Origin')
-        
+
         # 🔓 DEV MODE: Allow missing Origin for curl/testing
         if DEV_MODE and not origin:
             logger.info("⚠️ DEV MODE: Allowing request without Origin header")
             return
-        
+
         # Block requests with NO Origin in production
         if not origin and not DEV_MODE:
             return jsonify({
@@ -464,7 +464,7 @@ def create_app(port):
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
-        
+
         # Log health check telemetry
         try:
             with sqlite3.connect(DB_FILE) as conn:
@@ -474,7 +474,7 @@ def create_app(port):
                 )
         except Exception as e:
             logger.error(_('DB Error: {}').format(e))
-        
+
         return corsify_response(jsonify({
             "status": "connected", 
             "port": port, 
@@ -486,11 +486,11 @@ def create_app(port):
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
-        
+
         data = request.json
         cmd = data.get('command', '')
         logger.info(_('⚡ Executing: {}').format(cmd))
-        
+
         # Log to telemetry
         try:
             with sqlite3.connect(DB_FILE) as conn:
@@ -500,13 +500,13 @@ def create_app(port):
                 )
         except Exception as e:
             logger.error(_('DB Error: {}').format(e))
-        
+
         # Stream response using Server-Sent Events format
         def generate():
             for line in execute_omnipkg_command(cmd):
                 yield f"data: {json.dumps({'line': line})}\n\n"
             yield "data: {\"done\": true}\n\n"
-        
+
         response = make_response(generate())
         response.headers['Content-Type'] = 'text/event-stream'
         response.headers['Cache-Control'] = 'no-cache'
@@ -522,9 +522,9 @@ def create_app(port):
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
-        
+
         logger.info("🔧 Installing omnipkg from PyPI...")
-        
+
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--upgrade", "omnipkg"],
@@ -532,12 +532,12 @@ def create_app(port):
                 text=True,
                 timeout=120
             )
-            
+
             if result.returncode == 0:
                 output = sanitize_output(result.stdout or "✅ omnipkg installed successfully")
             else:
                 output = _('❌ Installation failed:\n{}').format(sanitize_output(result.stderr))
-            
+
             # Log to telemetry
             try:
                 with sqlite3.connect(DB_FILE) as conn:
@@ -547,9 +547,9 @@ def create_app(port):
                     )
             except Exception as e:
                 logger.error(_('DB Error: {}').format(e))
-            
+
             return corsify_response(jsonify({"output": output}), origin)
-            
+
         except subprocess.TimeoutExpired:
             return corsify_response(jsonify({"output": "❌ Installation timed out"}), origin)
         except Exception as e:
@@ -561,23 +561,23 @@ def create_app(port):
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
-            
+
         try:
             data = request.json
             event_type = data.get('event_type', 'unknown')
             event_name = data.get('event_name', 'unknown')
             page = data.get('page', 'unknown')
             meta = json.dumps(data.get('metadata', {}))
-            
+
             # 1. Save locally
             with sqlite3.connect(DB_FILE) as conn:
                 conn.execute(
                     "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
                     (datetime.utcnow().isoformat(), event_type, event_name, page, meta)
                 )
-            
+
             logger.info(f"📡 TELEMETRY: [{event_type}] {event_name}")
-            
+
             # 2. Forward to Cloudflare Worker (fire and forget)
             try:
                 import requests
@@ -589,12 +589,12 @@ def create_app(port):
                 logger.info("☁️ Telemetry forwarded to Cloudflare")
             except Exception as e:
                 logger.warning(_('Failed to forward to Cloudflare: {}').format(e))
-            
+
             return corsify_response(jsonify({"status": "saved"}), origin)
         except Exception as e:
             logger.error(_('Telemetry save failed: {}').format(e))
             return corsify_response(jsonify({"error": str(e)}), origin)
-    
+
     return app
 
 def run_bridge_server():
@@ -608,9 +608,9 @@ def run_bridge_server():
     except RuntimeError as e:
         safe_print(_('❌ {}').format(e))
         sys.exit(1)
-    
+
     print(_('Local Port: {}').format(port), flush=True)
-    
+
     app = create_app(port)
     app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False)
 
@@ -620,12 +620,12 @@ def run_bridge_server():
 
 class WebBridgeManager:
     """Manages the web bridge as a background service."""
-    
+
     def __init__(self):
         self.pid_file = PID_FILE
         self.log_file = LOG_FILE
         self.pid_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     def start(self):
         """Start the web bridge in background."""
         if not HAS_WEB_DEPS:
@@ -637,10 +637,10 @@ class WebBridgeManager:
             safe_print(_('✅ Web bridge already running on port {}').format(port))
             safe_print(_('🌍 Dashboard: {}#{}').format(PRIMARY_DASHBOARD, port))
             return 0
-        
+
         safe_print(_('🚀 Starting web bridge...'))
         cmd = [sys.executable, "-m", "omnipkg.apis.local_bridge"]
-        
+
         # Cross-platform detachment logic
         kwargs = {}
         if os.name == 'nt':
@@ -657,10 +657,10 @@ class WebBridgeManager:
                     cwd=Path.home(),
                     **kwargs
                 )
-            
+
             self.pid_file.write_text(str(process.pid))
             time.sleep(1.5)
-            
+
             if self.is_running():
                 port = self._get_port()
                 url = f"{PRIMARY_DASHBOARD}#{port}"
@@ -685,17 +685,17 @@ class WebBridgeManager:
         except Exception as e:
             safe_print(_('❌ Launch error: {}').format(e))
             return 1
-    
+
     def stop(self):
         """Stop the web bridge safely across platforms."""
         if not self.is_running():
             safe_print(_('⚠️  Web bridge is not running'))
             return 0
-        
+
         try:
             pid = int(self.pid_file.read_text())
             safe_print(_('🛑 Stopping web bridge (PID: {})...').format(pid))
-            
+
             if os.name == 'nt':
                 subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -714,21 +714,21 @@ class WebBridgeManager:
             if self.pid_file.exists(): 
                 self.pid_file.unlink()
             return 1
-    
+
     def restart(self):
         """Restart the web bridge."""
         safe_print(_('🔄 Restarting web bridge...'))
         self.stop()
         time.sleep(1)
         return self.start()
-    
+
     def status(self):
         """Check web bridge status."""
         if not self.is_running():
             safe_print(_('❌ Web bridge is not running'))
             safe_print(_('\n💡 Start with: 8pkg web start'))
             return 1
-        
+
         if not HAS_SYS_DEPS:
             safe_print(_("⚠️  'psutil' not installed. Limited status info available."))
             pid = int(self.pid_file.read_text())
@@ -738,12 +738,12 @@ class WebBridgeManager:
 
         pid = int(self.pid_file.read_text())
         port = self._get_port()
-        
+
         try:
             process = psutil.Process(pid)
             mem_info = process.memory_info()
             uptime = time.time() - process.create_time()
-            
+
             print("="*60)
             safe_print(_('✅ Web Bridge Status: RUNNING'))
             print("="*60)
@@ -758,13 +758,13 @@ class WebBridgeManager:
             safe_print(_('⚠️  PID file exists but process is dead. Cleaning up...'))
             self.pid_file.unlink()
             return 1
-    
+
     def show_logs(self, follow=False, lines=50):
         """Display web bridge logs."""
         if not self.log_file.exists():
             safe_print(_('❌ Log file not found: {}').format(self.log_file))
             return 1
-        
+
         if follow:
             safe_print(_('📝 Following logs (Ctrl+C to stop)...\n'))
             try:
@@ -852,7 +852,7 @@ class WebBridgeManager:
             return True
         except (OSError, ValueError):
             return False
-    
+
     def _get_port(self):
         """Retrieve port from log file."""
         if not self.log_file.exists(): 
@@ -865,7 +865,7 @@ class WebBridgeManager:
         except Exception:
             pass
         return 5000
-    
+
     def _format_uptime(self, seconds):
         """Format uptime in human-readable format."""
         m, s = divmod(seconds, 60)

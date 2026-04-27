@@ -29,12 +29,12 @@ def safe_print(*args, **kwargs):
     Detects non-UTF8 sessions (like cp1252) and strips emojis to prevent mojibake.
     """
     from omnipkg.i18n import _
-    
+
     # CRITICAL WINDOWS FIX: Force proper output handling
     if sys.platform == "win32":
         # Always flush on Windows to prevent buffer corruption
         kwargs["flush"] = True
-        
+
         # Ensure stdout/stderr are properly flushed before printing
         try:
             sys.stdout.flush()
@@ -43,17 +43,17 @@ def safe_print(*args, **kwargs):
             pass
     elif "flush" not in kwargs:
         kwargs["flush"] = True
-    
+
     try:
         _builtin_print(*args, **kwargs)
-        
+
         # CRITICAL: Force additional flush on Windows after print
         if sys.platform == "win32":
             try:
                 sys.stdout.flush()
             except:
                 pass
-                
+
     except UnicodeEncodeError:
         try:
             safe_args = []
@@ -76,14 +76,14 @@ def safe_print(*args, **kwargs):
                 else:
                     safe_args.append(arg)
             _builtin_print(*safe_args, **kwargs)
-            
+
             # CRITICAL: Force flush after fallback print too
             if sys.platform == "win32":
                 try:
                     sys.stdout.flush()
                 except:
                     pass
-                    
+
         except Exception:
             _builtin_print("[omnipkg: Encoding Error - Shell might not support UTF-8]", flush=True)
             if sys.platform == "win32":
@@ -374,7 +374,7 @@ class ProcessCorruptedException(Exception):
 
 class UVFailureDetector:
     """Detects UV dependency resolution failures."""
-    
+
     FAILURE_PATTERNS = [
         "No solution found when resolving dependencies",
         "ResolutionImpossible",

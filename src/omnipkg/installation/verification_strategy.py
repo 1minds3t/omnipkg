@@ -61,7 +61,7 @@ class SmartVerificationStrategy:
     - tensorboard failing without tensorflow
     - keras failing without tensorflow
     - scipy failing without numpy
-    
+
     CRITICAL V2: Uses sterile subprocess AND includes dependency bubbles.
     """
 
@@ -80,7 +80,7 @@ class SmartVerificationStrategy:
     def _get_actual_import_names(self, dist) -> List[str]:
         """
         Read top_level.txt to get actual import names.
-        
+
         This fixes issues where package name != import name (e.g. tomli -> tomli, autocommand -> autocommand).
         """
         try:
@@ -121,7 +121,7 @@ class SmartVerificationStrategy:
         """
         if existing_bubble_paths is None:
             existing_bubble_paths = []
-            
+
         if not all_dists:
             safe_print("   ❌ Verification failed: No valid packages in staging.")
             return False, []
@@ -232,13 +232,13 @@ class SmartVerificationStrategy:
                 groups[group_name]["dists"].append(dist)
             else:
                 standalone_packages.append(dist)
-        
+
         # [SMART STRATEGY] Namespace Clustering
         # Group packages that share a common prefix (e.g., jaraco.text, jaraco.functools)
         # to ensure they are verified in the same context.
         namespace_clusters = {}
         remaining_standalone = []
-        
+
         for dist in standalone_packages:
             pkg_name = dist.metadata["Name"]
             if "." in pkg_name:
@@ -249,7 +249,7 @@ class SmartVerificationStrategy:
                 namespace_clusters[root].append(dist)
             else:
                 remaining_standalone.append(dist)
-        
+
         # Add clusters to groups
         for root, cluster_dists in namespace_clusters.items():
             # If only 1 package, treat as standalone to avoid unnecessary grouping overhead
@@ -275,16 +275,16 @@ class SmartVerificationStrategy:
     ) -> List[VerificationResult]:
         """
         Verify all packages in a group together IN A STERILE SUBPROCESS.
-        
+
         CRITICAL FIX V2: Now includes dependency bubbles so keras can import tensorflow!
         """
-        
+
         if existing_bubble_paths is None:
             existing_bubble_paths = []
-        
+
         # Prepare the list of packages to test
         packages_to_test = []
-        
+
         if group_def:
             safe_print(_("      - Testing group '{}' ({} packages together)...").format(group_name, len(dists)))
             test_order = group_def.test_order if group_def.test_order else None
@@ -303,18 +303,18 @@ class SmartVerificationStrategy:
                 if d not in sorted_dists:
                     sorted_dists.append(d)
             dists = sorted_dists
-        
+
         # Build a simple list of dicts to send to the subprocess
         for dist in dists:
             pkg_name = dist.metadata["Name"]
             version = dist.metadata.get("Version", "unknown")
-            
+
             # [SMART STRATEGY] Use top_level.txt for accurate import names
             candidates = self._get_actual_import_names(dist)
             if not candidates:
                 # Fallback to heuristics
                 candidates = self.gatherer._get_import_candidates(dist, pkg_name)
-            
+
             if candidates:
                 packages_to_test.append({
                     "name": pkg_name,
@@ -419,14 +419,14 @@ print(json.dumps(results))
             if proc.returncode != 0 and not proc.stdout.strip():
                 # Provide stderr in crash report
                 return [VerificationResult(p['name'], p['version'], False, f"Crash: {proc.stderr}") for p in packages]
-            
+
             # Handle potential JSON decode errors if stdout contains garbage
             try:
                 raw_results = json.loads(proc.stdout)
                 return [VerificationResult(r['package_name'], r['version'], r['success'], r['error']) for r in raw_results]
             except json.JSONDecodeError:
                  return [VerificationResult(p['name'], p['version'], False, _('JSON Error: {}...').format(proc.stdout[:200])) for p in packages]
-                 
+
         except Exception as e:
             return [VerificationResult(p['name'], p['version'], False, str(e)) for p in packages]
 

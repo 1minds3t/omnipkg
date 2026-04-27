@@ -194,7 +194,7 @@ def smart_tf_patcher():
         # NEW: Handle opt_einsum (used by both TF and PyTorch)
         # ═══════════════════════════════════════════════════════════
         is_opt_einsum = name and name.startswith("opt_einsum")
-        
+
         # Be more specific about torch - don't catch safetensors.torch!
         is_torch_or_numpy = name and (
             (name == "torch" or name.startswith("torch.")) or 
@@ -241,7 +241,7 @@ def smart_tf_patcher():
         if is_tf_import:
             import os
             current_pid = os.getpid()
-            
+
             # Only check for reload if THIS WORKER previously loaded TF successfully
             if current_pid in _tf_loaded_pids and "tensorflow" not in sys.modules:
                 safe_print("☢️  [OMNIPKG] FATAL TENSORFLOW RELOAD DETECTED!")
@@ -475,28 +475,28 @@ def _patch_opt_einsum_for_isolation():
 
     # Frameworks to isolate if not already loaded
     targets = ['torch', 'jax', 'cupy']
-    
+
     try:
         # We only stub if the main package isn't already loaded.
         # If torch is already in sys.modules, opt_einsum can use it safely.
         # If it's NOT, we stub it to prevent opt_einsum from triggering a load.
         unavailable = [t for t in targets if t not in sys.modules]
-        
+
         if not unavailable:
             return
 
         for framework in unavailable:
             backend_name = f'opt_einsum.backends.{framework}'
-            
+
             # Create stub module
             backend_module = types.ModuleType(backend_name)
             backend_module.__file__ = '<omnipkg-isolated>'
-            
+
             # Add required opt_einsum interface methods to prevent AttributeErrors
             backend_module.build_expression = lambda *args, **kwargs: None
             backend_module.evaluate_constants = lambda *args, **kwargs: None
             backend_module.compute_size_by_dict = lambda *args, **kwargs: None
-            
+
             # Add framework-specific stubs
             if framework == 'torch':
                 backend_module.to_torch = lambda x: None
@@ -507,7 +507,7 @@ def _patch_opt_einsum_for_isolation():
             elif framework == 'cupy':
                 backend_module.to_cupy = lambda x: None
                 backend_module.CupyBackend = object
-            
+
             # Inject into sys.modules
             sys.modules[backend_name] = backend_module
 
