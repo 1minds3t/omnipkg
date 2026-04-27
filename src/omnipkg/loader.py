@@ -1456,7 +1456,7 @@ class omnipkgLoader:
         try:
             # FIX: Use the correct API for Python 3.8+
             from importlib.metadata import distributions, Distribution
-            
+
             for dist in distributions(path=[str(site_packages)]):
                 # Get the package name using the proper metadata API
                 try:
@@ -1478,7 +1478,7 @@ class omnipkgLoader:
                                 continue
                         else:
                             continue
-                
+
                 if canonicalize_name(dist_name) == canonical_target:
                     if dist.version == requested_version:
                         if not self.quiet:
@@ -2307,15 +2307,15 @@ class omnipkgLoader:
                 importlib.invalidate_caches()
                 gc.collect()
                 time.sleep(0.01)  # Brief pause for filesystem sync
-                
+
                 # Re-check bubble existence with explicit path resolution
                 bubble_path = bubble_path.resolve()  # Force fresh stat
-                
+
                 if not bubble_path.exists():
                     # Nuclear option: check if it's a timing issue
                     time.sleep(0.1)
                     bubble_path = self.multiversion_base / f"{pkg_name}-{requested_version}"
-                
+
                 if bubble_path.is_dir():
                     if not self.quiet:
                         safe_print("   - ✅ Bubble verified after installation.")
@@ -2705,7 +2705,7 @@ class omnipkgLoader:
                 # 🔧 FIX: Extract and pass index URLs
                 index_url = None
                 extra_index_url = None
-                
+
                 # Auto-detect PyTorch index
                 if 'torch' in spec.lower() and '+cu' in spec:
                     cu_version = spec.split('+cu')[1].split('==')[0] if '==' in spec else spec.split('+cu')[1]

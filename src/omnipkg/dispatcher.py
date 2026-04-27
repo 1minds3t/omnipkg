@@ -41,19 +41,19 @@ def main():
             kernel32 = ctypes.windll.kernel32
             # Enable ANSI escape sequences for stdout
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-            
+
             # Force UTF-8 encoding
             if hasattr(sys.stdout, 'reconfigure'):
                 sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
                 sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
             if hasattr(sys.stdin, 'reconfigure'):
                 sys.stdin.reconfigure(encoding='utf-8')
-                
+
             os.environ['PYTHONIOENCODING'] = 'utf-8'
             os.environ['PYTHONUNBUFFERED'] = '1'
         except Exception:
             pass
-    
+
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
 
     if debug_mode:
@@ -100,7 +100,7 @@ def main():
     if "OMNIPKG_LANG" not in os.environ:
         venv_root = find_absolute_venv_root()
         config_path = venv_root / ".omnipkg_config.json"
-        
+
         if config_path.exists():
             try:
                 with open(config_path, "r") as f:
@@ -113,42 +113,42 @@ def main():
             except Exception as e:
                 if debug_mode:
                     print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
-    
+
     # ═══════════════════════════════════════════════════════════
     # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, omnipkg39, etc.)
     # ═══════════════════════════════════════════════════════════
     import re
     prog_name = Path(sys.argv[0]).name.lower()
-    
+
     # Match both 8pkgXY and omnipkgXY (e.g. 8pkg39, omnipkg39, omnipkg311)
     version_match = re.match(r"(?:8pkg|omnipkg)(\d)(\d+)", prog_name)
-    
+
     if version_match:
         major = version_match.group(1)
         minor = version_match.group(2)
         forced_version = f"{major}.{minor}"
-        
+
         # Inject --python flag if not already present
         if "--python" not in sys.argv:
             sys.argv.insert(1, "--python")
             sys.argv.insert(2, forced_version)
-        
+
         if debug_mode:
             print(f'[DEBUG-DISPATCH] Detected version-specific command: {prog_name}', file=sys.stderr)
             print(f'[DEBUG-DISPATCH] Injected --python {forced_version}', file=sys.stderr)
             print(f'[DEBUG-DISPATCH] Modified argv: {sys.argv}', file=sys.stderr)
-    
+
     # ═══════════════════════════════════════════════════════════
     # STEP 1: Identify how we were called
     # ═══════════════════════════════════════════════════════════
-    
+
     # If called as 'python', 'python3', or 'pip' -> ACT AS SHIM
     if prog_name.startswith("python") or prog_name == "pip":
         if debug_mode:
             print("[DEBUG-SHIM] Intercepted call to '{}'".format(prog_name), file=sys.stderr)
         handle_shim_execution(prog_name, debug_mode)
         return
-    
+
     # ═══════════════════════════════════════════════════════════
     # STEP 2: Determine which Python interpreter to use
     # ═══════════════════════════════════════════════════════════
@@ -180,11 +180,11 @@ def main():
         if is_swap_command and not is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
             if debug_mode:
                 print("[DEBUG-DISPATCH] swap package inside swap shell — using active context Python", file=sys.stderr)
-    
+
     if debug_mode:
         print(f'[DEBUG-DISPATCH] Using Python: {target_python}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] Current executable: {sys.executable}', file=sys.stderr)
-    
+
     # NEW
     venv_root = find_absolute_venv_root()
     # NEW
@@ -192,7 +192,7 @@ def main():
         str(target_python).startswith(str(venv_root))
         or str(target_python.resolve()).startswith(str(venv_root.resolve()))
     )
-    
+
     if debug_mode:
         print(f'[DEBUG-DISPATCH] is_managed check:', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]   target_python         : {target_python}', file=sys.stderr)
@@ -200,7 +200,7 @@ def main():
         print(f'[DEBUG-DISPATCH]   venv_root             : {venv_root}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]   venv_root.resolve()   : {venv_root.resolve()}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]   is_managed            : {is_managed}', file=sys.stderr)
-    
+
     if not target_python.exists() or not is_managed:
         # Lazy import — only needed on this path
         import subprocess
@@ -243,7 +243,7 @@ def main():
         try:
             import socket
             import tempfile
-            
+
             sock_path = os.path.join(tempfile.gettempdir(), "omnipkg", "omnipkg_daemon.sock")
             if sys.platform == "win32":
                 conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
@@ -266,7 +266,7 @@ def main():
                     sock.settimeout(300)
                 else:
                     raise ValueError()
-                    
+
             req = {
                 "type": "run_cli",
                 "argv":["omnipkg"] + sys.argv[1:],
@@ -274,10 +274,10 @@ def main():
                 "isatty": sys.stdout.isatty(),
                 "python_exe": str(target_python)
             }
-            
+
             req_bytes = json.dumps(req).encode("utf-8")
             sock.sendall(len(req_bytes).to_bytes(8, "big") + req_bytes)
-            
+
             while True:
                 len_bytes = sock.recv(8)
                 if not len_bytes:
@@ -290,7 +290,7 @@ def main():
                         break
                     data.extend(chunk)
                 msg = json.loads(data.decode("utf-8"))
-                
+
                 if msg.get("stream") == "stdout":
                     sys.stdout.write(msg.get("data", ""))
                     sys.stdout.flush()
@@ -824,7 +824,7 @@ def determine_target_python() -> Path:
         if debug_mode:
             print(f'[DEBUG-DISPATCH] ✅ Running native venv Python → returning {current}', file=sys.stderr)
         return current
-    
+
     # ─────────────────────────────────────────────────────────────
     # Fallback: whatever Python is running this script
     # ─────────────────────────────────────────────────────────────
@@ -887,7 +887,7 @@ def test_active_python_version() -> str:
     except Exception:
         pass
     return None
-    
+
 def handle_shim_execution(prog_name: str, debug: bool):
     target_version = os.environ.get("OMNIPKG_PYTHON")
     venv_root = os.environ.get("OMNIPKG_VENV_ROOT")
@@ -998,45 +998,45 @@ def handle_shim_execution(prog_name: str, debug: bool):
 def resolve_python_path(version: str) -> Path:
     """
     Resolve a Python version string to an actual interpreter path.
-    
+
     NEW BEHAVIOR: First checks if the CURRENT executable's config knows about
     this version, then falls back to registry lookup.
     """
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-    
+
     # If it's already a path, use it
     if "/" in version or "\\" in version:
         return Path(version)
-    
+
     # Extract major.minor from version string
     version_parts = version.split(".")
     major_minor = f"{version_parts[0]}.{version_parts[1]}" if len(version_parts) >= 2 else version
-    
+
     # ═══════════════════════════════════════════════════════════
     # STEP 1: Find the venv root (where the registry lives)
     # ═══════════════════════════════════════════════════════════
     venv_root = find_absolute_venv_root()
-    
+
     if debug_mode:
         print(f'[DEBUG-DISPATCH] Absolute Venv Root: {venv_root}', file=sys.stderr)
-    
+
     # ═══════════════════════════════════════════════════════════
     # STEP 2: Check the master registry
     # ═══════════════════════════════════════════════════════════
     registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
-    
+
     if registry_path.exists():
         if debug_mode:
             print(f"[DEBUG-DISPATCH] Reading registry: {registry_path}", file=sys.stderr)
             with open(registry_path, "r") as _dbg_f:
                 print(f"[DEBUG-DISPATCH] Registry contents: {_dbg_f.read()}", file=sys.stderr)
-        
+
         try:
             with open(registry_path, "r") as f:
                 data = json.load(f)
-            
+
             interpreters = data.get("interpreters", {})
-            
+
             # Try exact match first, then major.minor
             for key in [version, major_minor]:
                 if key in interpreters:
@@ -1052,11 +1052,11 @@ def resolve_python_path(version: str) -> Path:
                         # config, running as the wrong Python version.
                         _ensure_interpreter_config(path, key, venv_root, debug_mode)
                         return path
-        
+
         except Exception as e:
             if debug_mode:
                 print(f'[DEBUG-DISPATCH] Registry read error: {e}', file=sys.stderr)
-    
+
     # ═══════════════════════════════════════════════════════════
     # STEP 3: FALLBACK - Check Native Venv Binaries
     # ═══════════════════════════════════════════════════════════
@@ -1068,7 +1068,7 @@ def resolve_python_path(version: str) -> Path:
         return venv_root / ".omnipkg" / "interpreters" / f"cpython-{version}" / "bin" / f"python{major_minor}"
 
     bin_dir = venv_root / ("Scripts" if os.name == "nt" else "bin")
-    
+
     if os.name == "nt":
         candidates = [bin_dir / "python.exe"]
     else:
@@ -1077,24 +1077,24 @@ def resolve_python_path(version: str) -> Path:
             bin_dir / "python3",
             bin_dir / "python",
         ]
-    
+
     for candidate in candidates:
         if candidate.exists():
             if debug_mode:
                 print(f'[DEBUG-DISPATCH] Found native: {candidate}', file=sys.stderr)
             return candidate
-    
+
     # ═══════════════════════════════════════════════════════════
     # STEP 4: LAST RESORT - Check System PATH
     # ═══════════════════════════════════════════════════════════
     import shutil
     path_exe = shutil.which(f"python{version}") or shutil.which(f"python{major_minor}")
-    
+
     if path_exe:
         if debug_mode:
             print(f'[DEBUG-DISPATCH] Found in PATH: {path_exe}', file=sys.stderr)
         return Path(path_exe)
-    
+
     # Not found
     return Path(f"/path/to/python{major_minor}/NOT_FOUND")
 
@@ -1105,7 +1105,7 @@ def _ensure_interpreter_config(interpreter_path: Path, version: str, venv_root: 
     Creates .omnipkg_config.json next to the interpreter if it doesn't exist.
     Called from the dispatcher at the earliest moment we know a path is valid —
     right after a registry hit — so the config is always present before cli.py loads.
-    
+
     This is intentionally lightweight: no imports from core.py, no subprocesses.
     We just write the essential keys so _load_or_create_config has something to read.
     """
@@ -1122,7 +1122,7 @@ def _ensure_interpreter_config(interpreter_path: Path, version: str, venv_root: 
         # Standard layout: .../cpython-3.11.9/Lib/site-packages (Windows)
         #                   .../cpython-3.11.9/lib/python3.11/site-packages (Unix)
         exe_dir = interpreter_path.parent  # e.g. .../cpython-3.11.9/ or .../cpython-3.11.9/bin/
-        
+
         # Walk up to find the interpreter root (parent of bin/ or Scripts/)
         interp_root = exe_dir
         if exe_dir.name.lower() in ("bin", "scripts"):
@@ -1536,25 +1536,25 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
     """
     Find the ABSOLUTE TOP-LEVEL virtual environment root.
     Uses the SAME logic as ConfigManager._get_venv_root() to ensure consistency.
-    
+
     Args:
         ignore_env_override: If True, ignores OMNIPKG_VENV_ROOT env var.
                            Used by shims to determine their true identity.
     """
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-    
+
     if not ignore_env_override:
         override = os.environ.get("OMNIPKG_VENV_ROOT")
         if override:
             if debug_mode:
                 print(f'[DEBUG-DISPATCH] Using OMNIPKG_VENV_ROOT override: {override}', file=sys.stderr)
             return Path(override)
-    
+
     # CRITICAL: When running as a shim/dispatcher, sys.executable is the python interpreter
     # running this script. But we want to find the venv relative to THIS SCRIPT.
     # If we are frozen or running as a script, sys.argv[0] is more reliable for location.
     current_executable = Path(sys.argv[0]).resolve()
-    
+
     # Fallback to sys.executable if argv[0] seems weird (e.g. -c)
     if not current_executable.exists():
         current_executable = Path(sys.executable).resolve()

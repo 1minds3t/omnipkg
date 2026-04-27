@@ -82,7 +82,7 @@ def install_dispatcher_binary(install_dir: Path = None) -> bool:
             binary_tmp.unlink()
         print(f"  [dispatcher] Skipped: {e}")
         return False
-   
+
 
 if __name__ == "__main__":
     install_dispatcher_binary()
