@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.0] — 2026-04-26
+
+Infrastructure Overhaul & Exotic Platform Stability
+
+*   **🚀 Exotic Platform Support:** Full integration with the `exotic-wheels` index, enabling seamless installation on `musllinux` (armv7l, aarch64, ppc64le, s390x).
+*   **🛠️ C-Extension Hardening:** Resolved critical 32-bit pointer truncation warnings on `armv7l` and `i686` targets to ensure memory safety across architectures.
+*   **📦 Binary Distribution:** Introduced `abi3` wheels for atomic extensions, allowing a single wheel to work across multiple Python 3.x versions.
+*   **⚙️ Build Pipeline Refactor:** Massive overhaul of `publish2.yml` and `conda_build` workflows, reducing build failures and optimizing the `cibuildwheel` environment.
+*   **🧹 Codebase Hygiene:** Removed ~10k lines of stale locale data and applied wide-scale refactoring for better maintainability.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/commands/run.py (33 lines changed)
+
+**⚙️ Configuration:**
+- pyproject.toml (6 lines)
+
+**Additional Changes:**
+- Update configuration
+- fix: fix import in conda forge mapping logic
+- fix: update locales path and resolve manifest warnings
+
+**New Features:**
+- feat: abi3 wheel for atomic ext, exotic platform hint on musl builds
+
+**Bug Fixes:**
+- fix: exotic-wheels index url, add build/ to gitignore
+- fix: use /simple/ path for exotic-wheels index url
+- fix: resolve 32-bit pointer truncation warnings on armv7l/i686
+- fix: remove merge conflict markers from publish2.yml
+- fix: safe march flags, remove build fallback, add ref input to workflow
+- fix: add locale.getencoding shim to setup.py to fix C dispatcher in manylinux
+- fix: remove auditwheel silent fallback to prevent bare linux_aarch64 tags
+
+**Updates:**
+- Update pip install command to use only-binary option
+- Update project title and description in README
+- Update build environment and before build commands
+- Update CIBW_BEFORE_BUILD to include setuptools version
+- Update workflow ID in homebrew-update.yml
+
+_42 files changed, 984 insertions(+), 10319 deletions(-)_
+
 ## [3.1.2] — 2026-04-26
 
 Infrastructure Overhaul & Exotic Platform Stability
