@@ -5900,12 +5900,10 @@ class DaemonClient:
                     attempts = 0
                     self.auto_start = False
                     continue
-                else:
-                    return {
-                        "success": False,
-                        "error": "Failed to auto-start daemon (timeout)",
-                    }
-                    
+                return {
+                    "success": False,
+                    "error": "Failed to auto-start daemon (timeout)",
+                }
             except Exception as e:
                 return {"success": False, "error": _('Communication error: {}').format(e)}
         

@@ -1235,7 +1235,7 @@ class ConfigManager:
                             )
                             filtered_deps.append("safety>=2.0.0,<3.0")
                             continue
-                        elif major == 3 and minor >= 15:
+                        if major == 3 and minor >= 15:
                             # Python 3.15+: skip safety (pydantic-core doesn't support it yet)
                             safe_print(
                                 _("   ⏭️  Skipping {} (pydantic-core not yet compatible with Python 3.15+)").format(dep)
@@ -12062,13 +12062,12 @@ class omnipkg:
                         )
                         fully_resolved_specs.append(resolved_spec)
                         continue
-                    elif install_strategy == "stable-main":
+                    if install_strategy == "stable-main":
                         safe_print(_('   ✓ {} [satisfied: {} - bubble @ {}]').format(resolved_spec, duration_str, bubble_path))
                         fully_resolved_specs.append(resolved_spec)
                         continue
-                    else:
-                        needs_installation.append(resolved_spec)
-                        continue
+                    needs_installation.append(resolved_spec)
+                    continue
                 else:
                     needs_installation.append(resolved_spec)
 
@@ -12227,10 +12226,10 @@ class omnipkg:
                 if install_status == "active":
                     safe_print(_('✅ {} already satisfied (active in main env)').format(pkg_spec))
                     continue
-                elif install_status == "bubble" and install_strategy == "stable-main":
+                if install_status == "bubble" and install_strategy == "stable-main":
                     safe_print(f"✅ {pkg_spec} already satisfied (found as bubble)")
                     continue
-                elif install_status == "bubble" and install_strategy == "latest-active":
+                if install_status == "bubble" and install_strategy == "latest-active":
                     # Bubble exists but we need it in main env - NOT satisfied
                     is_satisfied = False
                     break
@@ -12277,18 +12276,17 @@ class omnipkg:
                         processed_packages.append(pkg_spec)
                         continue
 
-                    elif install_status == "bubble":
+                    if install_status == "bubble":
                         # If found in a bubble, satisfaction DEPENDS on the install strategy.
                         if install_strategy == "stable-main":
                             # For stable-main, a bubble is good enough.
                             safe_print(f"✅ {pkg_spec} already satisfied (found as bubble)")
                             processed_packages.append(pkg_spec)
                             continue
-                        else:
-                            # For 'latest-active', a bubble is NOT good enough. We need to install.
-                            # Mark as not satisfied and stop checking. The main installer will handle it.
-                            all_packages_satisfied = False
-                            break  # Exit the loop immediately
+                        # For 'latest-active', a bubble is NOT good enough. We need to install.
+                        # Mark as not satisfied and stop checking. The main installer will handle it.
+                        all_packages_satisfied = False
+                        break  # Exit the loop immediately
 
                     elif install_status is None:
                         # Not found in main env or as a bubble. Might be nested, so check the KB.

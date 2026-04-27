@@ -1000,9 +1000,8 @@ class omnipkgMetadataGatherer:
                             if _dbg:
                                 print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
                             continue
-                        else:
-                            if _dbg:
-                                print(f"[FAST-DISC] P1: version mismatch {dist.version} != {version}", flush=True)
+                        if _dbg:
+                            print(f"[FAST-DISC] P1: version mismatch {dist.version} != {version}", flush=True)
                     except Exception as e:
                         if _dbg:
                             print(f"[FAST-DISC] P1: PathDistribution failed: {e}", flush=True)
