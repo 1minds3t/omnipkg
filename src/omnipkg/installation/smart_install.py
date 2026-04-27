@@ -346,15 +346,14 @@ class SmartInstaller:
                         fully_resolved_specs.append(resolved_spec)
                         resolved_package_cache[pkg_spec] = resolved_spec
                         continue
-                    elif install_strategy == "stable-main":
+                    if install_strategy == "stable-main":
                         self._safe_print(f"   ✓ {resolved_spec} [satisfied: {duration_str} - bubble]")
                         fully_resolved_specs.append(resolved_spec)
                         resolved_package_cache[pkg_spec] = resolved_spec
                         continue
-                    else:
-                        needs_installation.append(resolved_spec)
-                        resolved_package_cache[pkg_spec] = resolved_spec
-                        continue
+                    needs_installation.append(resolved_spec)
+                    resolved_package_cache[pkg_spec] = resolved_spec
+                    continue
                 else:
                     needs_installation.append(resolved_spec)
                     resolved_package_cache[pkg_spec] = resolved_spec
@@ -385,7 +384,7 @@ class SmartInstaller:
                             validated_specs.append(spec)
                             self._safe_print(f"   ✓ Disk-validated '{spec}' (skipping pip)")
                             continue
-                        elif _bubble_path.exists():
+                        if _bubble_path.exists():
                             resolved_package_cache[spec] = spec
                             validated_specs.append(spec)
                             self._safe_print(f"   ✓ Disk-validated '{spec}' (skipping pip)")
