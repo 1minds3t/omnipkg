@@ -331,21 +331,18 @@ except ImportError as e:
 OMNIPKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), "omnipkg")
 
 def _get_venv_temp_dir() -> str:
-    # 1. Check for the override first (Symmetry with ConfigManager)
-    override = os.environ.get("OMNIPKG_ENV_ID_OVERRIDE")
+    # Use OMNIPKG_DAEMON_TEMP_ID for socket/log/pid path consolidation only.
+    # This is separate from env_id used for KB keys.
+    override = os.environ.get("OMNIPKG_DAEMON_TEMP_ID")
     if override:
         venv_hash = override
     else:
-        # Fallback to the original hash logic
+        # Match ConfigManager exactly: md5(_canonical_path_str(sys.prefix))[:8]
         import hashlib
-        identity = sys.prefix
-        try:
-            project_root = Path(__file__).resolve().parent.parent.parent
-            if (project_root / "pyproject.toml").exists():
-                identity = f"{sys.prefix}:{project_root}"
-        except Exception:
-            pass
-        venv_hash = hashlib.sha1(identity.encode()).hexdigest()[:10]
+        p = os.path.realpath(sys.prefix).replace("\\", "/").rstrip("/")
+        if os.name == "nt":
+            p = p.lower()
+        venv_hash = hashlib.md5(p.encode()).hexdigest()[:8]
 
     d = os.path.join(OMNIPKG_TEMP_DIR, venv_hash)
     os.makedirs(d, exist_ok=True)
@@ -2199,7 +2196,7 @@ class PersistentWorker:
             env["OMNIPKG_SITE_PACKAGES"] = self.site_packages
         if os.environ.get("UV_FFI_PROFILE"):
             env["UV_FFI_PROFILE"] = "1"
-        env["OMNIPKG_ENV_ID_OVERRIDE"] = _VENV_TEMP_DIR.split(os.sep)[-1]
+        env["OMNIPKG_DAEMON_TEMP_ID"] = _VENV_TEMP_DIR.split(os.sep)[-1]
         # 🔑 ENSURE per-interpreter config file exists next to this interpreter.
         # Without this, the worker falls back to global config (wrong multiversion_base).
         # _ensure_worker_config writes a lightweight JSON that ConfigManager finds first.
