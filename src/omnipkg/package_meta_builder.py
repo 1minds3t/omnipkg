@@ -3023,7 +3023,7 @@ class omnipkgMetadataGatherer:
 
     def _enrich_from_site_packages(self, name: str, version: str = None) -> Dict:
         enriched_data = {}
-        guesses = set([name, name.lower().replace("-", "_")])
+        guesses = {name, name.lower().replace("-", "_")}
         base_path = Path(get_site_packages_path())
         if version:
             base_path = Path(self.config["multiversion_base"]) / f"{name}-{version}"
