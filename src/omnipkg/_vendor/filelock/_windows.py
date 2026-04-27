@@ -40,7 +40,7 @@ if sys.platform == "win32":  # pragma: win32 cover
 
         def _acquire(self) -> None:
             raise_on_not_writable_file(self.lock_file)
-            
+
             # Ensure parent directory exists
             Path(self.lock_file).parent.mkdir(parents=True, exist_ok=True)
 

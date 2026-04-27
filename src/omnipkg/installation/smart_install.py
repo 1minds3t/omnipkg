@@ -228,7 +228,7 @@ class SmartInstaller:
 
     def _is_quantum_error(self, e: Exception) -> bool:
         return type(e).__name__ == "NoCompatiblePythonError"
-        
+
     def _parse_uv_changes(self, uv_stderr: str, packages_before: Dict[str, str]) -> Dict[str, str]:
         """
         Derive post-install state from uv's stderr diff output.

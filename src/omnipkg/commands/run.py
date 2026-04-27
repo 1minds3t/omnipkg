@@ -1012,7 +1012,7 @@ def get_conda_forge_mapping(import_name):
     Downloads, caches to disk, and loads into memory to maintain lightning speed.
     """
     import os, time, urllib.request, re
-    
+
     # Return instantly if we already loaded it this session
     if _CF_CACHE_LOADED:
         return _CF_MAPPING_CACHE.get(import_name)
@@ -1020,7 +1020,7 @@ def get_conda_forge_mapping(import_name):
     cache_dir = os.path.expanduser("~/.cache/omnipkg")
     os.makedirs(cache_dir, exist_ok=True)
     cache_path = os.path.join(cache_dir, "cf_name_mapping.yaml")
-    
+
     # Download if missing or older than 7 days
     if not os.path.exists(cache_path) or (time.time() - os.path.getmtime(cache_path) > 604800):
         try:
@@ -1042,14 +1042,14 @@ def get_conda_forge_mapping(import_name):
                 for block in blocks:
                     imp_match = re.search(r"import_name:\s*([^\n]+)", block)
                     pypi_match = re.search(r"pypi_name:\s*([^\n]+)", block)
-                    
+
                     if imp_match and pypi_match:
                         i_name = imp_match.group(1).strip().strip("'\"")
                         p_name = pypi_match.group(1).strip().strip("'\"")
                         _CF_MAPPING_CACHE[i_name] = p_name
         except Exception:
             pass
-            
+
     _CF_CACHE_LOADED = True
     return _CF_MAPPING_CACHE.get(import_name)
 
@@ -1489,7 +1489,7 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
     # Highly authoritative list of import names to PyPI packages.
     base_module = module_name.split(".")[0] if "." in module_name else module_name
     cf_mapping = get_conda_forge_mapping(module_name) or get_conda_forge_mapping(base_module)
-    
+
     if cf_mapping:
         safe_print(f"INFO: Conda-Forge mapping confirmed '{module_name}' → '{cf_mapping}'")
         return cf_mapping
@@ -2635,7 +2635,7 @@ try:
     vprint(f"      ✅ omnipkgLoader imported")
 except ImportError as e:
     vprint(f"      ❌ omnipkgLoader failed: {{e}}")
-    
+
 try:
     from omnipkg.i18n import _
     vprint(f"      ✅ omnipkg.i18n imported")
@@ -2654,7 +2654,7 @@ except ImportError as e:
     for i, path in enumerate(sys.path):
         exists = "✅" if os.path.exists(path) else "❌"
         safe_print(f"   [{{i:2d}}] {{exists}} {{path}}")
-    
+
     # Check for omnipkg specifically
     safe_print(f"\\nDEBUG: Checking for omnipkg module...")
     for i, path in enumerate(sys.path):
@@ -2686,16 +2686,16 @@ finally:
     if loader_instances:
         total_activation_ns = 0
         last_stats = None
-        
+
         for loader in loader_instances:
             if loader is None:
                 continue
-            
+
             stats = loader.get_performance_stats()
             if stats:
                 total_activation_ns += stats.get('activation_time_ns', 0)
                 last_stats = stats
-        
+
         if last_stats:
             last_stats['activation_time_ns'] = total_activation_ns
             # ADD THE INITIAL FAILURE TIME TO THE STATS
@@ -2781,7 +2781,7 @@ def execute_run_command(
     # ADD THIS LINE - Propagate verbose flag to subprocesses
     if verbose:
         os.environ["OMNIPKG_VERBOSE"] = "1"
-    
+
     # NEW: Ensure language persists to subprocess
     current_lang = config_manager.config.get("language")
     if current_lang:
@@ -2805,7 +2805,7 @@ def execute_run_command(
             interpreter = str(target_path)
             module_name = cmd_args[m_index + 1]
             module_args = cmd_args[m_index + 2:]
-            
+
             # Run directly with the specified interpreter, no routing needed
             result = subprocess.run(
                 [interpreter, "-m", module_name] + module_args,
@@ -3202,9 +3202,9 @@ def _run_script_logic(
         # === EXECUTION STRATEGY SELECTION ===
         # Strategy A: Use 'uv run' if on Python 3.8+ (fast, isolated)
         # Strategy B: Use direct 'python' if on Python < 3.8 (uv not supported)
-        
+
         initial_cmd = []
-        
+
         if sys.version_info >= (3, 8):
             # Try using uv if available
             uv_path = shutil.which("uv")
@@ -3217,7 +3217,7 @@ def _run_script_logic(
                     python_exe,
                     "--",
                 ] + safe_cmd_args
-        
+
         # Fallback if uv not used/available
         if not initial_cmd:
             initial_cmd = [python_exe] + safe_cmd_args
@@ -3257,7 +3257,7 @@ def _run_script_logic(
             if initial_cmd[0] == "uv":
                 safe_print("⚠️  'uv' not found, falling back to direct python execution...")
                 initial_cmd = [python_exe] + safe_cmd_args
-                
+
                 direct_process = subprocess.Popen(
                     initial_cmd,
                     stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,

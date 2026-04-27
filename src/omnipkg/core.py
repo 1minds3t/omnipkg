@@ -315,24 +315,24 @@ class ConfigManager:
 
     def __init__(self, suppress_init_messages=False):
         self.venv_path = self._get_venv_root()
-        
+
         env_id_override = os.environ.get("OMNIPKG_ENV_ID_OVERRIDE")
         if env_id_override:
             self.env_id = env_id_override
         else:
             self.env_id = hashlib.md5(_canonical_path_str(self.venv_path).encode()).hexdigest()[:8]
-        
+
         self.config_dir = Path.home() / ".config" / "omnipkg"
-        
+
         # ✅ MUST be before _get_our_config_path() which can trigger _find_python_interpreters()
         self._python_cache = {}
         self._preferred_version = (3, 11)
-        
+
         self.config_path = self._get_our_config_path()
-        
+
         # Load config (UPDATED to handle flat structure)
         self.config = self._load_or_create_config(interactive=not suppress_init_messages)
-        
+
         if self.config:
             self.multiversion_base = Path(self.config.get("multiversion_base", ""))
         else:
@@ -348,20 +348,20 @@ class ConfigManager:
             # DISPATCHER ARCHITECTURE UPDATE:
             # We no longer perform heavy adoption/symlinking here.
             # We simply ensure the current interpreter is registered in the registry.json
-            
+
             try:
                 native_version_str = f"{sys.version_info.major}.{sys.version_info.minor}"
-                
+
                 # Simply register current executable as-is without moving/linking it
                 self._ensure_interpreter_registered(Path(sys.executable), native_version_str)
-                
+
                 # [NEW] Force KB build on first use for this native version
                 self._set_rebuild_flag_for_version(native_version_str)
-                
+
                 # Mark setup as complete
                 setup_complete_flag.parent.mkdir(parents=True, exist_ok=True)
                 setup_complete_flag.touch()
-                
+
             except Exception as e:
                 if not suppress_init_messages:
                     safe_print(
@@ -769,7 +769,7 @@ class ConfigManager:
         config_path = interpreter_path.parent / ".omnipkg_config.json"
         if not config_path.exists():
             self._write_interpreter_config(interpreter_path, version)
-                
+
     def _register_and_link_existing_interpreter(self, interpreter_path: Path, version: str):
         """
         Legacy registration logic. 
@@ -786,11 +786,11 @@ class ConfigManager:
         path = self.get_interpreter_for_version(version)
         if path and path.exists():
             return path
-            
+
         # Fallback: Check standard managed locations
         managed_dir = self.venv_path / ".omnipkg" / "interpreters"
         prefixes = [f"cpython-{version}", f"cpython-{version}-managed"]
-        
+
         for prefix in prefixes:
             dir_path = managed_dir / prefix
             if platform.system() == "Windows":
@@ -801,7 +801,7 @@ class ConfigManager:
                     dir_path / "bin" / "python3",
                     dir_path / "bin" / "python"
                 ]
-            
+
             for candidate in candidates:
                 if candidate.exists():
                     return candidate
@@ -820,7 +820,7 @@ class ConfigManager:
                 return True  # Already installed, do nothing
         except Exception:
             pass
-        
+
         # 2. Not installed: Bootstrap it
         try:
             safe_print(_('   PLEASE WAIT: Bootstrapping omnipkg into Python {}...').format(version))
@@ -852,31 +852,31 @@ class ConfigManager:
             # ═══════════════════════════════════════════════════════════════
             current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
             native_python = Path(sys.executable).absolute()
-            
+
             # Check if native Python is actually OUTSIDE .omnipkg/interpreters/
             if ".omnipkg/interpreters" not in str(native_python):
                 # This is truly native - good!
                 true_native_path = native_python
                 safe_print(_('   ✅ Detected true native Python {}: {}').format(current_version, true_native_path))
-                
+
                 # Check if there's a downloaded version masquerading as native
                 for interp_dir in managed_interpreters_dir.iterdir():
                     if not interp_dir.is_dir() and not interp_dir.is_symlink():
                         continue
-                        
+
                     # Check if this is a downloaded Python with the same version
                     if f"cpython-{current_version}" in interp_dir.name:
                         downloaded_python = interp_dir / "bin" / f"python{current_version}"
                         if downloaded_python.exists():
                             safe_print(_('   ⚠️  Found downloaded Python {} at: {}').format(current_version, interp_dir.name))
                             safe_print(f"   🧹 This will be kept as a managed interpreter, not treated as native")
-                
+
                 # Remove legacy symlinks
                 legacy_symlink = managed_interpreters_dir / f"cpython-{current_version}-managed"
                 if legacy_symlink.exists() and legacy_symlink.is_symlink():
                     safe_print(_('   🗑️  Removing legacy symlink: {}').format(legacy_symlink.name))
                     legacy_symlink.unlink()
-                    
+
                 # Another legacy pattern
                 legacy_native_symlink = managed_interpreters_dir / f"cpython-{current_version}-venv-native"
                 if legacy_native_symlink.exists():
@@ -885,7 +885,7 @@ class ConfigManager:
                         legacy_native_symlink.unlink()
                     else:
                         shutil.rmtree(legacy_native_symlink, ignore_errors=True)
-            
+
             # ═══════════════════════════════════════════════════════════════
             # STEP 1: Load existing registry and preserve native entries
             # ═══════════════════════════════════════════════════════════════
@@ -900,7 +900,7 @@ class ConfigManager:
                     # Extract and preserve native interpreter entries
                     for version, path_str in existing_registry.get("interpreters", {}).items():
                         path = Path(path_str)
-                        
+
                         # ⚠️ CRITICAL FIX: If the path is NOT inside .omnipkg/interpreters/, it's native
                         # BUT also check if it's the SAME version as a downloaded one
                         if not str(path).startswith(str(managed_interpreters_dir)):
@@ -928,7 +928,7 @@ class ConfigManager:
                                 )
                                 # Don't preserve this entry - we'll use native instead
                                 continue
-                                
+
                 except (json.JSONDecodeError, IOError) as e:
                     safe_print(_("   ⚠️  Could not load existing registry: {}").format(e))
 
@@ -937,7 +937,7 @@ class ConfigManager:
             # ═══════════════════════════════════════════════════════════════
             current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
             current_exe = Path(sys.executable).absolute()
-            
+
             # Only add if it's truly not in managed directory
             if ".omnipkg/interpreters" not in str(current_exe):
                 native_interpreters[current_version] = str(current_exe)
@@ -1094,7 +1094,7 @@ class ConfigManager:
                 for version, path in sorted(all_interpreters.items()):
                     marker = " (native)" if version in native_interpreters else " (managed)"
                     safe_print(_("      - Python {}: {}{}").format(version, path, marker))
-                    
+
                     # CRITICAL: Ensure omnipkg is in each registered interpreter
                     python_exe = Path(path)
                     if python_exe.exists():
@@ -1206,26 +1206,26 @@ class ConfigManager:
             if core_deps:
                 # Parse version once
                 major, minor = map(int, target_py_version.split("."))
-                
+
                 # Filter dependencies based on target Python version
                 filtered_deps = []
                 for dep in core_deps:
                     dep_lower = dep.lower()
-                    
+
                     # Skip uv for Python 3.7
                     if "uv" in dep_lower and major == 3 and minor < 8:
                         safe_print(
                             _("   ⏭️  Skipping {} (not compatible with Python {})").format(dep, target_py_version)
                         )
                         continue
-                    
+
                     # Skip pip-audit for Python < 3.14
                     if "pip-audit" in dep_lower and major == 3 and minor < 14:
                         safe_print(
                             _('   ⏭️  Skipping {} (requires Python 3.14+, have {})').format(dep, target_py_version)
                         )
                         continue
-                    
+
                     # Handle safety version constraints
                     if "safety" in dep_lower:
                         if major == 3 and minor < 10:
@@ -1242,7 +1242,7 @@ class ConfigManager:
                             )
                             continue
                         # Python 3.10-3.14: use safety 3.x (default from pyproject.toml)
-                    
+
                     filtered_deps.append(dep)
 
                 if filtered_deps:
@@ -1426,9 +1426,9 @@ class ConfigManager:
         safe_print(_("🔧 Updating default Python links..."))
         safe_print(f"   [DEBUG] new_python_exe: {new_python_exe}")
         safe_print(f"   [DEBUG] new_python_exe.resolve(): {new_python_exe.resolve()}")
-        
+
         bin_dir = venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
-        
+
         # Sanity check — refuse to link/copy a Python outside this venv
         try:
             new_python_exe.resolve().relative_to(venv_path.resolve())
@@ -1707,7 +1707,7 @@ class ConfigManager:
                 pass
             if not is_musl and Path("/etc/alpine-release").exists():
                 is_musl = True
-            
+
             if is_musl:
                 safe_print("   🌲 Alpine Linux (musl libc) detected - using musl-compatible build")
                 # Upgrade to musl-compatible version if needed
@@ -1800,7 +1800,7 @@ class ConfigManager:
                 pass
             if not is_musl and Path("/etc/alpine-release").exists():
                 is_musl = True
-            
+
             if is_musl:
                 safe_print("   🌲 Alpine Linux (musl libc) detected - using musl-compatible build")
 
@@ -1842,7 +1842,7 @@ class ConfigManager:
             safe_print(_("   - URL: {}").format(url))
             try:
                 safe_print(_("   - Attempting download..."))
-                
+
                 max_retries = 3
                 last_error = None
                 for attempt in range(max_retries):
@@ -2041,10 +2041,10 @@ class ConfigManager:
                         is_musl = "musl" in (ldd_check.stdout + ldd_check.stderr).lower()
                     except:
                         is_musl = False
-                    
+
                     if not is_musl and Path("/etc/alpine-release").exists():
                         is_musl = True
-                    
+
                     elif is_musl and full_version.startswith("3.11") and full_version != "3.11.14":
                         safe_print(_('   🌲 Alpine detected: upgrading {} → 3.11.14 (musl-compatible)').format(full_version))
                         full_version = "3.11.14"
@@ -2545,7 +2545,7 @@ class ConfigManager:
         """
         Interactive setup that keeps the native Python in its original location
         and only manages additional Python versions.
-        
+
         AUTO-DETECTS non-interactive environments (Docker, CI, piped input, etc.)
         """
         # ============================================================================
@@ -2558,9 +2558,9 @@ class ConfigManager:
         elif interactive and not is_interactive_session():
             interactive = False
             safe_print(_("🤖 Non-interactive environment detected - using defaults"))
-        
+
         # ============================================================================
-        
+
         safe_print(_("💡 Grounding configuration in the current active environment..."))
 
         # Use the ACTUAL active Python executable, not a managed copy
@@ -2700,7 +2700,7 @@ class ConfigManager:
             # 🎯 ADD THIS HERE - Right after native registration succeeds
             if platform.system() != "Windows":
                 self._create_version_symlinks()
-            
+
             # Now, when we look up the interpreter, it will be found in the registry.
             registered_path = self.get_interpreter_for_version(native_version)
             # Now, when we look up the interpreter, it will be found in the registry.
@@ -2954,7 +2954,7 @@ class ConfigManager:
                     safe_print(f"[DEBUG] Failed to create {link.name}: {e}")
                 ok = False
         return ok
-    
+
     def _ensure_shims_installed(self):
         """
         Creates a shim directory where 'python', 'python3', and 'pip' 
@@ -2965,19 +2965,19 @@ class ConfigManager:
 
         # The actual executable running this code (dispatcher)
         current_exe = Path(sys.executable)
-        
+
         # If we are running from a managed python, we need to find the REAL dispatcher entry point.
         # Usually, that is in the main venv's bin dir.
         dispatcher_exe = self.venv_path / ("Scripts" if os.name == "nt" else "bin") / "8pkg"
-        
+
         # Windows requires .exe shims or bat files, Unix uses symlinks
         is_windows = os.name == "nt"
 
         targets = ["python", "python3", "pip"]
-        
+
         for target in targets:
             shim_path = shims_dir / (target + (".exe" if is_windows else ""))
-            
+
             if not shim_path.exists():
                 safe_print(_('   🔧 Creating shim: {}...').format(target))
                 if is_windows:
@@ -2994,23 +2994,23 @@ class ConfigManager:
                         pass
                     except OSError:
                         shutil.copy2(dispatcher_exe, shim_path)
-        
+
         return shims_dir
 
     def _write_interpreter_config(self, interpreter_path: Path, version: str) -> Optional[Path]:
         bin_dir = interpreter_path.parent
         config_path = bin_dir / ".omnipkg_config.json"
-        
+
         is_managed = ".omnipkg/interpreters" in str(interpreter_path)
         config_data = self._get_sensible_defaults(python_exe_override=str(interpreter_path))
-        
+
         # Override paths with those from the TARGET interpreter, not the running one
         target_paths = self._get_paths_for_interpreter(str(interpreter_path))
         if target_paths:
             config_data["site_packages_path"] = target_paths["site_packages_path"]
             config_data["multiversion_base"] = target_paths["multiversion_base"]
             config_data["python_executable"] = target_paths["python_executable"]
-        
+
         config_data.update({
             "python_version": version,
             "python_version_short": version,
@@ -3036,7 +3036,7 @@ class ConfigManager:
         Merges the registry data with the current interpreter.
         """
         interpreters = {}
-        
+
         # 1. Try to load from registry
         try:
             registry_path = self.venv_path / ".omnipkg" / "interpreters" / "registry.json"
@@ -3046,10 +3046,10 @@ class ConfigManager:
                     interpreters = data.get("interpreters", {})
         except Exception:
             pass
-            
+
         # 2. Ensure the current interpreter is present and correct
         interpreters[current_version] = str(current_path.resolve())
-        
+
         return interpreters
 
     def _ensure_all_interpreters_have_config(self):
@@ -3059,17 +3059,17 @@ class ConfigManager:
         """
         registry = self._load_registry()
         interpreters = registry.get("interpreters", {})
-        
+
         if os.environ.get("OMNIPKG_DEBUG") == "1":
             print(f"[DEBUG] Ensuring configs for {len(interpreters)} interpreters", file=sys.stderr)
-        
+
         for version, path_str in interpreters.items():
             path = Path(path_str)
             if path.exists():
                 # Check if config exists
                 bin_dir = path.parent
                 config_path = bin_dir / ".omnipkg_config.json"
-                
+
                 if not config_path.exists():
                     if os.environ.get("OMNIPKG_DEBUG") == "1":
                         print(f"[DEBUG] Creating missing config for {version}", file=sys.stderr)
@@ -3078,7 +3078,7 @@ class ConfigManager:
     def _extract_version_from_path(self, exe_path: Path) -> Optional[str]:
         """
         Extract Python version from an interpreter path.
-        
+
         Examples:
         - /path/to/.omnipkg/interpreters/cpython-3.10-managed/bin/python3.10 → "3.10"
         - /path/to/bin/python3.11 → "3.11"
@@ -3087,13 +3087,13 @@ class ConfigManager:
         match = re.search(r'python(\d+\.\d+)', exe_path.name)
         if match:
             return match.group(1)
-        
+
         # Try to extract from directory name (for managed interpreters)
         for part in exe_path.parts:
             match = re.search(r'cpython-(\d+\.\d+)', part)
             if match:
                 return match.group(1)
-        
+
         # Fallback: ask Python itself
         try:
             result = subprocess.run(
@@ -3106,27 +3106,27 @@ class ConfigManager:
                 return result.stdout.strip()
         except:
             pass
-        
+
         return None
 
     def _get_our_config_path(self) -> Path:
         """
         FIXED: Returns per-Python config path, not global config
-        
+
         PRIORITY ORDER:
         1. Environment variable override (for testing)
         2. Config next to our Python executable (PRIMARY)
         3. Fallback to global config (backward compatibility)
         """
         debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-        
+
         # Priority 1: Explicit override
         if "OMNIPKG_CONFIG_PATH" in os.environ:
             path = Path(os.environ["OMNIPKG_CONFIG_PATH"])
             if debug_mode:
                 print(_('[DEBUG-CONFIG] Using override: {}').format(path), file=sys.stderr)
             return path
-        
+
         # Priority 2: Per-Python config next to the executable
         # Check UNRESOLVED path first — on macOS, venv python is a symlink to the
         # framework python. We want the config next to the symlink (venv), not the target.
@@ -3148,31 +3148,31 @@ class ConfigManager:
             self._write_interpreter_config(exe_path_raw, version)
         if per_python_config_raw.exists():
             return per_python_config_raw
-        
+
         per_python_config = exe_dir / ".omnipkg_config.json"
-        
+
         if debug_mode:
             print(_('[DEBUG-CONFIG] Python exe: {}').format(exe_path), file=sys.stderr)
             print(f"[DEBUG-CONFIG] Looking for config at: {per_python_config}", file=sys.stderr)
-        
+
         # If config exists, use it
         if per_python_config.exists():
             if debug_mode:
                 safe_print(_('[DEBUG-CONFIG] ✅ Using per-Python config: {}').format(per_python_config), file=sys.stderr)
             return per_python_config
-        
+
         # If we're in a managed interpreter directory, we SHOULD have a config
         # Create it if missing
         if ".omnipkg/interpreters" in str(exe_path):
             if debug_mode:
                 print(_('[DEBUG-CONFIG] In managed interpreter, creating config'), file=sys.stderr)
-            
+
             # Extract version from path
             version = self._extract_version_from_path(exe_path)
             if version:
                 self._write_interpreter_config(exe_path, version)
                 return per_python_config
-        
+
         # Priority 3: Global config (backward compatibility)
         global_config = Path.home() / ".config" / "omnipkg" / f"{self.env_id}.json"
 
@@ -3188,7 +3188,7 @@ class ConfigManager:
                     return per_python_config
             except Exception:
                 pass
-        
+
         if debug_mode:
             print(_('[DEBUG-CONFIG] Fallback to global config: {}').format(global_config), file=sys.stderr)
         return global_config
@@ -3301,7 +3301,7 @@ class ConfigManager:
     def set(self, key, value):
         """Set a configuration value for the current environment and save."""
         self.config[key] = value
-        
+
         # SIMPLE: Direct save to our config file (flat structure)
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.config_path, "w") as f:
@@ -3764,9 +3764,9 @@ class BubbleIsolationManager:
             observed_dependencies: Optional[Dict[str, str]] = None,
         ):
         """
-        (V10 - COMPLETE FIX) 
+        (V10 - COMPLETE FIX)
         Builds a bubble and verifies using smart group-aware testing.
-        
+
         FIX: Now properly creates manifest and registers bubble after successful verification.
         """
         _dbg = os.environ.get("OMNIPKG_DEBUG") == "1"
@@ -3775,15 +3775,15 @@ class BubbleIsolationManager:
         _t0 = time.perf_counter()
         if destination_path.exists():
             shutil.rmtree(destination_path, ignore_errors=True)
-            
+
         with tempfile.TemporaryDirectory() as temp_dir:
             staging_path = Path(temp_dir)
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
-            
+
             # Track if verification has been done
             verification_passed = False
             verification_already_done = False
-            
+
             # 1. Install to staging
             return_code, install_output = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
@@ -3803,7 +3803,7 @@ class BubbleIsolationManager:
                 except ImportError:
                     from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
                     from omnipkg.package_meta_builder import omnipkgMetadataGatherer
-                
+
                 from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(
                     config=self.parent_omnipkg.config,
@@ -3812,17 +3812,17 @@ class BubbleIsolationManager:
                     target_context_version=python_context_version,
                 )
                 gatherer.cache_client = self.parent_omnipkg.cache_client
-                
+
                 # Find dependency bubbles only if needed for verification groups
                 existing_bubble_paths = []
                 try:
                     from .installation.verification_groups import find_verification_group
                 except ImportError:
                     from omnipkg.installation.verification_groups import find_verification_group
-                
+
                 canonical_name = package_name.lower().replace("_", "-")
                 group_def = find_verification_group(canonical_name)
-                
+
                 if group_def:
                     existing_bubble_paths = self._find_dependency_bubbles(package_name, destination_path.parent)
 
@@ -3869,7 +3869,7 @@ class BubbleIsolationManager:
                 except ImportError:
                     from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
                     from omnipkg.package_meta_builder import omnipkgMetadataGatherer
-                    
+
                 from .package_meta_builder import omnipkgMetadataGatherer
                 _tv2 = time.perf_counter()
                 gatherer = omnipkgMetadataGatherer(
@@ -3878,20 +3878,20 @@ class BubbleIsolationManager:
                     omnipkg_instance=self.parent_omnipkg,
                     target_context_version=python_context_version,
                 )
-                
+
                 # Find dependency bubbles again for verification
                 existing_bubble_paths = []
                 try:
                     from .installation.verification_groups import find_verification_group
                 except ImportError:
                     from omnipkg.installation.verification_groups import find_verification_group
-                
+
                 canonical_name = package_name.lower().replace("_", "-")
                 group_def = find_verification_group(canonical_name)
-                
+
                 if group_def:
                     existing_bubble_paths = self._find_dependency_bubbles(package_name, destination_path.parent)
-                
+
                 verification_passed = verify_bubble_with_smart_strategy(
                     self.parent_omnipkg, 
                     package_name, 
@@ -3923,18 +3923,18 @@ class BubbleIsolationManager:
                         omnipkg_instance=self.parent_omnipkg,
                         target_context_version=python_context_version,
                     )
-                    
+
                     # We find the specific distribution we just installed
                     from importlib.metadata import PathDistribution
                     target_dist = None
                     canonical_pkg = canonicalize_name(package_name)
-                    
+
                     for dist_info in destination_path.glob("*.dist-info"):
                         dist = PathDistribution(dist_info)
                         if canonicalize_name(dist.metadata.get("Name", "")) == canonical_pkg:
                             target_dist = dist
                             break
-                            
+
                     if target_dist:
                         # Call your existing workhorse to get the perfect dictionary
                         enriched_meta = gatherer._build_comprehensive_metadata(target_dist)
@@ -3945,7 +3945,7 @@ class BubbleIsolationManager:
                 safe_print(_('   - 📝 Creating bubble manifest...'))
                 installed_tree = self._analyze_installed_tree(destination_path)
                 _ta = time.perf_counter()
-                
+
                 stats = {
                     "total_files": sum(len(info.get("files",[])) for info in installed_tree.values()),
                     "copied_files": sum(len(info.get("files",[])) for info in installed_tree.values()),
@@ -3968,7 +3968,7 @@ class BubbleIsolationManager:
                 _tp("iav: create_bubble_manifest", _tc)  # ← moved above return
 
                 return True
-            
+
             else:
                 safe_print(_('   - ❌ Verification failed, bubble not created'))
                 return False
@@ -3978,14 +3978,14 @@ class BubbleIsolationManager:
     ) -> List[Path]:
         """
         Find already-created bubbles that are in the same verification group.
-        
+
         This allows keras to find tensorflow, tensorboard to find tensorflow, etc.
         during verification testing.
-        
+
         Args:
             package_name: The package being installed (e.g., "keras")
             bubble_dir: The .omnipkg_versions directory
-            
+
         Returns:
             List of Path objects to dependency bubbles
         """
@@ -3993,34 +3993,34 @@ class BubbleIsolationManager:
             from .installation.verification_groups import find_verification_group
         except ImportError:
             from omnipkg.installation.verification_groups import find_verification_group
-        
+
         existing_bubble_paths = []
-        
+
         # Find verification group for this package
         canonical_name = package_name.lower().replace("_", "-")
         group_def = find_verification_group(canonical_name)
-        
+
         if not group_def:
             # No group = no dependencies to include
             return existing_bubble_paths
-        
+
         # Look for bubbles of other packages in the same group
         for dep_pkg in group_def.packages:
             if dep_pkg == canonical_name:
                 continue  # Skip self
-            
+
             # Find ANY version of this dependency
             # Pattern: dep_pkg-* (e.g., tensorflow-*)
             matching_bubbles = list(bubble_dir.glob(f"{dep_pkg}-*"))
-            
+
             if matching_bubbles:
                 # Take the most recent bubble (sorted by name, highest version last)
                 matching_bubbles.sort()
                 bubble_path = matching_bubbles[-1]
-                
+
                 if bubble_path.is_dir():
                     existing_bubble_paths.append(bubble_path)
-        
+
         return existing_bubble_paths
 
     def _granular_verify_and_heal(self, staging_path: Path, package_name: str, python_exe: str):
@@ -4243,7 +4243,7 @@ class BubbleIsolationManager:
     ) -> bool:
         # --- ADD THIS LINE HERE ---
         import site as site_module 
-        
+
         """
         Creates a bubble from an editable install by copying files from the live source.
         This preserves the current dev version WITH ALL DEPENDENCIES as a fallback.
@@ -5789,10 +5789,10 @@ class BubbleIsolationManager:
                 safe_print(f"    ⚠️ Warning: Could not inject global cache metadata: {e}")
 
         manifest_path = bubble_path / ".omnipkg_manifest.json"
-        
+
         # --- ADDED EXPLICIT PATH PRINTING ---
         print(f"   [MANIFEST] Writing schema 2.0 manifest to: {manifest_path}")
-        
+
         try:
             with open(manifest_path, "w") as f:
                 json.dump(manifest_data, f, indent=2)
@@ -6906,7 +6906,7 @@ class omnipkg:
 
         # === CRITICAL SAFETY CHECK ===
         # ONLY the native interpreter can update itself
-        
+
         native_needs_sync = False
         native_was_synced = False
         _sync_marker = native_exe.parent / f".omnipkg_synced_{master_version}"
@@ -10320,7 +10320,7 @@ class omnipkg:
 
         # Set quantum healing flag so switch_active_python knows this is automated
         os.environ["_OMNIPKG_QUANTUM_HEALING"] = "1"
-        
+
         try:
             if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
                 safe_print(
@@ -10335,10 +10335,10 @@ class omnipkg:
                     e.compatible_python
                 )
             )
-            
+
             new_config_manager = ConfigManager(suppress_init_messages=True)
             new_omnipkg_instance = self.__class__(new_config_manager)
-            
+
             return new_omnipkg_instance.smart_install(
                 packages,
                 dry_run=dry_run,
@@ -10373,7 +10373,7 @@ class omnipkg:
         should_reverse = strategy == "stable-main"
         return sorted(packages, key=get_version_key, reverse=should_reverse)
 
-    
+
     def _ensure_deps_in_interpreter(self, python_exe: Path, version: str) -> None:
         """
         Ensure critical omnipkg runtime deps are installed in a newly adopted interpreter.
@@ -10426,37 +10426,37 @@ class omnipkg:
         Create versioned entry-point symlinks / shims so that commands like
         8pkg39, omnipkg39, 8pkg311, omnipkg311 work immediately after adoption —
         without requiring a swap shell.
-    
+
         Unix
         ────
         Creates ONLY versioned symlinks in $VENV/bin/ (already on PATH):
             8pkg39     → 8pkg
             omnipkg39  → omnipkg
         These are permanent, harmless, and survive across fresh shells / CI steps.
-    
+
         We deliberately do NOT create generic python/pip shims on Unix at adopt
         time — those bleed into global PATH state and belong to swap only.
-    
+
         Windows
         ───────
         Creates .bat shims for python, pip, and versioned 8pkg (unchanged behaviour).
         """
         import sys as _sys
-    
+
         parts = version.split(".")
         if len(parts) < 2:
             return
         mm_nodot = f"{parts[0]}{parts[1]}"   # "3.9" → "39",  "3.11" → "311"
-    
+
         if os.name != "nt":
             # ── Unix: versioned symlinks only ──────────────────────────────────
             bin_dir = self.config_manager.venv_path / "bin"
-    
+
             for base_name in ("8pkg", "omnipkg"):
                 src = bin_dir / base_name
                 if not src.exists():
                     continue  # entry point not installed — skip silently
-    
+
                 link = bin_dir / f"{base_name}{mm_nodot}"
                 try:
                     if link.exists() or link.is_symlink():
@@ -10466,11 +10466,11 @@ class omnipkg:
                 except OSError as e:
                     safe_print(_("   - ⚠️  Could not create symlink {}: {}").format(link.name, e))
             return  # done on Unix — no PATH-bleeding python/pip shims
-    
+
         # ── Windows: .bat shims (original behaviour, unchanged) ────────────────
         shims_dir = self.config_manager.venv_path / ".omnipkg" / "shims"
         shims_dir.mkdir(parents=True, exist_ok=True)
-    
+
         major_minor = version
         shim_map = {
             f"python{major_minor}.bat": f'@echo off\r\n"{python_exe}" %*\r\n',
@@ -10485,7 +10485,7 @@ class omnipkg:
                 safe_print(_("   - 🔧 Shim: {}").format(name))
             except OSError as e:
                 safe_print(_("   - ⚠️  Could not write shim {}: {}").format(name, e))
-    
+
         scripts_dir = self.config_manager.venv_path / "Scripts"
         for base_name in ("8pkg", "omnipkg"):
             exe = scripts_dir / f"{base_name}.exe"
@@ -10499,7 +10499,7 @@ class omnipkg:
                     safe_print(_("   - 🔧 Shim: {}{}.bat").format(base_name, mm_nodot))
                 except OSError:
                     pass
-    
+
     def adopt_interpreter(self, version: str) -> int:
         """
         Safely adopts a Python version by checking the registry, then trying to copy
@@ -10715,10 +10715,10 @@ class omnipkg:
     def _detect_python_implementation(self, python_exe: Path) -> str:
         """
         Detect the Python implementation (cpython, pypy, graalpy, etc.).
-        
+
         Returns:
             str: Normalized implementation name ('cpython', 'pypy', 'graalpy', 'unknown')
-        
+
         Raises:
             OSError: If detection fails catastrophically
         """
@@ -10730,9 +10730,9 @@ class omnipkg:
                 timeout=2,  # Fast timeout - interpreter startup should be quick
                 check=True
             )
-            
+
             impl_name = result.stdout.strip().lower()
-            
+
             # Normalize weird variants
             if impl_name.startswith("cpython"):
                 return "cpython"
@@ -10744,7 +10744,7 @@ class omnipkg:
                 return impl_name  # Return as-is for other known implementations
             else:
                 return "unknown"
-                
+
         except subprocess.TimeoutExpired:
             raise OSError(_("Python implementation detection timed out after 2 seconds"))
         except Exception as e:
@@ -10935,7 +10935,7 @@ class omnipkg:
                                 real_venv_path, full_version, omnipkg_instance=self
                             )
                             download_success = True
-                            
+
                             # CRITICAL FIX: Detect actual installed directory
                             # The installer may upgrade versions (e.g., 3.11.9 -> 3.11.14 for musl)
                             if python_exe and hasattr(python_exe, 'parent'):
@@ -10944,14 +10944,14 @@ class omnipkg:
                                     actual_install_dir = python_exe.parent.parent
                                 else:
                                     actual_install_dir = python_exe.parent
-                                
+
                                 # Verify it looks like a version directory (starts with cpython-)
                                 if (actual_install_dir.exists() 
                                     and actual_install_dir != dest_path 
                                     and actual_install_dir.name.startswith("cpython-")):
                                     safe_print(_('   - 🔄 Version upgraded: {} -> {}').format(dest_path.name, actual_install_dir.name))
                                     dest_path = actual_install_dir
-                            
+
                         except Exception as e:
                             safe_print(_("   - Warning: _install_managed_python failed: {}").format(e))
                     elif hasattr(self.config_manager, "install_managed_python"):
@@ -10975,7 +10975,7 @@ class omnipkg:
                 if not dest_path.exists():
                     major_minor = ".".join(full_version.split(".")[:2])  # "3.11"
                     interpreters_dir = real_venv_path / ".omnipkg" / "interpreters"
-                    
+
                     safe_print(f"   - 🔍 Searching for any Python {major_minor}.* installation...")
                     for candidate in sorted(interpreters_dir.glob(f"cpython-{major_minor}.*"), reverse=True):
                         if candidate.is_dir():
@@ -11002,7 +11002,7 @@ class omnipkg:
             safe_print(_("❌ Download and installation process failed: {}").format(e))
             traceback.print_exc()
             return 1
-    
+
     def rescan_interpreters(self) -> int:
         """
         Forces a full, clean re-scan of the managed interpreters directory
@@ -11733,11 +11733,11 @@ class omnipkg:
         Handles package name normalization (dashes become underscores in filenames).
         """
         pkg_name = self._parse_package_spec(package_spec)[0]
-        
+
         # CRITICAL: Normalize package name for filename matching
         # PyPI normalizes package names: "urllib3-lts" becomes "urllib3_lts" in filenames
         normalized_name = pkg_name.replace('-', '_').lower()
-        
+
         # Pattern 1: Modern wheels - urllib3_lts-2025.66471.3-py3-none-any.whl
         wheel_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl"
         match = re.match(wheel_pattern, filename, re.IGNORECASE)
@@ -11767,7 +11767,7 @@ class omnipkg:
                 match = re.match(pattern, filename, re.IGNORECASE)
                 if match:
                     return match.group(1)
-        
+
         return None
 
     def _create_pre_install_snapshot(self, package_name: str) -> str:
@@ -13023,7 +13023,7 @@ class omnipkg:
                 )
                 
                 safe_print("    ✅ Priority packages indexed")
-                
+
                 # Schedule background scan for nested packages
                 if bubble_paths_to_scan:
                     safe_print(_('    🔄 Scheduling background scan of {} bubble(s)...').format(len(bubble_paths_to_scan)))
@@ -14455,7 +14455,7 @@ class omnipkg:
                     continue
                 
                 c_item_name = canonicalize_name(item_name)
-                
+
                 # Skip protected packages
                 if item.get("install_type") == "active" and (
                     c_item_name in core_deps or c_item_name == "omnipkg"
@@ -14780,10 +14780,10 @@ class omnipkg:
     def switch_active_python(self, version: str) -> int:
         """
         Switch the active Python context to the specified version.
-        
+
         FOR QUANTUM HEALING ONLY: Updates the in-memory config for this omnipkg instance
         to point to the correct Python. Does NOT touch symlinks or global state.
-        
+
         For interactive swaps, users should use: 8pkg swap python <version>
         """
         safe_print(_("🐍 Switching active Python context to version {}...").format(version))
@@ -14828,7 +14828,7 @@ class omnipkg:
             safe_print(_("   💡 For interactive shells, use: 8pkg swap python {}").format(version))
         
         return 0
-        
+
     def _clear_windows_module_cache(self):
         """
         Windows-specific: Clear cached modules that might cause import conflicts.
@@ -16033,7 +16033,7 @@ print(json.dumps(results))
         """
         Runs `pip install` with LIVE, STREAMING output and automatic recovery.
         NOW WITH AUTO INDEX URL DETECTION for special package variants!
-        
+
         🔥 CRITICAL FIX: Added --no-cache-dir to prevent /tmp bloat from pip's cache!
         """
         _dbg_flag = os.environ.get("OMNIPKG_DEBUG") == "1"
@@ -16250,9 +16250,9 @@ print(json.dumps(results))
                                 except Exception: pass
                             
                             return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True, "is_target": bool(target_directory)}
-                        
+
                         # NOW WE HAVE THE REAL REASON:
-                        # We combine the coarse label (_ffi_err) with the raw uv output (_ffi_stderr)
+# We combine the coarse label (_ffi_err) with the raw uv output (_ffi_stderr)
                         detailed_error = f"{_ffi_err}\n{_ffi_stderr}".strip()
                         safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}): {detailed_error} — trying daemon", file=sys.stderr)
 
@@ -16261,7 +16261,7 @@ print(json.dumps(results))
                         safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
                 
                 finally:
-                    # 🔥 BUBBLE FIX: Only tell the daemon if we actually touched the MAIN env.
+# 🔥 BUBBLE FIX: Only tell the daemon if we actually touched the MAIN env.
                     #    If _is_target_call, this was a bubble — daemon knows nothing about it,
                     #    and we don't want it to think the main site-packages changed.
                     if not _is_target_call and daemon_client:
@@ -16397,7 +16397,7 @@ print(json.dumps(results))
                 )
     
                 stdout_lines, stderr_lines = [], []
-    
+
                 # Stream output live while capturing
                 for line in process.stdout:
                     safe_print(line, end="")
@@ -16422,7 +16422,7 @@ print(json.dumps(results))
                     from omnipkg.installation.dependency_constraints import get_numpy_constraint
                 
                 pkg_name = packages[0].split("==")[0].split(">=")[0].split("<=")[0].strip()
-                
+
                 if "==" in packages[0]:
                     pkg_ver = packages[0].split("==")[1]
                     
@@ -16430,7 +16430,7 @@ print(json.dumps(results))
                     numpy_constraint = get_numpy_constraint(pkg_name, pkg_ver)
                     
                     if numpy_constraint:
-                        # Check what numpy was installed
+# Check what numpy was installed
                         numpy_check = subprocess.run(
                             [self.config["python_executable"], "-c",
                              f"import sys; sys.path.insert(0, '{target_directory}'); import numpy; print(numpy.__version__)"],

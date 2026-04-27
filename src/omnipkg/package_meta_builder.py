@@ -697,9 +697,9 @@ class omnipkgMetadataGatherer:
                 # We do NOT scan the entire multiversion_base. We only scan:
                 # A. Main Site Packages (The active environment)
                 # B. The specific bubble directory for this package version
-                
+
                 surgical_roots = [main_site_packages]
-                
+
                 expected_bubble = multiversion_base / f"{name}-{version}"
                 if os.environ.get("OMNIPKG_DEBUG") == "1":
                     print(f"[DEBUG] surgical: looking for bubble at {expected_bubble} exists={expected_bubble.is_dir()}", flush=True)
@@ -716,27 +716,27 @@ class omnipkgMetadataGatherer:
                 # 2. Execute Strategies on Surgical Roots (Parallelized)
                 # We use the ORIGINAL robust strategies, but constrained to our specific roots.
                 # This keeps the "smarts" (variants, vendored checks, nested dirs) but fixes the "lazy" globbing.
-                
+
                 name_variants = self._get_package_name_variants(name)
-                
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
                     futures = []
-                    
+
                     for root in surgical_roots:
                         # Strategy 1: Vendored (SKIP if skip_nested_discovery=True)
                         if not skip_nested_discovery:
                             futures.append(executor.submit(self._run_strategy_1, root, name_variants, version, verbose))
-                        
+
                         # Strategy 2-5: Keep these (they find the main package)
                         futures.append(executor.submit(self._run_strategy_2, root, name, name_variants, version, verbose))
                         futures.append(executor.submit(self._run_strategy_3, root, name_variants, version, verbose))
                         futures.append(executor.submit(self._run_strategy_4, root, name_variants, version, verbose))
                         futures.append(executor.submit(self._run_strategy_5, name, version, verbose, [root]))
-                        
+
                         # Strategy 6: Deep nested scan (SKIP if skip_nested_discovery=True)
                         if not skip_nested_discovery:
                             futures.append(executor.submit(self._run_strategy_6, root, name_variants, version, verbose))
-                        
+
                         # SKIP the deep dive into content directories when skip_nested_discovery=True
                         if not skip_nested_discovery:
                             for variant in name_variants:
@@ -745,7 +745,7 @@ class omnipkgMetadataGatherer:
                                     root / variant.replace('-', '_'),
                                     root / variant.lower()
                                 ]
-                            
+
                             for cand in content_candidates:
                                 if cand.is_dir():
                                     # This is likely the package source dir (e.g. .../torch/)
@@ -762,7 +762,7 @@ class omnipkgMetadataGatherer:
                             pass
 
             final_list = list(all_found_dists.values())
-            
+
             safe_print(
                 _('   -> Found {} unique instance(s) across {} target(s).').format(len(final_list), len(targeted_packages))
             )

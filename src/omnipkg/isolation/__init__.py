@@ -5,12 +5,12 @@ try:
     HAS_ATOMICS = True
 except ImportError:
     HAS_ATOMICS = False
-    
+
     # SLOW FALLBACKS (Just so code doesn't crash)
     def store64(addr, val):
         import ctypes
         ctypes.cast(addr, ctypes.POINTER(ctypes.c_longlong)).contents.value = val
-        
+
     def load64(addr):
         import ctypes
         return ctypes.cast(addr, ctypes.POINTER(ctypes.c_longlong)).contents.value

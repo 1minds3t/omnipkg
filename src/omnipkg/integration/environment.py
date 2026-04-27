@@ -88,14 +88,14 @@ import os
 if True:
     try:
         from omnipkg.cli_executor import CLIExecutor
-        
+
         # Initialize executor
         executor = CLIExecutor(omnipkg_manager=None)
-        
+
         # Execute with auto-healing
         exit_code = executor.execute_with_healing("{cli_name}", sys.argv[1:])
         sys.exit(exit_code)
-        
+
     except ImportError:
         # Fallback: just run the command normally if omnipkg not available
         import subprocess
@@ -104,7 +104,7 @@ try:
     from .common_utils import safe_print
 except ImportError:
     from omnipkg.common_utils import safe_print
-        
+
         # Find real executable (skip our wrapper)
         real_bin = shutil.which("{cli_name}", path=os.environ.get("OMNIPKG_REAL_PATH"))
         if real_bin:
