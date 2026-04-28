@@ -1137,7 +1137,7 @@ class omnipkgLoader:
             with open(manifest_path, "r") as f:
                 manifest = json.load(f)
                 packages = manifest.get("packages", {})
-                return packages.get(pkg_name, {}).get("version")
+                return packages.get(pkg_name.replace('-', '_'), packages.get(pkg_name, {})).get("version")
         return None
 
     def _batch_cloak_packages(self, package_names: list):
@@ -1720,7 +1720,7 @@ class omnipkgLoader:
     def _check_version_via_glob(self, pkg_name: str, requested_version: str):
         """Glob-based filesystem check"""
         try:
-            pkg_normalized = pkg_name.replace("-", "_").lower()
+            pkg_normalized = pkg_name.replace('-', '_').lower()
 
             # Check main env
             for dist_info in self.site_packages_root.glob(
@@ -1742,7 +1742,7 @@ class omnipkgLoader:
                                         }
 
             # Check bubbles
-            bubble_path = self.multiversion_base / f"{pkg_name}-{requested_version}"
+            bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{requested_version}"
             has_bubble = bubble_path.is_dir() and (bubble_path / ".omnipkg_manifest.json").exists()
 
             return {
@@ -1770,7 +1770,7 @@ class omnipkgLoader:
     def _check_version_via_filesystem(self, pkg_name: str, requested_version: str):
         """Direct filesystem check (no metadata parsing)"""
         try:
-            pkg_normalized = pkg_name.replace("-", "_").lower()
+            pkg_normalized = pkg_name.replace('-', '_').lower()
 
             # Quick check: does dist-info directory exist?
             dist_info_path = (
@@ -1779,7 +1779,7 @@ class omnipkgLoader:
             is_active = dist_info_path.is_dir()
 
             # Quick check: does bubble exist?
-            bubble_path = self.multiversion_base / f"{pkg_name}-{requested_version}"
+            bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{requested_version}"
             has_bubble = bubble_path.is_dir()
 
             return {
@@ -1900,7 +1900,7 @@ class omnipkgLoader:
                     for entry in os.scandir(str(self.multiversion_base)):
                         if (
                             entry.is_dir()
-                            and entry.name.startswith(f"{pkg_name}-")
+                            and entry.name.startswith(f"{pkg_name.replace('-', '_')}-")
                             and "_omnipkg_cloaked" not in entry.name
                         ):
                             conflicting_bubbles.append(Path(entry.path))
@@ -1961,7 +1961,7 @@ class omnipkgLoader:
                             for entry in os.scandir(str(self.multiversion_base)):
                                 if (
                                     entry.is_dir()
-                                    and entry.name.startswith(f"{pkg_name}-")
+                                    and entry.name.startswith(f"{pkg_name.replace('-', '_')}-")
                                     and "_omnipkg_cloaked" not in entry.name
                                 ):
                                     conflicting_bubbles.append(Path(entry.path))
@@ -2061,14 +2061,14 @@ class omnipkgLoader:
         from packaging.version import Version
         canonical_version = str(Version(requested_version))  # 0.15 -> 0.15.0
         # Use canonical version for the path
-        bubble_path = self.multiversion_base / f"{pkg_name}-{canonical_version}"
+        bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{canonical_version}"
 
         # Check for cloaked bubbles (use both forms for backward compatibility)
         if not bubble_path.exists():
             # Try both the requested and canonical versions for cloaked bubbles
             for version_form in [requested_version, canonical_version]:
                 cloaked_bubbles = list(
-                    self.multiversion_base.glob(f"{pkg_name}-{version_form}.*_omnipkg_cloaked")
+                    self.multiversion_base.glob(f"{pkg_name.replace('-', '_')}-{version_form}.*_omnipkg_cloaked")
                 )
                 if cloaked_bubbles:
                     target = sorted(cloaked_bubbles, key=str, reverse=True)[0]
@@ -2168,7 +2168,7 @@ class omnipkgLoader:
                     for entry in os.scandir(str(self.multiversion_base)):
                         if (
                             entry.is_dir()
-                            and entry.name.startswith(f"{pkg_name}-")
+                            and entry.name.startswith(f"{pkg_name.replace('-', '_')}-")
                             and "_omnipkg_cloaked" not in entry.name
                         ):
                             conflicting_bubbles.append(Path(entry.path))
@@ -2314,7 +2314,7 @@ class omnipkgLoader:
                 if not bubble_path.exists():
                     # Nuclear option: check if it's a timing issue
                     time.sleep(0.1)
-                    bubble_path = self.multiversion_base / f"{pkg_name}-{requested_version}"
+                    bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{requested_version}"
 
                 if bubble_path.is_dir():
                     if not self.quiet:
@@ -3272,7 +3272,7 @@ class omnipkgLoader:
 
     def _get_package_modules(self, pkg_name: str):
         """Helper to find all modules related to a package in sys.modules."""
-        pkg_name_normalized = pkg_name.replace("-", "_")
+        pkg_name_normalized = pkg_name.replace('-', '_')
         return [
             mod
             for mod in list(sys.modules.keys())
@@ -3377,7 +3377,7 @@ class omnipkgLoader:
                 safe_print(f"         ⏱️ pre_inval:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
-        pkg_name_normalized = pkg_name.replace("-", "_")
+        pkg_name_normalized = pkg_name.replace('-', '_')
 
         # SPECIAL: torch/tensorflow checks
         if pkg_name == "torch" and "torch._C" in sys.modules:
@@ -3717,7 +3717,7 @@ class omnipkgLoader:
 
         # Last resort: transform package name
         # Replace hyphens with underscores (common convention)
-        transformed = pkg_name.replace("-", "_").lower()
+        transformed = pkg_name.replace('-', '_').lower()
 
         if not self.quiet and transformed != pkg_name:
             safe_print(_('      📦 Using transformed name: {} -> {}').format(pkg_name, transformed))
