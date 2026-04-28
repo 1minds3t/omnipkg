@@ -9,25 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.2.1] — 2026-04-27
 
-Critical bugfix (yanks v3.1.0, v3.2.0)
+Critical bugfix: KB key corruption and bubble path normalization
 
-Bubble installs silently succeeded but were immediately unusable. Any `8pkg run`
-invocation that triggered an on-demand bubble install would fail with:
+## What's fixed
+
+`_get_venv_temp_dir()` in `worker_daemon.py` was computing a temp dir hash using
+SHA-1 on `sys.prefix + optional project_root` — diverging from `ConfigManager`'s
+canonical `md5(_canonical_path_str(sys.prefix))[:8]`. The wrong hash was injected
+into every worker subprocess via `OMNIPKG_ENV_ID_OVERRIDE`, which `package_meta_builder`
+and `core.py` consumed as the authoritative env_id. All bubble installs wrote KB
+entries under the daemon's incorrect env_id. Post-install verification recomputed
+the correct env_id, found no matching KB entry, and raised:
 
   RuntimeError: Installation reported success but <pkg>==<ver> not found. Found version: None
 
-A CI workaround introduced in v3.1.0 (`Set fixed Omnipkg Environment ID for CI`)
-injected `OMNIPKG_ENV_ID_OVERRIDE` into every worker subprocess. The value was
-computed with a different hash function (sha1) and different inputs than
-ConfigManager's canonical env_id (md5 of normalized sys.prefix). Workers wrote
-KB entries under the wrong env_id; the loader looked them up under the correct
-one and found nothing.
+**Fix:** Renamed env var to `OMNIPKG_DAEMON_TEMP_ID` (log/socket/pid path only,
+never touches KB keys) and aligned hash logic to match `ConfigManager` exactly.
 
-- Introduced `OMNIPKG_DAEMON_TEMP_ID` for log/socket/pid path consolidation (daemon-internal only)
-- `OMNIPKG_ENV_ID_OVERRIDE` is no longer injected into worker subprocesses
-- `_get_venv_temp_dir()` now uses identical hash logic to ConfigManager
+Packages specified with hyphens (e.g. `huggingface-hub`, `apache-tvm`) failed to
+activate existing bubbles. The loader constructed bubble paths using the raw spec
+name (`huggingface-hub-1.10.1`) while the filesystem used the normalized name
+(`huggingface_hub-1.10.1`), causing `has_bubble=False` and falling through to the
+main-env version check which returned `None`.
 
-v3.1.0, v3.2.0 — both yanked. Upgrade immediately.
+**Fix:** All bubble path construction, manifest lookups, glob patterns, and
+`entry.name.startswith` checks in `loader.py` now normalize dash→underscore.
+
+## Affected versions
+
+v3.1.0 and v3.2.0 are yanked. Upgrade immediately.
+
+## Upgrade
 
 pip install --upgrade omnipkg
 
@@ -35,8 +47,13 @@ pip install --upgrade omnipkg
 
 **📝 Code Changes:**
 - UPDATE: src/omnipkg/isolation/worker_daemon.py (21 lines changed)
+- UPDATE: src/omnipkg/loader.py (28 lines changed)
 
-_1 file changed, 9 insertions(+), 12 deletions(-)_
+**Additional Changes:**
+- fix(loader): loader now properly finds pkgs like hf_hub using normalization
+- fix: replace OMNIPKG_ENV_ID_OVERRIDE with OMNIPKG_DAEMON_TEMP_ID to prevent KB key corruption
+
+_4 files changed, 55 insertions(+), 27 deletions(-)_
 
 ## [3.2.0] — 2026-04-26
 
