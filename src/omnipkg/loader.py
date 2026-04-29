@@ -1743,6 +1743,10 @@ class omnipkgLoader:
 
             # Check bubbles
             bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{requested_version}"
+            if not bubble_path.exists():
+                _bp_hyp = self.multiversion_base / f"{pkg_name}-{requested_version}"
+                if _bp_hyp.exists():
+                    bubble_path = _bp_hyp
             has_bubble = bubble_path.is_dir() and (bubble_path / ".omnipkg_manifest.json").exists()
 
             return {
@@ -1780,6 +1784,10 @@ class omnipkgLoader:
 
             # Quick check: does bubble exist?
             bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{requested_version}"
+            if not bubble_path.exists():
+                _bp_hyp = self.multiversion_base / f"{pkg_name}-{requested_version}"
+                if _bp_hyp.exists():
+                    bubble_path = _bp_hyp
             has_bubble = bubble_path.is_dir()
 
             return {
@@ -2062,6 +2070,10 @@ class omnipkgLoader:
         canonical_version = str(Version(requested_version))  # 0.15 -> 0.15.0
         # Use canonical version for the path
         bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{canonical_version}"
+        if not bubble_path.exists():
+            _bp_hyp = self.multiversion_base / f"{pkg_name}-{canonical_version}"
+            if _bp_hyp.exists():
+                bubble_path = _bp_hyp
 
         # Check for cloaked bubbles (use both forms for backward compatibility)
         if not bubble_path.exists():
@@ -2315,6 +2327,10 @@ class omnipkgLoader:
                     # Nuclear option: check if it's a timing issue
                     time.sleep(0.1)
                     bubble_path = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{requested_version}"
+            if not bubble_path.exists():
+                _bp_hyp = self.multiversion_base / f"{pkg_name}-{requested_version}"
+                if _bp_hyp.exists():
+                    bubble_path = _bp_hyp
 
                 if bubble_path.is_dir():
                     if not self.quiet:
