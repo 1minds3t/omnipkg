@@ -2069,7 +2069,41 @@ class ConfigManager:
                     timeout=30,
                 )
                 if result.returncode != 0:
-                    raise OSError(_("Python executable test failed: {}").format(result.stderr))
+                    stderr_text = result.stderr or ""
+                    missing_so = re.search(r"error while loading shared libraries: (\S+): cannot open shared object file", stderr_text)
+                    if missing_so:
+                        missing_lib = missing_so.group(1)
+                        safe_print(_("   - ⚠️  Missing shared library: {}").format(missing_lib))
+                        SO_COMPAT = {
+                            "libcrypt.so.1": {"pacman": "libxcrypt-compat", "apt": "libxcrypt-dev", "dnf": "libxcrypt-compat"},
+                        }
+                        pkg_map = SO_COMPAT.get(missing_lib, {})
+                        installed = False
+                        for mgr, pkg in pkg_map.items():
+                            if not shutil.which(mgr):
+                                continue
+                            safe_print(_("   - 🔧 Attempting auto-install of {} via {}...").format(pkg, mgr))
+                            try:
+                                install_cmd = ["sudo", mgr, "-S", "--noconfirm", pkg] if mgr == "pacman" else ["sudo", mgr, "install", "-y", pkg]
+                                r2 = subprocess.run(install_cmd, capture_output=True, text=True, timeout=120)
+                                if r2.returncode == 0:
+                                    safe_print(_("   - ✅ Installed {}. Retrying...").format(pkg))
+                                    installed = True
+                                    break
+                                else:
+                                    safe_print(_("   - ⚠️  Auto-install failed. Run manually: {}").format(" ".join(install_cmd)))
+                            except Exception as ie:
+                                safe_print(_("   - ⚠️  Auto-install error: {}").format(ie))
+                        if installed:
+                            result = subprocess.run([str(python_exe), "--version"], capture_output=True, text=True, timeout=30)
+                            if result.returncode != 0:
+                                raise OSError(_("Python executable test failed after compat install: {}").format(result.stderr))
+                        else:
+                            safe_print(_("   - 💡 On Arch: sudo pacman -S libxcrypt-compat"))
+                            safe_print(_("   - 💡 On Debian/Ubuntu: sudo apt install libxcrypt-dev"))
+                            raise OSError(_("Python executable test failed: {}").format(stderr_text))
+                    else:
+                        raise OSError(_("Python executable test failed: {}").format(stderr_text))
                 safe_print(_("   - ✅ Python version: {}").format(result.stdout.strip()))
 
                 self._install_essential_packages(python_exe)
