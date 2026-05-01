@@ -6853,15 +6853,15 @@ class omnipkg:
                     if p.name not in (expected_dist_info, expected_editable_dist_info)
                 ]
 
+                _marker = Path(exe_path).parent / f".omnipkg_synced_{master_version}"
+                if _marker.exists():
+                    # Marker present — already synced at this version, skip all checks
+                    continue
+
                 has_egg_link = (site_packages / "omnipkg.egg-link").exists()
                 if has_egg_link:
-                    _marker = Path(exe_path).parent / f".omnipkg_synced_{master_version}"
-                    if _marker.exists():
-                        # Already synced, egg-link is stale but harmless — skip
-                        pass
-                    else:
-                        sync_needed.append((py_ver, str(exe_path)))
-                        continue
+                    sync_needed.append((py_ver, str(exe_path)))
+                    continue
 
                 # If we found an old/conflicting .dist-info directory, sync is ALWAYS needed.
                 # This is non-negotiable and overrides any .pth file check.
@@ -8276,10 +8276,7 @@ class omnipkg:
                 # ── Fast missing-METADATA scan (main env + bubbles) ──────────────
         if self._fast_missing_metadata_check():
             safe_print("   🔧 Auto-healed broken metadata, re-running discovery...")
-            # Force fresh discovery after healing
-            all_discovered_dists = gatherer._discover_distributions(
-                targeted_packages=None, verbose=False
-            )
+            # Auto-heal done; discovery runs below
         safe_print(_("🧠 Checking knowledge base synchronization..."))
 
         configured_python_exe = self.config.get("python_executable", sys.executable)
