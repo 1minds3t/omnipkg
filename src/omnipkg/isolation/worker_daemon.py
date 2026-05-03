@@ -2704,7 +2704,7 @@ class PersistentWorker:
         code: str,
         shm_in: Dict[str, Any],
         shm_out: Dict[str, Any],
-        timeout: float = 240.0,
+        timeout: float = None,  # <--- Block forever
     ) -> Dict[str, Any]:
         """Execute task with timeout."""
         with self.lock:
@@ -4311,7 +4311,7 @@ class WorkerPoolDaemon:
                     code,
                     shm_in,
                     shm_out,
-                    timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
+                    timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
                 )
                 # ── IMMEDIATE EVICTION IF NESTED SWITCHING OCCURRED ────────
                 _has_tag = bool(worker_tag)
@@ -4353,7 +4353,7 @@ class WorkerPoolDaemon:
                             code,
                             shm_in,
                             shm_out,
-                            timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
+                            timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
                         )
                         return result
                     except Exception as e:
@@ -4445,7 +4445,7 @@ class WorkerPoolDaemon:
                 code,
                 shm_in,
                 shm_out,
-                timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
+                timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
             )
             return result
         except Exception as e:
