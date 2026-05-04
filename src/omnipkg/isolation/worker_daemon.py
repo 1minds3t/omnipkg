@@ -1999,6 +1999,7 @@ while True:
         # Make current task's input_data visible (overwritten each call, not persisted)
         exec_scope['input_data'] = command
 
+        _pre_task_modules = set(sys.modules.keys())
         try:
             with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
                 exec(worker_code + '\\nworker_result = locals().get("result", None)', exec_scope, exec_scope)
@@ -2034,9 +2035,10 @@ while True:
                 if _cls:
                     _cls._daemon_did_version_switch = False
 
-                # ☢️ ABI CONTAMINATION — separate flag, separate concern from nesting
+                # ☢️ ABI CONTAMINATION — only flag if NEW ABI modules appeared during this task
                 _ABI_CEXTS = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2'}
-                result['_worker_abi_contaminated'] = any(m in sys.modules for m in _ABI_CEXTS)
+                _new_abi = _ABI_CEXTS & (set(sys.modules.keys()) - _pre_task_modules)
+                result['_worker_abi_contaminated'] = bool(_new_abi)
             except Exception:
                 result['_worker_did_nesting'] = False
                 result['_worker_abi_contaminated'] = False

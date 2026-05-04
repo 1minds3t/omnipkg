@@ -9546,6 +9546,168 @@ class omnipkg:
 
             return 0 if not failed_bubbles else 1
 
+        from omnipkg.common_utils import safe_input
+        all_dist_infos = list(sp.glob("*.dist-info"))
+
+        # Step 1: Group metadata by package name to find conflicts
+        packages = defaultdict(list)
+        for path in all_dist_infos:
+            try:
+                # Extract name like 'rich' from 'rich-14.1.0.dist-info'
+                package_name = path.name.split("-")[0].lower().replace("_", "-")
+                packages[package_name].append(path)
+            except IndexError:
+                continue
+
+        conflicted_packages = {name: paths for name, paths in packages.items() if len(paths) > 1}
+
+        if not conflicted_packages:
+            safe_print("\n✅ Environment is healthy. No conflicts found.")
+            return 0
+
+        safe_print(
+            f"\n🚨 DIAGNOSIS: Found {len(conflicted_packages)} packages with conflicting metadata!"
+        )
+
+        ghosts_to_exorcise = []
+
+        # Step 2 & 3: Perform the autopsy and identify ghosts for each conflict
+        for name, paths in conflicted_packages.items():
+            safe_print(_("\n--- Autopsy for: '{}' ---").format(name))
+            found_versions = sorted([p.name.split("-")[1] for p in paths])
+            safe_print(_('  - Found Metadata Versions: {}').format(', '.join(found_versions)))
+
+            canonical_version = None
+            python_exe = self.config["python_executable"]
+            import_name = name.replace("-", "_")
+
+            # Step 1: Try actual import for __version__
+            try:
+                cmd = [
+                    python_exe,
+                    "-c",
+                    f"import {import_name}; print(getattr({import_name}, '__version__', None))",
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=5)
+                version_output = result.stdout.strip()
+
+                if version_output and version_output != "None":
+                    canonical_version = version_output
+                    safe_print(_('  - Live Code Version (Ground Truth): {}  ✅').format(canonical_version))
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                # Import failed, that's ok - we'll try metadata
+                pass
+
+            # Step 2: If import didn't work or had no __version__, try importlib.metadata
+            if not canonical_version:
+                try:
+                    safe_print("  - ⚠️  Direct import unavailable. Falling back to metadata...")
+                    cmd = [
+                        python_exe,
+                        "-c",
+                        f"try: import importlib.metadata as meta\n"
+                        f"except ImportError: import importlib_metadata as meta\n"
+                        f"print(meta.version('{name}'))",
+                    ]
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, check=True, timeout=5
+                    )
+                    canonical_version = result.stdout.strip()
+                    safe_print(_('  - Metadata Version: {}  📦').format(canonical_version))
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                    safe_print(f"  - ⚠️  Could not determine version for '{name}'. Skipping.")
+                    continue
+
+            if not canonical_version:
+                safe_print(f"  - ⚠️  No version found for '{name}'. Skipping.")
+                continue
+
+            try:
+                # Use the packaging library to create a comparable Version object
+                parsed_canonical_version = parse_version(canonical_version)
+            except Exception as e:
+                safe_print(
+                    f"  - ⚠️  Could not parse live version '{canonical_version}' for '{name}'. Skipping. Error: {e}"
+                )
+                continue
+
+            # Identify the keeper and the ghosts
+            for path in paths:
+                is_keeper = False
+                try:
+                    # 'rich-14.1.0.dist-info' -> 'rich-14.1.0'
+                    base_name = path.name.removesuffix(".dist-info")
+
+                    # Reliably split name and version by splitting from the right
+                    package_part, version_part = base_name.rsplit("-", 1)
+
+                    # Compare using normalized names and parsed versions
+                    parsed_path_version = parse_version(version_part)
+                    parsed_canonical_base = parse_version(str(parsed_canonical_version).split("+")[0])
+
+                    if (
+                        canonicalize_name(package_part) == canonicalize_name(name)
+                        and (
+                            parsed_path_version == parsed_canonical_version
+                            or parse_version(version_part.split("+")[0]) == parsed_canonical_base
+                        )
+                    ):
+                        # This is the keeper, do not delete
+                        is_keeper = True
+
+                except Exception:
+                    # If parsing the directory name fails, it's non-standard.
+                    # Treat it as a ghost.
+                    pass
+
+                if not is_keeper:
+                    # If it's not the keeper, it's a ghost.
+                    ghosts_to_exorcise.append(path)
+
+        if not ghosts_to_exorcise:
+            safe_print(
+                "\n✅ All conflicts resolved without action (e.g., could not determine canonical version)."
+            )
+            return 0
+
+        # Step 4: Present the healing plan
+        safe_print("\n" + "─" * 60)
+        safe_print("💔 HEALING PLAN: The following orphaned metadata ('ghosts') will be deleted:")
+        for ghost in ghosts_to_exorcise:
+            safe_print(f"  - 👻 {ghost.name}")
+        safe_print("─" * 60)
+
+        if dry_run:
+            safe_print("\n🔬 Dry run complete. No changes were made.")
+            return 0
+
+        if not force:
+            confirm = safe_input("\n🤔 Proceed with the exorcism? (y/N): ").lower().strip()
+            if confirm != "y":
+                safe_print("🚫 Healing cancelled by user.")
+                return 1
+
+        # Step 5: Execute the healing
+        safe_print("\n🔥 Starting exorcism...")
+        healed_count = 0
+        for ghost in ghosts_to_exorcise:
+            try:
+                safe_print(_('  - 🗑️  Deleting {}...').format(ghost.name))
+                shutil.rmtree(ghost)
+                healed_count += 1
+            except OSError as e:
+                safe_print(_('  - ❌ FAILED to delete {}: {}').format(ghost.name, e))
+
+        safe_print(_('\n✨ Healing complete. {} ghosts exorcised.').format(healed_count))
+
+        # Step 6: Finalize and resync
+        safe_print("🧠 The environment has changed. Forcing a full knowledge base rebuild...")
+        self.rebuild_knowledge_base(force=True)
+
+        safe_print("\n🎉 Your environment is now clean and healthy!")
+        return 0
+
+
     def heal(self, dry_run: bool = False, force: bool = False) -> int:
         """
         (UPGRADED) Audits, reconciles conflicting requirements, and attempts

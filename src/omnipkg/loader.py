@@ -189,7 +189,8 @@ class omnipkgLoader:
     _global_cloaking_lock = threading.RLock()  # Re-entrant lock
     _nesting_depth = 0
     VERSION_CHECK_METHOD = "filesystem"  # Options: 'kb', 'filesystem', 'glob', 'importlib'
-    _profiling_enabled = True
+    _profiling_enabled = os.environ.get("OMNIPKG_PROFILE") == "1"
+    _debug_enabled = os.environ.get("OMNIPKG_DEBUG") == "1"
     _profile_data = defaultdict(list)
     _daemon_did_version_switch: bool = False  # Set True when any bubble activated in daemon
     _nesting_lock = threading.Lock()
@@ -439,6 +440,23 @@ class omnipkgLoader:
             safe_print(f"      ⏱️  {label}: {elapsed_ms:.3f}ms")
 
         return elapsed_ns
+
+    def _debug(self, msg: str):
+        """Emit debug message if OMNIPKG_DEBUG=1"""
+        if omnipkgLoader._debug_enabled and not self.quiet:
+            safe_print(f"   [DBG-LOADER] {msg}")
+
+    def _debug_sys_path(self, label: str = ""):
+        """Dump sys.path if OMNIPKG_DEBUG=1"""
+        if not omnipkgLoader._debug_enabled or self.quiet:
+            return
+        tag = f" ({label})" if label else ""
+        safe_print(f"   [DBG-SYSPATH]{tag} {len(sys.path)} entries:")
+        for _i, _p in enumerate(sys.path[:12]):
+            _exists = "✅" if Path(_p).exists() else "❌"
+            safe_print(f"      [{_i}] {_exists} {_p}")
+        if len(sys.path) > 12:
+            safe_print(f"      ... +{len(sys.path)-12} more")
 
     @classmethod
     def enable_profiling(cls):
@@ -914,6 +932,13 @@ class omnipkgLoader:
                     "✅ [omnipkg loader] Stored clean original state with {} compatible paths"
                 ).format(len(self.original_sys_path))
             )
+        if omnipkgLoader._debug_enabled and not self.quiet:
+            safe_print(f"   [DBG-ORIGPATH] original_sys_path ({len(self.original_sys_path)} entries):")
+            for _i, _p in enumerate(self.original_sys_path[:12]):
+                _exists = "✅" if Path(_p).exists() else "❌"
+                safe_print(f"      [{_i}] {_exists} {_p}")
+            if len(self.original_sys_path) > 12:
+                safe_print(f"      ... +{len(self.original_sys_path)-12} more")
 
     def _filter_environment_paths(self, env_var: str) -> str:
         """
@@ -1175,9 +1200,11 @@ class omnipkgLoader:
         """
         bubble_path = Path(bubble_path_str)
         linked_count = 0
+        self._debug(f"_ensure_omnipkg_access: bubble={bubble_path.name} deps={len(self._omnipkg_dependencies)}")
         for dep_name, dep_path in self._omnipkg_dependencies.items():
             bubble_dep_path = bubble_path / dep_name
             if bubble_dep_path.exists():
+                self._debug(f"  dep already in bubble: {dep_name}")
                 continue
             if not self._is_version_compatible_path(dep_path):
                 continue
@@ -1187,7 +1214,9 @@ class omnipkgLoader:
                 else:
                     bubble_dep_path.symlink_to(dep_path)
                 linked_count += 1
-            except Exception:
+                self._debug(f"  symlinked: {dep_name} -> {dep_path}")
+            except Exception as _e:
+                self._debug(f"  symlink failed {dep_name}: {_e} — falling back to sys.path")
                 site_packages_str = str(self.site_packages_root)
                 if site_packages_str not in sys.path:
                     insertion_point = 1 if len(sys.path) > 1 else len(sys.path)
@@ -2240,7 +2269,11 @@ class omnipkgLoader:
                 self._active_bubble_lock = None
                 self._activation_successful = True
                 if _in_daemon:
-                    omnipkgLoader._daemon_did_version_switch = True
+                    import os as _os
+                    _assigned = _os.environ.get("OMNIPKG_WORKER_SPEC", "")
+                    _this_spec = self.package_spec if hasattr(self, "package_spec") else ""
+                    if _assigned and _this_spec and _assigned != _this_spec:
+                        omnipkgLoader._daemon_did_version_switch = True
                 self._using_main_env = False
                 self._cloaked_main_modules = []
                 self._cloaked_bubbles = []
@@ -2822,12 +2855,17 @@ class omnipkgLoader:
                     if bubble_path_str in sys.path:
                         sys.path.remove(bubble_path_str)
                     sys.path.insert(0, bubble_path_str)
+                    self._debug_sys_path("overlay[1D] after insert")
                 else:
                     new_sys_path = [bubble_path_str]
                     for p in self.original_sys_path:
                         if not self._is_main_site_packages(p) and p != bubble_path_str:
                             new_sys_path.append(p)
+                    _site_str = str(self.site_packages_root)
+                    if _site_str not in new_sys_path:
+                        new_sys_path.append(_site_str)
                     sys.path[:] = new_sys_path
+                    self._debug_sys_path("strict[1D] after rebuild")
 
                 self._ensure_omnipkg_access_in_bubble(bubble_path_str)
                 self._activated_bubble_path = bubble_path_str
@@ -3220,6 +3258,7 @@ class omnipkgLoader:
                 if bubble_path_str in sys.path:
                     sys.path.remove(bubble_path_str)
                 sys.path.insert(0, bubble_path_str)
+                self._debug_sys_path("overlay after insert")
             else:
                 if not self.quiet:
                     safe_print("   - 🔒 STRICT mode")
@@ -3227,7 +3266,13 @@ class omnipkgLoader:
                 for p in self.original_sys_path:
                     if not self._is_main_site_packages(p) and p != bubble_path_str:
                         new_sys_path.append(p)
+                # Keep main site-packages as fallback so packages not shadowed
+                # by this bubble (e.g. requests, httpie) remain importable.
+                _site_str = str(self.site_packages_root)
+                if _site_str not in new_sys_path:
+                    new_sys_path.append(_site_str)
                 sys.path[:] = new_sys_path
+                self._debug_sys_path("strict after rebuild")
             self._profile_end("setup_syspath", print_now=self._profiling_enabled)
 
             # Phase 6: Handle binary executables
