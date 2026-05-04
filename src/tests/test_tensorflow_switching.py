@@ -542,12 +542,22 @@ def _get_tf_client_and_exe(config_manager):
 
 
 _TF_WORKER_CODE = """
-import sys, importlib.metadata, os
+import sys, os
+_pid = os.getpid()
+_exe = sys.executable
+_tf_mods = [k for k in sys.modules if 'tensorflow' in k]
+_tf_file = getattr(sys.modules.get('tensorflow'), '__file__', None)
+print(f"  [PRE-IMPORT] pid={_pid}  exe={_exe}", flush=True)
+sys.stderr.write(f"  [PRE-IMPORT] pid={_pid}  exe={_exe}\\n")
+sys.stderr.write(f"  [PRE-IMPORT] tf already in sys.modules: {bool(_tf_mods)}\\n")
+if _tf_mods:
+    sys.stderr.write(f"  [PRE-IMPORT] tf modules loaded: {_tf_mods[:5]}\\n")
+    sys.stderr.write(f"  [PRE-IMPORT] tf.__file__={_tf_file}\\n")
+sys.stderr.flush()
 import tensorflow as tf
-print(f"  tf={tf.__version__}  pid={os.getpid()}  exe={sys.executable}")
-# Quick sanity: build a tiny model to confirm TF is actually operational
+print(f"  tf={tf.__version__}  pid={_pid}", flush=True)
 model = tf.keras.Sequential([tf.keras.layers.Dense(1, input_shape=(1,))])
-print(f"  model.layers={len(model.layers)}")
+print(f"  model.layers={len(model.layers)}", flush=True)
 """
 
 
@@ -592,6 +602,10 @@ def run_tf_daemon_pair(client, python_exe, label: str) -> dict:
         if result.get("stdout"):
             for line in result["stdout"].splitlines():
                 safe_print(f"     {line.strip()}")
+        if result.get("stderr"):
+            for line in result["stderr"].splitlines():
+                if "[PRE-IMPORT]" in line or "[DAEMON]" in line:
+                    safe_print(f"     stderr: {line.strip()}")
         if not ok and result.get("error"):
             safe_print(f"     error: {result['error']}")
         timings[spec] = elapsed

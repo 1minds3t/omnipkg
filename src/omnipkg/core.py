@@ -88,9 +88,19 @@ SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 _DBG = os.environ.get("OMNIPKG_DEBUG", "0") == "1"
 
 def _dbg(msg: str):
-    """Lightweight debug printer; no-op unless OMNIPKG_DEBUG=1."""
-    if _DBG:
-        print(f"[DEBUG-CORE] {msg}", file=sys.stderr, flush=True)
+       if _DBG:
+               print(f"[DEBUG-CORE] {msg}", file=sys.stderr, flush=True)
+
+# ── PROFILE HELPER ───────────────────────────────────────────────────────────
+# Set UV_FFI_PROFILE=1 in environment to see timing info.
+# ─────────────────────────────────────────────────────────────────────────────
+_PROF = os.environ.get("UV_FFI_PROFILE", "0") == "1"
+
+def _prof(msg: str):
+       """Lightweight timing printer; no-op unless UV_FFI_PROFILE=1."""
+       if _PROF:
+               # We use stderr so it doesn't pollute actual program output
+               print(f"[TIMING] {msg}", file=sys.stderr, flush=True)
 
 def _get_dynamic_omnipkg_version():
     """
@@ -5825,13 +5835,13 @@ class BubbleIsolationManager:
         manifest_path = bubble_path / ".omnipkg_manifest.json"
 
         # --- ADDED EXPLICIT PATH PRINTING ---
-        print(f"   [MANIFEST] Writing schema 2.0 manifest to: {manifest_path}")
-
+        _dbg(f"Writing schema 2.0 manifest to: {manifest_path}")
         try:
             with open(manifest_path, "w") as f:
                 json.dump(manifest_data, f, indent=2)
-            print(f"   [MANIFEST] ✅ Successfully wrote {len(json.dumps(manifest_data))} bytes.")
+            _dbg(f"Successfully wrote {len(json.dumps(manifest_data))} bytes to manifest.")
         except Exception as e:
+            # THIS IS THE CORRECTED PART - We actually print the critical error
             print(f"   [MANIFEST] ❌ CRITICAL ERROR writing manifest: {e}")
 
         try:
@@ -17126,11 +17136,11 @@ print(json.dumps(results))
         safe_print(
             f" -> Finding latest COMPATIBLE version for '{package_name}' using background caching..."
         )
-        print(f"[TIMING] after safe_print: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+        _prof(f"after safe_print: {(_t.perf_counter()-_t0)*1000:.1f}ms")
         import requests as http_requests
-        print(f"[TIMING] after import requests: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+        _prof(f"after import requests: {(_t.perf_counter()-_t0)*1000:.1f}ms")
         py_context = python_context_version or self.current_python_context
-        print(f"[TIMING] after py_context: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+        _prof(f"after py_context: {(_t.perf_counter()-_t0)*1000:.1f}ms")
         py_context = python_context_version or self.current_python_context
 
         if not hasattr(self, "pypi_cache"):
@@ -17139,10 +17149,19 @@ print(json.dumps(results))
         cached_version = self.pypi_cache.get_cached_version(package_name, py_context)
         if cached_version:
             import time as _t
-            _t0 = _t.perf_counter(); stale = self.pypi_cache.is_cache_entry_stale(package_name, py_context, max_age_seconds=3600); print(f"[TIMING] is_cache_entry_stale: {(_t.perf_counter()-_t0)*1000:.1f}ms stale={stale}", flush=True)
+            _t0 = _t.perf_counter()
+            stale = self.pypi_cache.is_cache_entry_stale(
+                    package_name,
+                    py_context,
+                    max_age_seconds=3600
+            )
+            _prof(f"is_cache_entry_stale: {(_t.perf_counter()-_t0)*1000:.1f}ms stale={stale}")
+
             if stale:
-                _t0 = _t.perf_counter(); self._start_background_cache_refresh(package_name, py_context); print(f"[TIMING] _start_background_cache_refresh: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
-            return cached_version
+                    # 2. Background refresh with hidden timing
+                    _t0 = _t.perf_counter()
+                    self._start_background_cache_refresh(package_name, py_context)
+                    _prof(f"_start_background_cache_refresh: {(_t.perf_counter()-_t0)*1000:.1f}ms")
 
         # USE THE ROBUST TEST INSTALLATION APPROACH FIRST
         safe_print(f"    🧪 Using pip to find latest compatible version for Python {py_context}...")
