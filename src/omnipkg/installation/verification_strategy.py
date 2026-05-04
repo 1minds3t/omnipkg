@@ -483,9 +483,7 @@ def verify_bubble_with_smart_strategy(
         # Look for an executable: bin/<name> or <name> at root
         bin_candidates = [
             staging_path / "bin" / package_name,
-            staging_path / package_name,
             staging_path / "bin" / f"{package_name}.exe",
-            staging_path / f"{package_name}.exe",
         ]
         has_binary = any(
             p.exists() and os.access(str(p), os.X_OK)

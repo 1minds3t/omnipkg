@@ -6955,7 +6955,17 @@ def cli_start():
         return
 
     safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
-
+    import os
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        # SCHED_FIFO=1, priority 10 (reasonable, not maxing out)
+        class SchedParam(ctypes.Structure):
+            _fields_ = [("sched_priority", ctypes.c_int)]
+        param = SchedParam(10)
+        libc.sched_setscheduler(0, 1, ctypes.byref(param))
+    except Exception:
+        pass
     daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
 
     try:

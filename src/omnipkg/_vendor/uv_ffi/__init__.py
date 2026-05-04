@@ -1,5 +1,6 @@
 """
 uv_ffi — thin wrapper around the PyO3 native extension.
+Includes safety stubs for legacy native binaries.
 """
 import sys as _sys
 import os as _os
@@ -43,22 +44,37 @@ def _load_native():
 
     raise ImportError(f'uv_ffi: no .so found for {_sys.executable} (tag={_tag}, site={_sc.get_path("purelib")})')
 
+# Load the native binary
 _native = _load_native()
 _loaded_so_path = getattr(_native, '__file__', 'unknown')
 
+# ── SAFETY STUBS ─────────────────────────────────────────────────────────────
+# We use getattr(..., fallback) to ensure that if a legacy .so is loaded, 
+# the import doesn't crash with an AttributeError. 
+# The functions will exist as no-ops instead of blowing up the process.
+# ─────────────────────────────────────────────────────────────────────────────
+_noop = lambda *a, **kw: None
 
-run                         = _native.run
-get_site_packages_cache     = _native.get_site_packages_cache
-invalidate_site_packages_cache = _native.invalidate_site_packages_cache
-patch_site_packages_cache   = _native.patch_site_packages_cache
-clear_registry_cache        = _native.clear_registry_cache
-
+run                         = getattr(_native, 'run', lambda cmd: (1, "Native 'run' missing", ""))
+get_site_packages_cache     = getattr(_native, 'get_site_packages_cache', _noop)
+invalidate_site_packages_cache = getattr(_native, 'invalidate_site_packages_cache', _noop)
+patch_site_packages_cache   = getattr(_native, 'patch_site_packages_cache', _noop)
+clear_registry_cache        = getattr(_native, 'clear_registry_cache', _noop)
 
 def run(cmd: str) -> tuple:
-    result = _native.run(cmd)
-    if len(result) == 3:
-        return (result[0], result[1], result[2], '')
-    return result
+    """
+    Core execution wrapper. 
+    If the native 'run' was missing, this will call the stub return value.
+    """
+    # If 'run' is the stub, it returns a tuple; otherwise call the native function.
+    if hasattr(_native, 'run'):
+        result = _native.run(cmd)
+        if len(result) == 3:
+            return (result[0], result[1], result[2], '')
+        return result
+    else:
+        # Fallback return for the stub to prevent crashing the caller
+        return (1, "Native 'run' method not found in loaded .so", "")
 
 run_capture = run
 

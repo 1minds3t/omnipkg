@@ -7189,9 +7189,24 @@ class omnipkg:
                                 needs_upgrade = False
                 else:
                     needs_upgrade = True
+                # ... inside the uv_ffi check ...
                 if needs_upgrade:
-                    subprocess.run([target_exe, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "-q", f"uv_ffi>={_uv_ffi_min}"], capture_output=True, text=True, timeout=60, env=env)
-                return (py_ver, _already_synced or result.returncode == 0)
+                    if "--verbose" in sys.argv or "-V" in sys.argv:
+                        safe_print(f"   - 🛡️  HEALING {py_ver}: upgrading uv_ffi from {_installed} to >={_uv_ffi_min}...")
+
+                    # 1. Forcefully UNINSTALL the old version first.
+                    subprocess.run(
+                        [target_exe, "-m", "pip", "uninstall", "-y", "uv_ffi"],
+                        capture_output=True, text=True, timeout=30, env=env
+                    )
+
+                    # 2. Now, perform a clean INSTALL of the required version.
+                    upgrade_result = subprocess.run(
+                        [target_exe, "-m", "pip", "install", "--no-cache-dir", "-q", f"uv_ffi>={_uv_ffi_min}"],
+                        capture_output=True, text=True, timeout=60, env=env
+                    )
+                    if upgrade_result.returncode != 0 and ("--verbose" in sys.argv or "-V" in sys.argv):
+                        safe_print(f"   - ❌ uv_ffi upgrade failed for {py_ver}: {upgrade_result.stderr}")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                 futures = [executor.submit(sync_interpreter, ver, exe) for ver, exe in sync_needed]
@@ -11436,14 +11451,13 @@ class omnipkg:
                 return "active", (time.perf_counter_ns() - start_time_ns)
 
             # Check bubble
-            bubble_path = self.site_packages_root / ".omnipkg_versions" / f"{package}-{version}"
-            if bubble_path.is_dir():
-                return "bubble", (time.perf_counter_ns() - start_time_ns)
-
-            # Fallback: Legacy bubble location
-            legacy_bubble = self.multiversion_base / f"{package}-{version}"
-            if legacy_bubble.is_dir():
-                return "bubble", (time.perf_counter_ns() - start_time_ns)
+            for pkg_form in [package, pkg_normalized, package.replace("_", "-")]:
+                bubble_path = self.site_packages_root / ".omnipkg_versions" / f"{pkg_form}-{version}"
+                if bubble_path.is_dir():
+                    return "bubble", (time.perf_counter_ns() - start_time_ns)
+                legacy_bubble = self.multiversion_base / f"{pkg_form}-{version}"
+                if legacy_bubble.is_dir():
+                    return "bubble", (time.perf_counter_ns() - start_time_ns)
 
         except Exception:
             pass
@@ -11964,6 +11978,10 @@ class omnipkg:
         """
         changes = {"downgrades": [], "upgrades": [], "additions": [], "removals": []}
 
+        # Normalize all keys to underscores before diffing
+        before = {k.replace("-", "_"): v for k, v in before.items()}
+        after = {k.replace("-", "_"): v for k, v in after.items()}
+
         all_packages = set(before.keys()) | set(after.keys())
 
         for pkg in all_packages:
@@ -12018,7 +12036,6 @@ class omnipkg:
         index_url: Optional[str] = None,
         extra_index_url: Optional[str] = None,
     ) -> int:
-
         # ====================================================================
         # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
         # ====================================================================
@@ -12095,7 +12112,8 @@ class omnipkg:
 
                 if is_installed:
                     bubble_path = self.multiversion_base / f"{pkg_name}-{version}"
-                    is_in_bubble = bubble_path.exists() and bubble_path.is_dir()
+                    bubble_path_alt = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{version}"
+                    is_in_bubble = (bubble_path.exists() and bubble_path.is_dir()) or (bubble_path_alt.exists() and bubble_path_alt.is_dir())
 
                     if not is_in_bubble:
                         safe_print(
@@ -12113,6 +12131,7 @@ class omnipkg:
                     needs_installation.append(resolved_spec)
 
             # Phase 2: If everything satisfied, we're done!
+            needs_installation = [s for s in needs_installation if s not in fully_resolved_specs]
             if not needs_installation:
                 total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
                 if total_check_time_ns < 1_000_000:
@@ -12554,9 +12573,11 @@ class omnipkg:
                                 )
 
                     # Now perform the actual upgrade/downgrade in main environment
-                    safe_print(_('📦 Installing omnipkg=={} to main environment...').format(requested_version))
+                    self._installed_packages_cache = None
                     packages_before = self.get_installed_packages(live=True)
-                    return_code, install_result = self._run_pip_install(
+                    safe_print("⚙️ Running pip install for: {}...".format(package_spec))
+
+                    return_code, pkg_install_output = self._run_pip_install(
                         [f"omnipkg=={requested_version}"],
                         target_directory=None,
                         force_reinstall=force_reinstall,
@@ -12758,6 +12779,7 @@ class omnipkg:
                     continue
 
                 any_installations_made = True
+                self._installed_packages_cache = None
                 packages_after = self.get_installed_packages(live=True)
                 final_main_state = packages_after.copy()  # Track latest state
                 # 3. Change Detection
@@ -12793,6 +12815,22 @@ class omnipkg:
                                 "package": change["package"],
                                 "new_version": change["new_version"],
                                 "old_version": change["old_version"],
+                                "is_removal": False,
+                            }
+                        )
+
+                    for change in all_changes["removals"]:
+                        # pip removed old_ver and installed new_ver in its place.
+                        # Bubble new_ver (what pip just put in), restore old_ver to main.
+                        newly_installed = packages_after.get(change["package"]) or packages_after.get(change["package"].replace("_", "-"))
+                        if not newly_installed:
+                            continue  # truly gone, nothing to bubble
+                        packages_to_bubble.append(
+                            {
+                                "package": change["package"],
+                                "new_version": newly_installed,   # bubble what pip just installed
+                                "old_version": change["version"], # restore what was stable
+                                "is_removal": True,
                             }
                         )
 
@@ -12892,9 +12930,11 @@ class omnipkg:
 
                 elif install_strategy == "latest-active":
                     versions_to_bubble = []
-                    for pkg_name in set(packages_before.keys()) | set(packages_after.keys()):
-                        old_version = packages_before.get(pkg_name)
-                        new_version = packages_after.get(pkg_name)
+                    norm_before = {k.replace("-", "_"): v for k, v in packages_before.items()}
+                    norm_after = {k.replace("-", "_"): v for k, v in packages_after.items()}
+                    for pkg_name in set(norm_before.keys()) | set(norm_after.keys()):
+                        old_version = norm_before.get(pkg_name)
+                        new_version = norm_after.get(pkg_name)
                         if old_version and new_version and (old_version != new_version):
                             change_type = (
                                 "upgraded"
@@ -14558,7 +14598,8 @@ class omnipkg:
                     # A critical sanity check to ensure we're deleting the correct directory.
                     expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
 
-                    if bubble_dir.name == expected_bubble_name and bubble_dir.is_dir():
+                    expected_bubble_name_alt = f"{item_name}-{item_version}"
+                    if bubble_dir.name in (expected_bubble_name, expected_bubble_name_alt) and bubble_dir.is_dir():
                         safe_print(_("🗑️  Deleting bubble directory: {}").format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
                     else:
@@ -15702,7 +15743,7 @@ print(json.dumps(results))
                     target_directory=target_directory_override,
                     # CRITICAL FIX: --ignore-installed prevents uv/pip from uninstalling 
                     # the modern versions from the main environment during a --target install.
-                    extra_flags=["--no-build-isolation", "--no-deps", "--ignore-installed"],
+                    extra_flags=["--no-build-isolation", "--no-deps", "--no-reinstall"],
                 )
 
                 temp_file.unlink()
@@ -16166,8 +16207,8 @@ print(json.dumps(results))
             if extra_index_url:
                 _uv_args += ["--extra-index-url", extra_index_url]
             if extra_flags:
-                _uv_args += extra_flags
-            if force_reinstall:
+                _uv_args += ["--no-reinstall" if f == "--ignore-installed" else f for f in extra_flags]
+            if force_reinstall and "--no-reinstall" not in (extra_flags or []):
                 _uv_args.append("--upgrade")
             if target_directory:
                 # Windows symlinks in --target dirs cause broken metadata reads
@@ -16205,7 +16246,8 @@ print(json.dumps(results))
             _uv_args += _uv_packages
             _dbg_print(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
             # ── PATH 1: FFI in-process ─────────────────────────────────
-            if self._uv_ffi_run is not None:
+            _skip_ffi = "--no-reinstall" in (extra_flags or [])
+            if self._uv_ffi_run is not None and not _skip_ffi:
                 daemon_client = None
                 _ffi_installed, _ffi_removed = [], []
                 _op_marker = None
@@ -17148,21 +17190,10 @@ print(json.dumps(results))
 
         cached_version = self.pypi_cache.get_cached_version(package_name, py_context)
         if cached_version:
-            import time as _t
-            _t0 = _t.perf_counter()
-            stale = self.pypi_cache.is_cache_entry_stale(
-                    package_name,
-                    py_context,
-                    max_age_seconds=3600
-            )
-            _prof(f"is_cache_entry_stale: {(_t.perf_counter()-_t0)*1000:.1f}ms stale={stale}")
-
-            if stale:
-                    # 2. Background refresh with hidden timing
-                    _t0 = _t.perf_counter()
-                    self._start_background_cache_refresh(package_name, py_context)
-                    _prof(f"_start_background_cache_refresh: {(_t.perf_counter()-_t0)*1000:.1f}ms")
-
+            if self.pypi_cache.is_cache_entry_stale(package_name, py_context, max_age_seconds=3600):
+                self._start_background_cache_refresh(package_name, py_context)
+            return cached_version
+                    
         # USE THE ROBUST TEST INSTALLATION APPROACH FIRST
         safe_print(f"    🧪 Using pip to find latest compatible version for Python {py_context}...")
         try:
@@ -17968,7 +17999,8 @@ class PyPIVersionCache:
         """
         cache_key = self._get_cache_key(package_name, python_context)
         cached_data = None
-        self.sync_if_stale()  # reload if another worker/process wrote new entries
+        if not hasattr(self, "_file_cache"):
+            self._load_file_cache()
         # Try Redis first
         if self.redis_client:
             try:
