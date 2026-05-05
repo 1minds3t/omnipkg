@@ -282,7 +282,7 @@ def smart_tf_patcher():
         # ═══════════════════════════════════════════════════════════
         module = _original_import_func(name, globals, locals, fromlist, level)
 
-        if is_tf_import and module:
+        if is_tf_import and module and name == "tensorflow":
             import os
             _tf_loaded_pids.add(os.getpid())  # Mark THIS worker as having loaded TF
             _patch_numpy_for_tf_recursion()

@@ -2871,6 +2871,10 @@ class omnipkgMetadataGatherer:
         directories to build a ``{canonical_name: version}`` snapshot of
         everything installed alongside it.
 
+        For bubble installs: grab all co-installed dist-infos (full sibling scan).
+        For nested installs: BFS-walk only this pkg's own Requires-Dist tree so
+        we don't bleed the owner package's unrelated deps into the snapshot.
+
         This is the runtime lock — it tells the loader exactly which version
         of every dep is present in *this* bubble so it can cloak conflicts
         against the main environment without guessing.
@@ -2886,16 +2890,55 @@ class omnipkgMetadataGatherer:
         resolved: Dict[str, str] = {}
         try:
             bubble_root = Path(dist._path).parent
-            for neighbor_di in bubble_root.glob("*.dist-info"):
-                if not neighbor_di.is_dir():
-                    continue
-                try:
-                    n_dist = PathDistribution(neighbor_di)
-                    n_name = n_dist.metadata.get("Name", "")
-                    if n_name:
-                        resolved[canonicalize_name(n_name)] = n_dist.version
-                except Exception:
-                    continue
+
+            if install_type == "bubble":
+                for neighbor_di in bubble_root.glob("*.dist-info"):
+                    if not neighbor_di.is_dir():
+                        continue
+                    try:
+                        n_dist = PathDistribution(neighbor_di)
+                        n_name = n_dist.metadata.get("Name", "")
+                        if n_name:
+                            resolved[canonicalize_name(n_name)] = n_dist.version
+                    except Exception:
+                        continue
+
+            elif install_type == "nested":
+                # Build lookup of everything available in the owner bubble
+                available: Dict[str, PathDistribution] = {}
+                for di in bubble_root.glob("*.dist-info"):
+                    if not di.is_dir():
+                        continue
+                    try:
+                        d = PathDistribution(di)
+                        n = d.metadata.get("Name", "")
+                        if n:
+                            available[canonicalize_name(n)] = d
+                    except Exception:
+                        continue
+
+                # BFS only through this pkg's own dep tree
+                from packaging.requirements import Requirement
+                visited: set = set()
+                queue = [dist]
+                while queue:
+                    current = queue.pop()
+                    c_name = canonicalize_name(current.metadata.get("Name", ""))
+                    if c_name in visited:
+                        continue
+                    visited.add(c_name)
+                    resolved[c_name] = current.version
+                    for req_str in (current.metadata.get_all("Requires-Dist") or []):
+                        try:
+                            req = Requirement(req_str)
+                            if req.marker and not req.marker.evaluate({"extra": ""}):
+                                continue
+                            dep_name = canonicalize_name(req.name)
+                            if dep_name not in visited and dep_name in available:
+                                queue.append(available[dep_name])
+                        except Exception:
+                            continue
+
         except Exception:
             pass
         return resolved

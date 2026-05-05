@@ -172,14 +172,18 @@ def run_legacy_payload():
 
 
 def run_modern_payload(legacy_json: str):
-    import tensorflow as tf
-    print(
-        f"--- Python {sys.version.split()[0]} | TensorFlow {tf.__version__} ---",
-        file=sys.stderr,
-    )
-    legacy = json.loads(legacy_json)
-    prediction = "SUCCESS" if legacy["result"] > 200 else "FAILURE"
-    print(json.dumps({"prediction": prediction}))
+    from omnipkg.loader import omnipkgLoader
+    from omnipkg.core import ConfigManager
+    config_manager = ConfigManager(suppress_init_messages=True)
+    with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config):
+        import tensorflow as tf
+        print(
+            f"--- Python {sys.version.split()[0]} | TensorFlow {tf.__version__} ---",
+            file=sys.stderr,
+        )
+        legacy = json.loads(legacy_json)
+        prediction = "SUCCESS" if legacy["result"] > 200 else "FAILURE"
+        print(json.dumps({"prediction": prediction}))
 
 
 # --- MAIN TEST ---
@@ -223,7 +227,7 @@ def multiverse_analysis():
     pkg311_cmd = get_versioned_bin(venv_root, "3.11", "8pkg")
     safe_print(f"[INFO] pkg311 cmd prefix: {pkg311_cmd}")
 
-    run(pkg311_cmd + ["install", "tensorflow"],
+    run(pkg311_cmd + ["install", "tensorflow==2.13.0"],
         "Installing tensorflow into Python 3.11")
 
     # Adoption complete — safe to read registry

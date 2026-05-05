@@ -18,6 +18,7 @@ import threading
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
@@ -32,6 +33,12 @@ try:
 except ImportError:
     pass
 IS_WINDOWS = platform.system() == "Windows"
+
+
+@contextmanager
+def _null_ctx():
+    """No-op context manager — used as a lock placeholder when no ABI lock is needed."""
+    yield
 
 
 def _normalize_exe(path: str) -> str:
@@ -1402,8 +1409,29 @@ def _patch_opt_einsum_worker():
     # Check what frameworks are NOT in this worker's spec
     unavailable = []
     for framework in ['torch', 'jax', 'cupy']:
-        if framework not in PKG_SPEC and framework not in sys.modules:
-            unavailable.append(framework)
+        if framework not in PKG_SPEC:
+            if framework not in sys.modules:
+                unavailable.append(framework)
+            else:
+                # Framework is in sys.modules but may be broken (partial load).
+                # Detect by checking for a known-good attribute.
+                _broken = False
+                try:
+                    mod = sys.modules[framework]
+                    if mod is None:
+                        _broken = True
+                    elif framework == 'jax' and not hasattr(mod, 'numpy'):
+                        _broken = True
+                    elif framework == 'torch' and not hasattr(mod, 'Tensor'):
+                        _broken = True
+                except Exception:
+                    _broken = True
+                if _broken:
+                    # Purge broken module and all submodules, then stub
+                    _to_remove = [k for k in sys.modules if k == framework or k.startswith(framework + '.')]
+                    for _k in _to_remove:
+                        sys.modules.pop(_k, None)
+                    unavailable.append(framework)
 
     if not unavailable:
         return  # All frameworks available, no patching needed
@@ -1446,6 +1474,14 @@ def _patch_opt_einsum_worker():
 
             # Add to sys.modules
             sys.modules[backend_name] = backend_module
+            # Also stub the top-level module so direct imports (e.g. 'from jax import x')
+            # return a no-op stub instead of re-triggering the broken import.
+            if framework not in sys.modules:
+                import types as _types
+                _top_stub = _types.ModuleType(framework)
+                _top_stub.__file__ = '<omnipkg-isolated>'
+                _top_stub.xla_computation = lambda *a, **kw: None  # TF lite uses this
+                sys.modules[framework] = _top_stub
 
         sys.stderr.write(f'🩹 [DAEMON] Isolated worker from: {", ".join(unavailable)}\\n')
         sys.stderr.flush()
@@ -1963,6 +1999,7 @@ while True:
         # Make current task's input_data visible (overwritten each call, not persisted)
         exec_scope['input_data'] = command
 
+        _pre_task_modules = set(sys.modules.keys())
         try:
             with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
                 exec(worker_code + '\\nworker_result = locals().get("result", None)', exec_scope, exec_scope)
@@ -1989,29 +2026,40 @@ while True:
             result['stdout'] = stdout_buffer.getvalue()
             result['stderr'] = stderr_buffer.getvalue()
             result['cuda_method'] = actual_cuda_method
-            # ── DIRTY DETECTION: report if nested version switching occurred ──
+            # ── DIRTY DETECTION ──
             try:
                 _loader_mod = sys.modules.get('omnipkg.loader')
                 _cls = getattr(_loader_mod, 'omnipkgLoader', None)
                 _did_switch = getattr(_cls, '_daemon_did_version_switch', False)
                 result['_worker_did_nesting'] = _did_switch
-                # Reset for next task
                 if _cls:
                     _cls._daemon_did_version_switch = False
+
+                # ☢️ ABI CONTAMINATION — only flag if NEW ABI modules appeared during this task
+                _ABI_CEXTS = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2'}
+                _new_abi = _ABI_CEXTS & (set(sys.modules.keys()) - _pre_task_modules)
+                result['_worker_abi_contaminated'] = bool(_new_abi)
             except Exception:
                 result['_worker_did_nesting'] = False
+                result['_worker_abi_contaminated'] = False
             # ── END DIRTY DETECTION ──
             _original_stdout.write(json.dumps(result) + '\\n')
             _original_stdout.flush()
 
         except Exception as e:
             import traceback
+            # ☢️ ABI contamination must be reported even on ERROR — this is how
+            # the daemon knows to evict a worker that blew up during assign_spec.
+            _abi_cexts_err = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2'}
+            _abi_contaminated_err = any(m in sys.modules for m in _abi_cexts_err)
             error_response = {
                 'status': 'ERROR',
                 'task_id': task_id,
                 'error': f'{e.__class__.__name__}: {str(e)}',
                 'traceback': traceback.format_exc(),
-                'success': False
+                'success': False,
+                '_worker_did_nesting': False,
+                '_worker_abi_contaminated': _abi_contaminated_err,
             }
             sys.stderr.write(f'❌ [DAEMON] Sending error for task {task_id}: {str(e)}\\n')
             sys.stderr.flush()
@@ -2704,7 +2752,7 @@ class PersistentWorker:
         code: str,
         shm_in: Dict[str, Any],
         shm_out: Dict[str, Any],
-        timeout: float = 240.0,
+        timeout: float = None,  # <--- Block forever
     ) -> Dict[str, Any]:
         """Execute task with timeout."""
         with self.lock:
@@ -2810,6 +2858,9 @@ class PersistentWorker:
                             safe_print(f"🔍 [DAEMON] Diagnostic query failed: {_de}", file=sys.stderr)
                     except Exception as _diag_err:
                         safe_print(f"🔍 [DAEMON] Could not query worker state: {_diag_err}", file=sys.stderr)
+                # ☢️ Store last result so _run_cli can read _worker_abi_contaminated
+                # before deciding whether to recycle this worker into idle_pools.
+                self._last_result = parsed
                 return parsed
 
             except Exception as e:
@@ -2929,6 +2980,19 @@ class WorkerPoolDaemon:
         self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.running = True
         self.socket_path = DEFAULT_SOCKET
+
+        # ── ABI PACKAGE ACTIVATION LOCKS ────────────────────────────────────
+        # C-extension packages (TF, torch, etc.) do filesystem bubble/cloak
+        # operations during omnipkgLoader.__enter__(). If two workers for
+        # different versions of the same package (e.g. tf==2.12.0 and
+        # tf==2.13.0) run assign_spec concurrently, those filesystem ops race
+        # and one worker ends up with the other version's .so mapped in.
+        # Serializing assign_spec per package NAME (not per spec) prevents this.
+        _ABI_PKG_NAMES = {'tensorflow', 'torch', 'jax', 'cupy', 'scipy', 'numpy', 'cv2'}
+        self.abi_activation_locks: Dict[str, threading.Lock] = {
+            pkg: threading.Lock() for pkg in _ABI_PKG_NAMES
+        }
+        # ────────────────────────────────────────────────────────────────────
 
         # ── DEDICATED UV WORKERS: one PersistentWorker per Python exe ──────
         # These are NEVER shared with idle_pools (run_cli).
@@ -3936,6 +4000,11 @@ class WorkerPoolDaemon:
                         f"(worker→daemon→client relay)",
                         file=sys.stderr
                     )
+                    # ☢️ Store last result so the recycle gate can read
+                    # _worker_abi_contaminated before putting this worker
+                    # back into idle_pools. _run_cli bypasses execute_shm_task
+                    # so we must set it here directly.
+                    worker._last_result = msg
                     try:
                         send_json(conn, msg)
                     except Exception:
@@ -3952,19 +4021,41 @@ class WorkerPoolDaemon:
             if worker is not None:
                 if _completed_cleanly and worker is not None:
                     try:
+                        # ── ABI CONTAMINATION CHECK ────────────────────────
+                        # If the worker ran any code that loaded a C-extension
+                        # with a version-specific ABI (TF, torch, numpy, etc.),
+                        # the OS linker has permanently bound this process to
+                        # that .so. Recycling it into idle_pools would hand it
+                        # to a different spec's assign_spec call → crash.
+                        # The flag is set by the idle.py dirty detection block
+                        # and stored on the worker by execute_shm_task.
+                        _last_result = getattr(worker, '_last_result', {}) or {}
+                        _abi_contaminated = _last_result.get('_worker_abi_contaminated', False)
+                        if _abi_contaminated:
+                            safe_print(
+                                f"[RUN-CLI] ☢️  ABI-contaminated worker — evicting "
+                                f"pid={worker.process.pid} (cext loaded in sys.modules)",
+                                file=sys.stderr,
+                            )
+                            worker.force_shutdown()
+                            worker = None
+                            self._replenish_idle_pool(python_exe)
+                        # ── END ABI CHECK ──────────────────────────────────
+
                         # ── RAM CHECK before recycling into idle pool ──────
                         _worker_ram_mb = 0
-                        try:
-                            import psutil as _psu
-                            _worker_ram_mb = _psu.Process(
-                                worker.process.pid
-                            ).memory_info().rss / 1_048_576
-                        except Exception:
-                            pass
+                        if worker is not None:
+                            try:
+                                import psutil as _psu
+                                _worker_ram_mb = _psu.Process(
+                                    worker.process.pid
+                                ).memory_info().rss / 1_048_576
+                            except Exception:
+                                pass
                         # If worker ballooned (e.g. loaded numpy/torch),
                         # evict it and replenish with a fresh lean worker.
                         _RAM_RECYCLE_LIMIT_MB = 150
-                        if _worker_ram_mb > _RAM_RECYCLE_LIMIT_MB:
+                        if worker is not None and _worker_ram_mb > _RAM_RECYCLE_LIMIT_MB:
                             safe_print(
                                 f"[RUN-CLI] 🗑️  Worker too fat to recycle "
                                 f"({_worker_ram_mb:.0f}MB > {_RAM_RECYCLE_LIMIT_MB}MB)"
@@ -3974,7 +4065,8 @@ class WorkerPoolDaemon:
                             worker.force_shutdown()
                             worker = None
                             self._replenish_idle_pool(python_exe)
-                        else:
+
+                        if worker is not None:
                             # Put at front so it gets reused immediately
                             pool = self.idle_pools[python_exe]
                             items = []
@@ -4311,11 +4403,13 @@ class WorkerPoolDaemon:
                     code,
                     shm_in,
                     shm_out,
-                    timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
+                    timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
                 )
                 # ── IMMEDIATE EVICTION IF NESTED SWITCHING OCCURRED ────────
                 _has_tag = bool(worker_tag)
-                if not _has_tag and result.get("_worker_did_nesting"):
+                _did_nest = result.get("_worker_did_nesting")
+                _abi_dirty = result.get("_worker_abi_contaminated")
+                if not _has_tag and (_did_nest or _abi_dirty):
                     with self.pool_lock:
                         _dirty_entry = self.workers.pop(worker_key, None)
                     if _dirty_entry:
@@ -4324,11 +4418,22 @@ class WorkerPoolDaemon:
                             daemon=True,
                         ).start()
                         self._replenish_idle_pool(python_exe)
+                        _reason = "nesting+ABI" if (_did_nest and _abi_dirty) else ("nesting" if _did_nest else "ABI contamination")
                         safe_print(
-                            f"   🔄 [DAEMON] Immediately evicted dirty worker: {spec}",
+                            f"   🔄 [DAEMON] Immediately evicted dirty worker ({_reason}): {spec}",
                             file=sys.stderr,
                         )
                 # ── END IMMEDIATE EVICTION ──────────────────────────────────
+                # ☢️ Tagged ABI workers must also die after use — they can't be reused for a different spec
+                elif _has_tag and _abi_dirty:
+                    with self.pool_lock:
+                        _entry = self.workers.get(worker_key)
+                        if _entry:
+                            _entry["dirty"] = True  # Mark dirty — evicted on next access (existing dirty-eviction path)
+                    safe_print(
+                        f"   ☢️  [DAEMON] Tagged ABI worker marked dirty for next-access eviction: {worker_key}",
+                        file=sys.stderr,
+                    )
                 return result
             except Exception as e:
                 return {"success": False, "error": str(e)}
@@ -4353,7 +4458,7 @@ class WorkerPoolDaemon:
                             code,
                             shm_in,
                             shm_out,
-                            timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
+                            timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
                         )
                         return result
                     except Exception as e:
@@ -4367,6 +4472,16 @@ class WorkerPoolDaemon:
             # Create worker - loader's __enter__ handles ALL the locking
             try:
                 _took_from_idle = False
+
+                # ── SERIALIZE ABI PACKAGE ACTIVATION ───────────────────────
+                # Two concurrent workers for different versions of the same
+                # ABI package (e.g. tf==2.12 + tf==2.13) must not run
+                # assign_spec at the same time — omnipkgLoader.__enter__()
+                # does filesystem bubble/cloak ops that race across versions.
+                # Grab the per-pkg-name lock for the duration of assign_spec.
+                _pkg_name = spec.split("==")[0].split("[")[0].strip()
+                _abi_activation_lock = getattr(self, "abi_activation_locks", {}).get(_pkg_name)
+
                 try:
                     # Instant spawn (0ms) - MUST match requested python_exe
                     # Both idle_pools keys and python_exe are normalized via _normalize_exe,
@@ -4384,7 +4499,13 @@ class WorkerPoolDaemon:
                             )
                             worker.force_shutdown()
                             raise queue.Empty  # fall through to fresh spawn
-                        worker.assign_spec(spec)
+                        # Acquire ABI lock BEFORE assign_spec — holds through READY signal
+                        with (_abi_activation_lock if _abi_activation_lock else _null_ctx()):
+                            safe_print(
+                                f"   🔒 [DAEMON] ABI activation lock acquired for '{_pkg_name}' (from idle pool)",
+                                file=sys.stderr,
+                            ) if _abi_activation_lock else None
+                            worker.assign_spec(spec)
                         _took_from_idle = True
                     else:
                         raise queue.Empty
@@ -4396,12 +4517,17 @@ class WorkerPoolDaemon:
 
                     # Fallback if queue empty or no pool exists for this exe (~30ms)
                     # Note: PersistentWorker constructor calls assign_spec if spec is provided
-                    worker = PersistentWorker(
-                        spec,
-                        python_exe=python_exe,
-                        site_packages=target_paths.get("site_packages_path"),
-                        multiversion_base=target_paths.get("multiversion_base")
-                    )
+                    with (_abi_activation_lock if _abi_activation_lock else _null_ctx()):
+                        safe_print(
+                            f"   🔒 [DAEMON] ABI activation lock acquired for '{_pkg_name}' (fresh spawn)",
+                            file=sys.stderr,
+                        ) if _abi_activation_lock else None
+                        worker = PersistentWorker(
+                            spec,
+                            python_exe=python_exe,
+                            site_packages=target_paths.get("site_packages_path"),
+                            multiversion_base=target_paths.get("multiversion_base")
+                        )
 
                 # Once an idle worker is taken and assigned a spec, spawn a replacement
                 if _took_from_idle:
@@ -4445,8 +4571,25 @@ class WorkerPoolDaemon:
                 code,
                 shm_in,
                 shm_out,
-                timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
+                timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
             )
+            # ── SLOW-PATH EVICTION: ABI contamination or nesting ──────────
+            _sp_did_nest = result.get("_worker_did_nesting")
+            _sp_abi_dirty = result.get("_worker_abi_contaminated")
+            if _sp_did_nest or _sp_abi_dirty:
+                with self.pool_lock:
+                    _dirty_entry = self.workers.pop(worker_key, None)
+                if _dirty_entry:
+                    threading.Thread(
+                        target=_dirty_entry["worker"].force_shutdown, daemon=True
+                    ).start()
+                    self._replenish_idle_pool(python_exe)
+                    _sp_reason = "nesting+ABI" if (_sp_did_nest and _sp_abi_dirty) else ("nesting" if _sp_did_nest else "ABI contamination")
+                    safe_print(
+                        f"   🔄 [DAEMON] Slow-path evicted dirty worker ({_sp_reason}): {spec}",
+                        file=sys.stderr,
+                    )
+            # ── END SLOW-PATH EVICTION ────────────────────────────────────
             return result
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -6814,7 +6957,17 @@ def cli_start():
         return
 
     safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
-
+    import os
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        # SCHED_FIFO=1, priority 10 (reasonable, not maxing out)
+        class SchedParam(ctypes.Structure):
+            _fields_ = [("sched_priority", ctypes.c_int)]
+        param = SchedParam(10)
+        libc.sched_setscheduler(0, 1, ctypes.byref(param))
+    except Exception:
+        pass
     daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
 
     try:

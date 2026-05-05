@@ -190,6 +190,7 @@ static void winsock_init(void) {
 #  include <fcntl.h>
 #  include <glob.h>
 #  include <sys/time.h>   /* struct timeval */
+#  include <time.h>       /* clock_gettime, CLOCK_MONOTONIC */
 #  define PATH_SEPARATOR ":"
 #  define sock_read(s,b,n)   read(s,b,n)
 #  define sock_write(s,b,n)  write(s,b,n)
@@ -690,51 +691,130 @@ static uint32_t parse_hex4(const char *p) {
     return v;
 }
 
+/* print_unescaped — decode a JSON string value and write it to `out`.
+ *
+ * OLD behaviour: fputc() per character + fflush() per message.
+ * With many small daemon messages that meant one write() syscall per line,
+ * showing up in strace as hundreds of write(fd, "X", 1) calls.
+ *
+ * NEW behaviour: decode into a stack buffer (64 KB), then emit in one
+ * fwrite() + one fflush() per call.  For the common case (plain ASCII,
+ * no escapes) we can also copy whole runs in one memcpy.
+ *
+ * The buffer is grown on the heap only if the decoded output exceeds 64 KB
+ * (extremely rare for CLI output lines).
+ */
+#define PRINT_UNESCAPED_STACK 65536
+
+/* Emit a UTF-8 codepoint into a growable buffer. */
+static size_t emit_utf8_buf(uint32_t cp, char *buf, size_t pos, size_t *cap, char **heap) {
+    /* Ensure 4 bytes of headroom */
+    if (pos + 4 > *cap) {
+        size_t newcap = *cap * 2;
+        char *nb = realloc(*heap, newcap);
+        if (!nb) return pos; /* silently truncate rather than crash */
+        *heap = nb;
+        *cap  = newcap;
+        buf   = nb; /* caller's local `buf` ptr becomes stale — use *heap */
+    }
+    char *p = (*heap ? *heap : buf) + pos;
+    if (cp < 0x80)        { p[0] = (char)cp; return pos + 1; }
+    if (cp < 0x800)       { p[0] = (char)(0xC0|(cp>>6));  p[1] = (char)(0x80|(cp&0x3F)); return pos + 2; }
+    if (cp < 0x10000)     { p[0] = (char)(0xE0|(cp>>12)); p[1] = (char)(0x80|((cp>>6)&0x3F));  p[2] = (char)(0x80|(cp&0x3F)); return pos + 3; }
+    p[0]=(char)(0xF0|(cp>>18)); p[1]=(char)(0x80|((cp>>12)&0x3F)); p[2]=(char)(0x80|((cp>>6)&0x3F)); p[3]=(char)(0x80|(cp&0x3F)); return pos + 4;
+}
+
 static void print_unescaped(const char *str, FILE *out) {
-    while (*str) {
-        if (*str == '"') break;
-        if (*str == '\\') {
-            str++;
-            if (*str == 'n')       { fputc('\n', out); str++; }
-            else if (*str == 't')  { fputc('\t', out); str++; }
-            else if (*str == 'r')  { fputc('\r', out); str++; }
-            else if (*str == '"')  { fputc('"',  out); str++; }
-            else if (*str == '\\') { fputc('\\', out); str++; }
-            else if (*str == '/')  { fputc('/',  out); str++; }
-            else if (*str == 'b')  { fputc('\b', out); str++; }
-            else if (*str == 'f')  { fputc('\f', out); str++; }
-            else if (*str == 'u' && str[1] && str[2] && str[3] && str[4]) {
-                /* \uXXXX — decode and emit UTF-8.
-                 * Also handle surrogate pairs: \uD800–\uDBFF followed by \uDC00–\uDFFF */
-                uint32_t hi = parse_hex4(str + 1);
-                str += 5; /* consume 'u' + 4 hex digits */
-                if (hi >= 0xD800 && hi <= 0xDBFF &&
-                    str[0] == '\\' && str[1] == 'u' &&
-                    str[2] && str[3] && str[4] && str[5]) {
-                    /* High surrogate — look for low surrogate */
-                    uint32_t lo = parse_hex4(str + 2);
-                    if (lo >= 0xDC00 && lo <= 0xDFFF) {
-                        uint32_t cp = 0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00);
-                        emit_utf8(cp, out);
-                        str += 6; /* consume second \uXXXX */
-                    } else {
-                        emit_utf8(hi, out); /* lone high surrogate — best effort */
+    /* Stack buffer for the common case; heap fallback for very long lines. */
+    char  stack_buf[PRINT_UNESCAPED_STACK];
+    char *heap_buf = NULL;
+    size_t cap = PRINT_UNESCAPED_STACK;
+    size_t pos = 0;
+
+#define PU_BUF (heap_buf ? heap_buf : stack_buf)
+#define PU_ENSURE(n) \
+    do { \
+        if (pos + (n) > cap) { \
+            size_t newcap = cap * 2 + (n); \
+            char *nb = realloc(heap_buf, newcap); \
+            if (!nb) goto pu_flush; \
+            if (!heap_buf) memcpy(nb, stack_buf, pos); \
+            heap_buf = nb; cap = newcap; \
+        } \
+    } while(0)
+
+    while (*str && *str != '"') {
+        if (*str != '\\') {
+            /* Fast path: find the end of the plain run, copy it wholesale. */
+            const char *run = str;
+            while (*str && *str != '"' && *str != '\\') str++;
+            size_t run_len = (size_t)(str - run);
+            PU_ENSURE(run_len);
+            memcpy(PU_BUF + pos, run, run_len);
+            pos += run_len;
+            continue;
+        }
+
+        /* Escape sequence */
+        str++; /* skip backslash */
+        char esc = *str;
+        if (!esc) break;
+        str++;
+
+        char decoded = 0;
+        int  simple  = 1;
+        switch (esc) {
+            case 'n':  decoded = '\n'; break;
+            case 't':  decoded = '\t'; break;
+            case 'r':  decoded = '\r'; break;
+            case '"':  decoded = '"';  break;
+            case '\\': decoded = '\\'; break;
+            case '/':  decoded = '/';  break;
+            case 'b':  decoded = '\b'; break;
+            case 'f':  decoded = '\f'; break;
+            case 'u': {
+                simple = 0;
+                if (str[0] && str[1] && str[2] && str[3]) {
+                    uint32_t hi = parse_hex4(str);
+                    str += 4;
+                    uint32_t cp = hi;
+                    if (hi >= 0xD800 && hi <= 0xDBFF &&
+                        str[0]=='\\' && str[1]=='u' &&
+                        str[2] && str[3] && str[4] && str[5]) {
+                        uint32_t lo = parse_hex4(str + 2);
+                        if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                            cp = 0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00);
+                            str += 6;
+                        }
                     }
-                } else {
-                    emit_utf8(hi, out);
+                    /* emit UTF-8 into buffer (up to 4 bytes) */
+                    PU_ENSURE(4);
+                    pos = emit_utf8_buf(cp, stack_buf, pos, &cap, &heap_buf);
                 }
-            } else {
-                /* Unknown escape — pass through as-is */
-                fputc('\\', out);
-                if (*str) { fputc(*str, out); str++; }
+                break;
             }
-        } else {
-            /* Regular UTF-8 byte — pass through directly */
-            fputc((unsigned char)*str, out);
-            str++;
+            default:
+                simple = 0;
+                PU_ENSURE(2);
+                PU_BUF[pos++] = '\\';
+                PU_BUF[pos++] = esc;
+                break;
+        }
+        if (simple) {
+            PU_ENSURE(1);
+            PU_BUF[pos++] = decoded;
         }
     }
+
+pu_flush:
+    /* Single fwrite() + single fflush() — one syscall per message. */
+    if (pos > 0)
+        fwrite(PU_BUF, 1, pos, out);
     fflush(out);
+
+    if (heap_buf) free(heap_buf);
+#undef PU_BUF
+#undef PU_ENSURE
 }
 
 static int json_get_raw_str(const char *json, const char *key, char **out_start) {
@@ -1397,6 +1477,26 @@ int main(int argc, char **argv) {
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
+
+    /* ── Wall-clock timer ────────────────────────────────────────────────────
+     * Printed at every exit/execv point when OMNIPKG_DEBUG=1.
+     * clock_gettime(CLOCK_MONOTONIC) on POSIX, GetTickCount64 on Windows.
+     */
+#ifndef _WIN32
+    struct timespec _t0;
+    clock_gettime(CLOCK_MONOTONIC, &_t0);
+#   define DISPATCH_ELAPSED_US() \
+        ({ struct timespec _t1; clock_gettime(CLOCK_MONOTONIC, &_t1); \
+           (long)((_t1.tv_sec - _t0.tv_sec) * 1000000L + \
+                  (_t1.tv_nsec - _t0.tv_nsec) / 1000L); })
+#else
+    ULONGLONG _t0_ms = GetTickCount64();
+#   define DISPATCH_ELAPSED_US() ((long)((GetTickCount64() - _t0_ms) * 1000L))
+#endif
+#define DISPATCH_LOG_TIME(label) \
+    do { if (debug) fprintf(stderr, \
+        "[C-TIMER] %-36s %7ld us\n", (label), DISPATCH_ELAPSED_US()); } while(0)
+
     /* Force-fallback escape hatch */
     if (getenv("OMNIPKG_FORCE_PYTHON_DISPATCH")) {
         char self_real[MAX_PATH];
@@ -1469,12 +1569,14 @@ int main(int argc, char **argv) {
             fprintf(stderr, "[C-STALE] c_src found=%s path=%s\n",
                     c_src[0] ? "yes" : "no", c_src[0] ? c_src : "(none)");
 
-        /* Read marker — format written by Python: "<md5>:<abs/path/to/dispatcher.c>" */
+        /* Marker — format written by Python: "<md5>:<abs/path/to/dispatcher.c>"
+         * We no longer compute MD5; only need the embedded source path and the
+         * marker's mtime.  We read one line to extract the path, then stat()
+         * both files — two syscalls total instead of reading 50 KB of source. */
         char marker_path[MAX_PATH];
         snprintf(marker_path, sizeof(marker_path),
                  "%s/.omnipkg_dispatch_compiled", self_dir);
 
-        char stored_hash[33] = "";
         int marker_found = 0;
         FILE *mf = fopen(marker_path, "r");
         if (mf) {
@@ -1482,44 +1584,50 @@ int main(int argc, char **argv) {
             char marker_content[MAX_PATH * 2];
             if (fgets(marker_content, sizeof(marker_content), mf)) {
                 marker_content[strcspn(marker_content, "\r\n")] = '\0';
+                /* Extract source path from "hash:path" — ignore the hash */
                 char *colon = strchr(marker_content, ':');
-                if (colon) {
-                    size_t hlen = (size_t)(colon - marker_content);
-                    if (hlen < sizeof(stored_hash)) {
-                        memcpy(stored_hash, marker_content, hlen);
-                        stored_hash[hlen] = '\0';
-                    }
+                if (colon && colon[1])
                     strncpy(c_src, colon + 1, sizeof(c_src) - 1);
-                }
             }
             fclose(mf);
         }
 
         if (debug)
-            fprintf(stderr, "[C-STALE] marker=%s stored_hash=%s c_src=%s\n",
+            fprintf(stderr, "[C-STALE] marker=%s c_src=%s\n",
                     marker_found ? marker_path : "(missing)",
-                    stored_hash[0] ? stored_hash : "(none)",
                     c_src[0] ? c_src : "(none)");
 
         if (c_src[0]) {
-            /* Compare stored MD5 hash against current file — mtime is unreliable
-             * (pip installs, adopt operations, and file copies all reset it).
-             * If the path from the marker doesn't exist, treat as stale too. */
-            char current_hash[33] = "";
-            int src_ok = md5_file(c_src, current_hash);
+            /* Fast staleness check: compare mtime of dispatcher.c against
+             * mtime of the marker file.  One stat() each — zero file reads,
+             * zero MD5 computation.  If dispatcher.c is strictly newer than
+             * the marker, the binary is stale and we fall back to Python.
+             *
+             * Note: mtime can be unreliable for pip installs / file copies,
+             * but the marker is written by Python *after* compilation, so
+             * marker_mtime >= compile_time.  Any genuine source edit bumps
+             * dispatcher.c mtime above the marker — which is exactly the
+             * signal we need.
+             *
+             * If the marker is missing we have no reference point; we also
+             * fall back if c_src cannot be stat'd (permissions issue, etc.).
+             */
+            struct stat src_st, marker_st;
+            int src_ok    = (stat(c_src,       &src_st)    == 0);
+            int marker_ok = (stat(marker_path,  &marker_st) == 0);
 
-            /* stored_hash was parsed from marker content above */
-            int hash_match = (src_ok && stored_hash[0] &&
-                              strcmp(current_hash, stored_hash) == 0);
+            /* mtime match = marker exists AND src exists AND src not newer */
+            int mtime_ok = (src_ok && marker_ok &&
+                            src_st.st_mtime <= marker_st.st_mtime);
 
             if (debug)
                 fprintf(stderr,
-                    "[C-STALE] stored=%s current=%s match=%s\n",
-                    stored_hash[0] ? stored_hash : "(none)",
-                    src_ok         ? current_hash : "(unreadable)",
-                    hash_match     ? "yes" : "NO — stale");
+                    "[C-STALE] src_mtime=%ld marker_mtime=%ld match=%s\n",
+                    src_ok    ? (long)src_st.st_mtime    : -1L,
+                    marker_ok ? (long)marker_st.st_mtime : -1L,
+                    mtime_ok  ? "yes" : "NO — stale");
 
-            if (!hash_match) {
+            if (!mtime_ok) {
                 remove(marker_path);
                 if (debug)
                     fprintf(stderr,
@@ -1530,6 +1638,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    DISPATCH_LOG_TIME("stale-check done");
     /* ── 2. Shim mode? Fall back immediately ──────────────────── */
     if (strncmp(prog, "python", 6) == 0 || strcmp(prog, "pip") == 0) {
         if (debug) fprintf(stderr, "[C-DISPATCH] shim mode → python fallback\n");
@@ -1690,6 +1799,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    DISPATCH_LOG_TIME("target-python resolved");
     /* ── 6. Native FFI Fast-Path (swap + install) ── */
     int is_swap = 0;
     const char *pkg_spec = NULL;
@@ -2070,6 +2180,7 @@ int main(int argc, char **argv) {
     }
 
     /* ── 7. Build final argv and execv (or try daemon) ───────────────────────── */
+    DISPATCH_LOG_TIME("pre-daemon-connect");
     int is_interactive_command = 0;
     if (argc >= 2) {
         int is_info   = (strcmp(argv[1], "info")   == 0);
@@ -2126,6 +2237,7 @@ int main(int argc, char **argv) {
     }
 
     putenv("_OMNIPKG_ISATTY=1");
+    DISPATCH_LOG_TIME("pre-execv (fallback path)");
     execv(target_python, new_argv);
 
     /* execv only returns on error */

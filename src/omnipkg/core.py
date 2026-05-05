@@ -88,9 +88,19 @@ SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 _DBG = os.environ.get("OMNIPKG_DEBUG", "0") == "1"
 
 def _dbg(msg: str):
-    """Lightweight debug printer; no-op unless OMNIPKG_DEBUG=1."""
-    if _DBG:
-        print(f"[DEBUG-CORE] {msg}", file=sys.stderr, flush=True)
+       if _DBG:
+               print(f"[DEBUG-CORE] {msg}", file=sys.stderr, flush=True)
+
+# ── PROFILE HELPER ───────────────────────────────────────────────────────────
+# Set UV_FFI_PROFILE=1 in environment to see timing info.
+# ─────────────────────────────────────────────────────────────────────────────
+_PROF = os.environ.get("UV_FFI_PROFILE", "0") == "1"
+
+def _prof(msg: str):
+       """Lightweight timing printer; no-op unless UV_FFI_PROFILE=1."""
+       if _PROF:
+               # We use stderr so it doesn't pollute actual program output
+               print(f"[TIMING] {msg}", file=sys.stderr, flush=True)
 
 def _get_dynamic_omnipkg_version():
     """
@@ -2069,7 +2079,41 @@ class ConfigManager:
                     timeout=30,
                 )
                 if result.returncode != 0:
-                    raise OSError(_("Python executable test failed: {}").format(result.stderr))
+                    stderr_text = result.stderr or ""
+                    missing_so = re.search(r"error while loading shared libraries: (\S+): cannot open shared object file", stderr_text)
+                    if missing_so:
+                        missing_lib = missing_so.group(1)
+                        safe_print(_("   - ⚠️  Missing shared library: {}").format(missing_lib))
+                        SO_COMPAT = {
+                            "libcrypt.so.1": {"pacman": "libxcrypt-compat", "apt": "libxcrypt-dev", "dnf": "libxcrypt-compat"},
+                        }
+                        pkg_map = SO_COMPAT.get(missing_lib, {})
+                        installed = False
+                        for mgr, pkg in pkg_map.items():
+                            if not shutil.which(mgr):
+                                continue
+                            safe_print(_("   - 🔧 Attempting auto-install of {} via {}...").format(pkg, mgr))
+                            try:
+                                install_cmd = ["sudo", mgr, "-S", "--noconfirm", pkg] if mgr == "pacman" else ["sudo", mgr, "install", "-y", pkg]
+                                r2 = subprocess.run(install_cmd, capture_output=True, text=True, timeout=120)
+                                if r2.returncode == 0:
+                                    safe_print(_("   - ✅ Installed {}. Retrying...").format(pkg))
+                                    installed = True
+                                    break
+                                else:
+                                    safe_print(_("   - ⚠️  Auto-install failed. Run manually: {}").format(" ".join(install_cmd)))
+                            except Exception as ie:
+                                safe_print(_("   - ⚠️  Auto-install error: {}").format(ie))
+                        if installed:
+                            result = subprocess.run([str(python_exe), "--version"], capture_output=True, text=True, timeout=30)
+                            if result.returncode != 0:
+                                raise OSError(_("Python executable test failed after compat install: {}").format(result.stderr))
+                        else:
+                            safe_print(_("   - 💡 On Arch: sudo pacman -S libxcrypt-compat"))
+                            safe_print(_("   - 💡 On Debian/Ubuntu: sudo apt install libxcrypt-dev"))
+                            raise OSError(_("Python executable test failed: {}").format(stderr_text))
+                    else:
+                        raise OSError(_("Python executable test failed: {}").format(stderr_text))
                 safe_print(_("   - ✅ Python version: {}").format(result.stdout.strip()))
 
                 self._install_essential_packages(python_exe)
@@ -5791,13 +5835,13 @@ class BubbleIsolationManager:
         manifest_path = bubble_path / ".omnipkg_manifest.json"
 
         # --- ADDED EXPLICIT PATH PRINTING ---
-        print(f"   [MANIFEST] Writing schema 2.0 manifest to: {manifest_path}")
-
+        _dbg(f"Writing schema 2.0 manifest to: {manifest_path}")
         try:
             with open(manifest_path, "w") as f:
                 json.dump(manifest_data, f, indent=2)
-            print(f"   [MANIFEST] ✅ Successfully wrote {len(json.dumps(manifest_data))} bytes.")
+            _dbg(f"Successfully wrote {len(json.dumps(manifest_data))} bytes to manifest.")
         except Exception as e:
+            # THIS IS THE CORRECTED PART - We actually print the critical error
             print(f"   [MANIFEST] ❌ CRITICAL ERROR writing manifest: {e}")
 
         try:
@@ -6819,15 +6863,15 @@ class omnipkg:
                     if p.name not in (expected_dist_info, expected_editable_dist_info)
                 ]
 
+                _marker = Path(exe_path).parent / f".omnipkg_synced_{master_version}"
+                if _marker.exists():
+                    # Marker present — already synced at this version, skip all checks
+                    continue
+
                 has_egg_link = (site_packages / "omnipkg.egg-link").exists()
                 if has_egg_link:
-                    _marker = Path(exe_path).parent / f".omnipkg_synced_{master_version}"
-                    if _marker.exists():
-                        # Already synced, egg-link is stale but harmless — skip
-                        pass
-                    else:
-                        sync_needed.append((py_ver, str(exe_path)))
-                        continue
+                    sync_needed.append((py_ver, str(exe_path)))
+                    continue
 
                 # If we found an old/conflicting .dist-info directory, sync is ALWAYS needed.
                 # This is non-negotiable and overrides any .pth file check.
@@ -7145,9 +7189,24 @@ class omnipkg:
                                 needs_upgrade = False
                 else:
                     needs_upgrade = True
+                # ... inside the uv_ffi check ...
                 if needs_upgrade:
-                    subprocess.run([target_exe, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "-q", f"uv_ffi>={_uv_ffi_min}"], capture_output=True, text=True, timeout=60, env=env)
-                return (py_ver, _already_synced or result.returncode == 0)
+                    if "--verbose" in sys.argv or "-V" in sys.argv:
+                        safe_print(f"   - 🛡️  HEALING {py_ver}: upgrading uv_ffi from {_installed} to >={_uv_ffi_min}...")
+
+                    # 1. Forcefully UNINSTALL the old version first.
+                    subprocess.run(
+                        [target_exe, "-m", "pip", "uninstall", "-y", "uv_ffi"],
+                        capture_output=True, text=True, timeout=30, env=env
+                    )
+
+                    # 2. Now, perform a clean INSTALL of the required version.
+                    upgrade_result = subprocess.run(
+                        [target_exe, "-m", "pip", "install", "--no-cache-dir", "-q", f"uv_ffi>={_uv_ffi_min}"],
+                        capture_output=True, text=True, timeout=60, env=env
+                    )
+                    if upgrade_result.returncode != 0 and ("--verbose" in sys.argv or "-V" in sys.argv):
+                        safe_print(f"   - ❌ uv_ffi upgrade failed for {py_ver}: {upgrade_result.stderr}")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                 futures = [executor.submit(sync_interpreter, ver, exe) for ver, exe in sync_needed]
@@ -8242,10 +8301,7 @@ class omnipkg:
                 # ── Fast missing-METADATA scan (main env + bubbles) ──────────────
         if self._fast_missing_metadata_check():
             safe_print("   🔧 Auto-healed broken metadata, re-running discovery...")
-            # Force fresh discovery after healing
-            all_discovered_dists = gatherer._discover_distributions(
-                targeted_packages=None, verbose=False
-            )
+            # Auto-heal done; discovery runs below
         safe_print(_("🧠 Checking knowledge base synchronization..."))
 
         configured_python_exe = self.config.get("python_executable", sys.executable)
@@ -9489,6 +9545,168 @@ class omnipkg:
                     safe_print(f"      8pkg install {spec}")
 
             return 0 if not failed_bubbles else 1
+
+        from omnipkg.common_utils import safe_input
+        all_dist_infos = list(sp.glob("*.dist-info"))
+
+        # Step 1: Group metadata by package name to find conflicts
+        packages = defaultdict(list)
+        for path in all_dist_infos:
+            try:
+                # Extract name like 'rich' from 'rich-14.1.0.dist-info'
+                package_name = path.name.split("-")[0].lower().replace("_", "-")
+                packages[package_name].append(path)
+            except IndexError:
+                continue
+
+        conflicted_packages = {name: paths for name, paths in packages.items() if len(paths) > 1}
+
+        if not conflicted_packages:
+            safe_print("\n✅ Environment is healthy. No conflicts found.")
+            return 0
+
+        safe_print(
+            f"\n🚨 DIAGNOSIS: Found {len(conflicted_packages)} packages with conflicting metadata!"
+        )
+
+        ghosts_to_exorcise = []
+
+        # Step 2 & 3: Perform the autopsy and identify ghosts for each conflict
+        for name, paths in conflicted_packages.items():
+            safe_print(_("\n--- Autopsy for: '{}' ---").format(name))
+            found_versions = sorted([p.name.split("-")[1] for p in paths])
+            safe_print(_('  - Found Metadata Versions: {}').format(', '.join(found_versions)))
+
+            canonical_version = None
+            python_exe = self.config["python_executable"]
+            import_name = name.replace("-", "_")
+
+            # Step 1: Try actual import for __version__
+            try:
+                cmd = [
+                    python_exe,
+                    "-c",
+                    f"import {import_name}; print(getattr({import_name}, '__version__', None))",
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=5)
+                version_output = result.stdout.strip()
+
+                if version_output and version_output != "None":
+                    canonical_version = version_output
+                    safe_print(_('  - Live Code Version (Ground Truth): {}  ✅').format(canonical_version))
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                # Import failed, that's ok - we'll try metadata
+                pass
+
+            # Step 2: If import didn't work or had no __version__, try importlib.metadata
+            if not canonical_version:
+                try:
+                    safe_print("  - ⚠️  Direct import unavailable. Falling back to metadata...")
+                    cmd = [
+                        python_exe,
+                        "-c",
+                        f"try: import importlib.metadata as meta\n"
+                        f"except ImportError: import importlib_metadata as meta\n"
+                        f"print(meta.version('{name}'))",
+                    ]
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, check=True, timeout=5
+                    )
+                    canonical_version = result.stdout.strip()
+                    safe_print(_('  - Metadata Version: {}  📦').format(canonical_version))
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                    safe_print(f"  - ⚠️  Could not determine version for '{name}'. Skipping.")
+                    continue
+
+            if not canonical_version:
+                safe_print(f"  - ⚠️  No version found for '{name}'. Skipping.")
+                continue
+
+            try:
+                # Use the packaging library to create a comparable Version object
+                parsed_canonical_version = parse_version(canonical_version)
+            except Exception as e:
+                safe_print(
+                    f"  - ⚠️  Could not parse live version '{canonical_version}' for '{name}'. Skipping. Error: {e}"
+                )
+                continue
+
+            # Identify the keeper and the ghosts
+            for path in paths:
+                is_keeper = False
+                try:
+                    # 'rich-14.1.0.dist-info' -> 'rich-14.1.0'
+                    base_name = path.name.removesuffix(".dist-info")
+
+                    # Reliably split name and version by splitting from the right
+                    package_part, version_part = base_name.rsplit("-", 1)
+
+                    # Compare using normalized names and parsed versions
+                    parsed_path_version = parse_version(version_part)
+                    parsed_canonical_base = parse_version(str(parsed_canonical_version).split("+")[0])
+
+                    if (
+                        canonicalize_name(package_part) == canonicalize_name(name)
+                        and (
+                            parsed_path_version == parsed_canonical_version
+                            or parse_version(version_part.split("+")[0]) == parsed_canonical_base
+                        )
+                    ):
+                        # This is the keeper, do not delete
+                        is_keeper = True
+
+                except Exception:
+                    # If parsing the directory name fails, it's non-standard.
+                    # Treat it as a ghost.
+                    pass
+
+                if not is_keeper:
+                    # If it's not the keeper, it's a ghost.
+                    ghosts_to_exorcise.append(path)
+
+        if not ghosts_to_exorcise:
+            safe_print(
+                "\n✅ All conflicts resolved without action (e.g., could not determine canonical version)."
+            )
+            return 0
+
+        # Step 4: Present the healing plan
+        safe_print("\n" + "─" * 60)
+        safe_print("💔 HEALING PLAN: The following orphaned metadata ('ghosts') will be deleted:")
+        for ghost in ghosts_to_exorcise:
+            safe_print(f"  - 👻 {ghost.name}")
+        safe_print("─" * 60)
+
+        if dry_run:
+            safe_print("\n🔬 Dry run complete. No changes were made.")
+            return 0
+
+        if not force:
+            confirm = safe_input("\n🤔 Proceed with the exorcism? (y/N): ").lower().strip()
+            if confirm != "y":
+                safe_print("🚫 Healing cancelled by user.")
+                return 1
+
+        # Step 5: Execute the healing
+        safe_print("\n🔥 Starting exorcism...")
+        healed_count = 0
+        for ghost in ghosts_to_exorcise:
+            try:
+                safe_print(_('  - 🗑️  Deleting {}...').format(ghost.name))
+                shutil.rmtree(ghost)
+                healed_count += 1
+            except OSError as e:
+                safe_print(_('  - ❌ FAILED to delete {}: {}').format(ghost.name, e))
+
+        safe_print(_('\n✨ Healing complete. {} ghosts exorcised.').format(healed_count))
+
+        # Step 6: Finalize and resync
+        safe_print("🧠 The environment has changed. Forcing a full knowledge base rebuild...")
+        self.rebuild_knowledge_base(force=True)
+
+        safe_print("\n🎉 Your environment is now clean and healthy!")
+        return 0
+
 
     def heal(self, dry_run: bool = False, force: bool = False) -> int:
         """
@@ -11395,14 +11613,13 @@ class omnipkg:
                 return "active", (time.perf_counter_ns() - start_time_ns)
 
             # Check bubble
-            bubble_path = self.site_packages_root / ".omnipkg_versions" / f"{package}-{version}"
-            if bubble_path.is_dir():
-                return "bubble", (time.perf_counter_ns() - start_time_ns)
-
-            # Fallback: Legacy bubble location
-            legacy_bubble = self.multiversion_base / f"{package}-{version}"
-            if legacy_bubble.is_dir():
-                return "bubble", (time.perf_counter_ns() - start_time_ns)
+            for pkg_form in [package, pkg_normalized, package.replace("_", "-")]:
+                bubble_path = self.site_packages_root / ".omnipkg_versions" / f"{pkg_form}-{version}"
+                if bubble_path.is_dir():
+                    return "bubble", (time.perf_counter_ns() - start_time_ns)
+                legacy_bubble = self.multiversion_base / f"{pkg_form}-{version}"
+                if legacy_bubble.is_dir():
+                    return "bubble", (time.perf_counter_ns() - start_time_ns)
 
         except Exception:
             pass
@@ -11923,6 +12140,10 @@ class omnipkg:
         """
         changes = {"downgrades": [], "upgrades": [], "additions": [], "removals": []}
 
+        # Normalize all keys to underscores before diffing
+        before = {k.replace("-", "_"): v for k, v in before.items()}
+        after = {k.replace("-", "_"): v for k, v in after.items()}
+
         all_packages = set(before.keys()) | set(after.keys())
 
         for pkg in all_packages:
@@ -11977,7 +12198,6 @@ class omnipkg:
         index_url: Optional[str] = None,
         extra_index_url: Optional[str] = None,
     ) -> int:
-
         # ====================================================================
         # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
         # ====================================================================
@@ -12054,7 +12274,8 @@ class omnipkg:
 
                 if is_installed:
                     bubble_path = self.multiversion_base / f"{pkg_name}-{version}"
-                    is_in_bubble = bubble_path.exists() and bubble_path.is_dir()
+                    bubble_path_alt = self.multiversion_base / f"{pkg_name.replace('-', '_')}-{version}"
+                    is_in_bubble = (bubble_path.exists() and bubble_path.is_dir()) or (bubble_path_alt.exists() and bubble_path_alt.is_dir())
 
                     if not is_in_bubble:
                         safe_print(
@@ -12072,6 +12293,7 @@ class omnipkg:
                     needs_installation.append(resolved_spec)
 
             # Phase 2: If everything satisfied, we're done!
+            needs_installation = [s for s in needs_installation if s not in fully_resolved_specs]
             if not needs_installation:
                 total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
                 if total_check_time_ns < 1_000_000:
@@ -12513,9 +12735,11 @@ class omnipkg:
                                 )
 
                     # Now perform the actual upgrade/downgrade in main environment
-                    safe_print(_('📦 Installing omnipkg=={} to main environment...').format(requested_version))
+                    self._installed_packages_cache = None
                     packages_before = self.get_installed_packages(live=True)
-                    return_code, install_result = self._run_pip_install(
+                    safe_print("⚙️ Running pip install for: {}...".format(package_spec))
+
+                    return_code, pkg_install_output = self._run_pip_install(
                         [f"omnipkg=={requested_version}"],
                         target_directory=None,
                         force_reinstall=force_reinstall,
@@ -12717,6 +12941,7 @@ class omnipkg:
                     continue
 
                 any_installations_made = True
+                self._installed_packages_cache = None
                 packages_after = self.get_installed_packages(live=True)
                 final_main_state = packages_after.copy()  # Track latest state
                 # 3. Change Detection
@@ -12752,6 +12977,22 @@ class omnipkg:
                                 "package": change["package"],
                                 "new_version": change["new_version"],
                                 "old_version": change["old_version"],
+                                "is_removal": False,
+                            }
+                        )
+
+                    for change in all_changes["removals"]:
+                        # pip removed old_ver and installed new_ver in its place.
+                        # Bubble new_ver (what pip just put in), restore old_ver to main.
+                        newly_installed = packages_after.get(change["package"]) or packages_after.get(change["package"].replace("_", "-"))
+                        if not newly_installed:
+                            continue  # truly gone, nothing to bubble
+                        packages_to_bubble.append(
+                            {
+                                "package": change["package"],
+                                "new_version": newly_installed,   # bubble what pip just installed
+                                "old_version": change["version"], # restore what was stable
+                                "is_removal": True,
                             }
                         )
 
@@ -12851,9 +13092,11 @@ class omnipkg:
 
                 elif install_strategy == "latest-active":
                     versions_to_bubble = []
-                    for pkg_name in set(packages_before.keys()) | set(packages_after.keys()):
-                        old_version = packages_before.get(pkg_name)
-                        new_version = packages_after.get(pkg_name)
+                    norm_before = {k.replace("-", "_"): v for k, v in packages_before.items()}
+                    norm_after = {k.replace("-", "_"): v for k, v in packages_after.items()}
+                    for pkg_name in set(norm_before.keys()) | set(norm_after.keys()):
+                        old_version = norm_before.get(pkg_name)
+                        new_version = norm_after.get(pkg_name)
                         if old_version and new_version and (old_version != new_version):
                             change_type = (
                                 "upgraded"
@@ -14517,7 +14760,8 @@ class omnipkg:
                     # A critical sanity check to ensure we're deleting the correct directory.
                     expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
 
-                    if bubble_dir.name == expected_bubble_name and bubble_dir.is_dir():
+                    expected_bubble_name_alt = f"{item_name}-{item_version}"
+                    if bubble_dir.name in (expected_bubble_name, expected_bubble_name_alt) and bubble_dir.is_dir():
                         safe_print(_("🗑️  Deleting bubble directory: {}").format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
                     else:
@@ -15661,7 +15905,7 @@ print(json.dumps(results))
                     target_directory=target_directory_override,
                     # CRITICAL FIX: --ignore-installed prevents uv/pip from uninstalling 
                     # the modern versions from the main environment during a --target install.
-                    extra_flags=["--no-build-isolation", "--no-deps", "--ignore-installed"],
+                    extra_flags=["--no-build-isolation", "--no-deps", "--no-reinstall"],
                 )
 
                 temp_file.unlink()
@@ -16125,8 +16369,8 @@ print(json.dumps(results))
             if extra_index_url:
                 _uv_args += ["--extra-index-url", extra_index_url]
             if extra_flags:
-                _uv_args += extra_flags
-            if force_reinstall:
+                _uv_args += ["--no-reinstall" if f == "--ignore-installed" else f for f in extra_flags]
+            if force_reinstall and "--no-reinstall" not in (extra_flags or []):
                 _uv_args.append("--upgrade")
             if target_directory:
                 # Windows symlinks in --target dirs cause broken metadata reads
@@ -16164,7 +16408,8 @@ print(json.dumps(results))
             _uv_args += _uv_packages
             _dbg_print(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
             # ── PATH 1: FFI in-process ─────────────────────────────────
-            if self._uv_ffi_run is not None:
+            _skip_ffi = "--no-reinstall" in (extra_flags or [])
+            if self._uv_ffi_run is not None and not _skip_ffi:
                 daemon_client = None
                 _ffi_installed, _ffi_removed = [], []
                 _op_marker = None
@@ -17095,11 +17340,11 @@ print(json.dumps(results))
         safe_print(
             f" -> Finding latest COMPATIBLE version for '{package_name}' using background caching..."
         )
-        print(f"[TIMING] after safe_print: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+        _prof(f"after safe_print: {(_t.perf_counter()-_t0)*1000:.1f}ms")
         import requests as http_requests
-        print(f"[TIMING] after import requests: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+        _prof(f"after import requests: {(_t.perf_counter()-_t0)*1000:.1f}ms")
         py_context = python_context_version or self.current_python_context
-        print(f"[TIMING] after py_context: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+        _prof(f"after py_context: {(_t.perf_counter()-_t0)*1000:.1f}ms")
         py_context = python_context_version or self.current_python_context
 
         if not hasattr(self, "pypi_cache"):
@@ -17107,12 +17352,10 @@ print(json.dumps(results))
 
         cached_version = self.pypi_cache.get_cached_version(package_name, py_context)
         if cached_version:
-            import time as _t
-            _t0 = _t.perf_counter(); stale = self.pypi_cache.is_cache_entry_stale(package_name, py_context, max_age_seconds=3600); print(f"[TIMING] is_cache_entry_stale: {(_t.perf_counter()-_t0)*1000:.1f}ms stale={stale}", flush=True)
-            if stale:
-                _t0 = _t.perf_counter(); self._start_background_cache_refresh(package_name, py_context); print(f"[TIMING] _start_background_cache_refresh: {(_t.perf_counter()-_t0)*1000:.1f}ms", flush=True)
+            if self.pypi_cache.is_cache_entry_stale(package_name, py_context, max_age_seconds=3600):
+                self._start_background_cache_refresh(package_name, py_context)
             return cached_version
-
+                    
         # USE THE ROBUST TEST INSTALLATION APPROACH FIRST
         safe_print(f"    🧪 Using pip to find latest compatible version for Python {py_context}...")
         try:
@@ -17918,7 +18161,8 @@ class PyPIVersionCache:
         """
         cache_key = self._get_cache_key(package_name, python_context)
         cached_data = None
-        self.sync_if_stale()  # reload if another worker/process wrote new entries
+        if not hasattr(self, "_file_cache"):
+            self._load_file_cache()
         # Try Redis first
         if self.redis_client:
             try:

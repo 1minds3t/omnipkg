@@ -2106,10 +2106,13 @@ def _handle_cli_execution(command, args, config_manager, omnipkg_core):
         python_exe = config_manager.config.get("python_executable", sys.executable)
 
     safe_print(_("🔍 Analyzing error output to build comprehensive healing plan..."))
+    # Use a non-existent sentinel path so the local-module heuristic in the
+    # healer never mistakes site-packages dirs for local project files.
+    _cli_sentinel = Path("/dev/null/cli_command")
     exit_code, heal_stats = analyze_runtime_failure_and_heal(
         error_output,
         [executable] + args,
-        Path.cwd(),
+        _cli_sentinel,
         config_manager,
         is_context_aware_run=False,
         cli_owner_spec=owner_spec,
@@ -2530,7 +2533,7 @@ def run_with_healing_wrapper(
     indentation = "    "  # Start with 4 spaces for inside the try block
     for spec in required_specs:
         pkg_name = re.sub(r"[^a-zA-Z0-9_]", "_", spec.split("==")[0])
-        nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='{isolation_mode}', force_activation=True) as loader_{pkg_name}:\n"
+        nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='{isolation_mode}', force_activation=True, quiet=True) as loader_{pkg_name}:\n"
         nested_loaders_str += f"{indentation}    loader_instances.append(loader_{pkg_name})\n"
         indentation += "    "
 
@@ -2978,7 +2981,7 @@ def run_cli_with_healing_wrapper(
     indentation = "    "
     for spec in required_specs:
         pkg_name = re.sub(r"[^a-zA-Z0-9_]", "_", spec.split("==")[0])
-        nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='overlay', force_activation=True) as loader_{pkg_name}:\n"
+        nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='overlay', force_activation=True, quiet=True) as loader_{pkg_name}:\n"
         nested_loaders_str += f"{indentation}    loader_instances.append(loader_{pkg_name})\n"
         indentation += "    "
 
@@ -2990,9 +2993,18 @@ try:
 except ImportError:
     def safe_print(msg, **kwargs): print(msg, **kwargs)
 
-# Do NOT inherit wrapper's sys.path as PYTHONPATH — it contains the wrong
-# interpreter's site-packages (e.g. 3.11 paths when relaunching 3.8 pytest).
-env = {{k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}}
+# Build env with bubble paths prepended to PYTHONPATH so the subprocess
+# inherits the healed import environment (bubble is first on the path).
+_bubble_paths = []
+for _entry in sys.path:
+    if '.omnipkg_versions' in _entry or _entry not in os.environ.get('PYTHONPATH', '').split(os.pathsep):
+        _bubble_paths.append(_entry)
+_orig_pypath = os.environ.get('PYTHONPATH', '')
+env = dict(os.environ)
+env['PYTHONPATH'] = os.pathsep.join(
+    [p for p in _bubble_paths if p] +
+    ([_orig_pypath] if _orig_pypath else [])
+)
 
 cmd_path = shutil.which({command!r}) or {command!r}
 full_cmd = [cmd_path] + {command_args!r}
