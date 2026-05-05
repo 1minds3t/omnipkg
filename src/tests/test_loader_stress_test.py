@@ -434,13 +434,19 @@ def chaos_test_2_dependency_inception():
 
         safe_print(_('   {}{} Level {}: numpy {}').format(indent, '🔻' * level, level, ver))
 
-        with omnipkgLoader(f"numpy=={ver}", quiet=False, worker_fallback=True):
+        with omnipkgLoader(f"numpy=={ver}", worker_fallback=True) as loader:
+            try:
+                if loader._worker_mode:
+                    result = loader.execute(
+                        "import numpy as np\nimport sys\nsys.stdout.write(np.__version__)"
+                    )
+                    got = result.get("stdout", "").strip() or "⚠️ no output"
+                else:
+                    import numpy as np
+                    got = np.__version__
             # Import may fail or return wrong version if a cross-ABI switch
             # encountered a .so mapping conflict. Catch and continue — this
             # is the known limitation we are demonstrating.
-            try:
-                import numpy as np
-                got = np.__version__
             except Exception as e:
                 abi_misses += 1
                 got = f"⚠️ import failed ({type(e).__name__}: {str(e)})"
