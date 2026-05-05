@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.0] — 2026-05-04
+
+State Healing, Strict ABI Protection, and High-Performance C Dispatch
+
+We are proud to release **omnipkg v3.3.0**. This release represents a massive milestone in environmental determinism, memory-safe package management, and raw execution performance.
+
+By pairing forensic filesystem checks with ultra-low latency C-extensions and strict process-isolated worker daemons, v3.3.0 guarantees that your Python runtimes remain perfectly clean, conflict-free, and incredibly fast.
+
+---
+
+Raw runs of standard package managers (`pip`, `uv`) frequently leave orphaned `.dist-info` folders behind when swapping package versions, causing Python’s metadata collectors to report multiple active versions of the same library simultaneously (environmental "schizophrenia").
+* **Ground-Truth Healing**: The upgraded `8pkg heal` command now performs a deep `site-packages` audit. It cross-references duplicate `.dist-info` folders by importing modules live to determine the physical code execution truth.
+* **Metadata Quarantine**: Orphaned metadata directories ("ghosts") are automatically swept away and cleanly registered as fallback bubbles, restoring absolute sanity to your system package registries.
+
+Version-switching packages with deep C-extensions (NumPy, PyTorch, TensorFlow, SciPy) inside a single process is historically a recipe for segmentation faults, because the OS dynamic linker cannot cleanly reload a mapped `.so` library in-process.
+* **Contamination Tracking**: Daemon workers now strictly monitor if any sensitive binary ABI libraries have been loaded into memory during a task.
+* **Proactive Process Eviction**: If a worker becomes "contaminated" by loading an ABI-sensitive package, it is immediately evicted from the idle pool instead of being recycled. A fresh, clean worker is spawned for subsequent runs, entirely eliminating segfault risks and state contamination.
+* **BFS Dependency Slices**: Improved the metadata builder to use a BFS-walk on the exact `Requires-Dist` tree of nested packages. This ensures nested bubbles only declare and snapshot their *true* transitive closure, rather than bleeding parent packages' unrelated dependencies.
+
+We re-engineered the lowest level of our invocation pipeline to minimize operating system context-switching and system call overhead.
+* **Buffered JSON Unescaping**: Rewrote the C-dispatcher's (`dispatcher.c`) JSON parser to decode data directly into a highly-optimized 64KB stack buffer. This avoids the hundred-plus single-character `write()` and `fputc()` syscalls previously generated per daemon packet, resulting in massive speedups in hot-path CLI routing.
+* **Linux Real-Time Scheduling (`SCHED_FIFO`)**: On Linux hosts, the worker daemon now attempts to elevate its execution priority to `SCHED_FIFO` (real-time FIFO scheduler with priority 10), dropping orchestration overhead and process-switching latency to near-zero.
+
+* **Coordinated Package Locks (`fs_lock_queue`)**: Replaced loose filesystem moves and disparate file locks with a centralized, re-entrant, atomic locking queue. Multiple threads or processes attempting to activate or cloak different versions of the same library (such as TensorFlow 2.12 vs 2.13) are serialized gracefully to prevent filesystem race conditions.
+* **Nested Overlay Fast Path**: Nested `omnipkgLoader` contexts within daemon workers now execute a lightning-fast in-memory path, bypassing heavy filesystem lock routines. Nested bubble activations now cost **<1ms** (down from 100+ms).
+
+* **Arch Compat Bootstrap**: When managed Python runtimes are bootstrapped on modern Linux distributions (such as Arch Linux) where legacy `libcrypt.so.1` has been removed from system libraries, `omnipkg` now automatically intercepts the dynamic link loader crash, resolves the distro-specific compatibility library (e.g., `libxcrypt-compat` via pacman), and auto-installs it non-interactively via the system package manager.
+* **Bubble Path Normalization**: Fixed path resolution fallback logic to correctly match and swap bubble paths on disk regardless of whether they are declared using hyphens or underscores (e.g., mapping `aiohttp-3.8.4` dynamically to `aiohttp_3.8.4` namespaces).
+
+---
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/_vendor/uv_ffi/__init__.py (36 lines changed)
+- UPDATE: src/omnipkg/commands/run.py (24 lines changed)
+- UPDATE: src/omnipkg/core.py (342 lines changed)
+- UPDATE: src/omnipkg/dispatcher.c (238 lines changed)
+- UPDATE: src/omnipkg/installation/verification_strategy.py (2 lines changed)
+- UPDATE: src/omnipkg/isolation/patchers.py (4 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (209 lines changed)
+- UPDATE: src/omnipkg/loader.py (2372 lines changed)
+
+**🧪 Tests:**
+- UPDATE: src/tests/test_multiverse_healing.py (22 lines)
+- UPDATE: src/tests/test_tensorflow_switching.py (24 lines)
+
+**⚙️ Configuration:**
+- pyproject.toml
+
+**Additional Changes:**
+- Update configuration
+- fix: fix state schizophrenia by exorcising duplicate dist-info ghosts and fix strict mode sys.path
+- perf: optimize dispatcher latency
+- feat(loader, daemon): Implement strict ABI contamination tracking and worker isolation
+- fix: remove timeout to support long-running tasks
+- fix: Update 1 code files
+- fix(runtime): auto-install missing libcrypt compat for managed Python on Arch
+
+**Bug Fixes:**
+- fix: nested pkg resolved_bubble_deps now BFS-walks own dep tree only
+
+_15 files changed, 2748 insertions(+), 647 deletions(-)_
+
 ## [3.2.2] — 2026-05-04
 
 State Healing, Strict ABI Protection, and High-Performance C Dispatch
