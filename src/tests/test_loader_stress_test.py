@@ -2645,7 +2645,6 @@ def chaos_test_17_triple_python_multiverse():
         {
             "name": "Universe Alpha",
             "python": "3.9",
-            "tf_spec": "tensorflow==2.12.0",
             "torch_spec": "torch==2.0.1+cu118",
             "emoji": "🔴",
             "operation": "Generate random matrix (1000x1000)",
@@ -2653,7 +2652,6 @@ def chaos_test_17_triple_python_multiverse():
         {
             "name": "Universe Beta",
             "python": "3.10",
-            "tf_spec": "tensorflow==2.13.0",
             "torch_spec": "torch==2.1.0",
             "emoji": "🟢",
             "operation": "Compute matrix determinant",
@@ -2661,7 +2659,6 @@ def chaos_test_17_triple_python_multiverse():
         {
             "name": "Universe Gamma",
             "python": "3.11",
-            "tf_spec": "tensorflow==2.20.0",
             "torch_spec": "torch==2.2.0+cu121",
             "emoji": "🔵",
             "operation": "Apply neural network layer",
@@ -2670,7 +2667,6 @@ def chaos_test_17_triple_python_multiverse():
 
     for u in universes:
         safe_print(f"   {u['emoji']} {u['name']:<20} Python {u['python']}")
-        safe_print(_('      ├─ TensorFlow: {}').format(u['tf_spec']))
         safe_print(_('      ├─ PyTorch:    {}').format(u['torch_spec']))
         safe_print(_('      └─ Task:       {}').format(u['operation']))
 
@@ -3068,6 +3064,13 @@ arr_out[:] = result.numpy()
                 safe_print("   ⚠️  CUDA not available on client, skipping GPU pipeline.")
             else:
                 # Create initial tensor on GPU
+                safe_print("   🔥 Warming up CUDA context...")
+                _warmup = torch.randn(32, 32, device="cuda:0", dtype=torch.float32)
+                torch.matmul(_warmup, _warmup.T)
+                torch.cuda.synchronize()
+                del _warmup
+                safe_print("   ✅ CUDA warm")
+
                 gpu_tensor = torch.randn(500, 250, device="cuda:0", dtype=torch.float32)
                 safe_print(f"   📦 Input: {gpu_tensor.shape} GPU tensor ({gpu_tensor.nbytes/1024/1024:.2f} MB)")
 
@@ -3110,9 +3113,9 @@ arr_out[:] = result.numpy()
     # ═══════════════════════════════════════════════════════════════
     safe_print("\n   🏆 CROSS-VERSION CUDA IPC VERIFICATION:")
     safe_print("   ────────────────────────────────────────────────────────────")
-    safe_print(_('   Stage 1: PyTorch {} → Universal IPC ✅').format(unused1.get('worker_torch_version')))
-    safe_print(_('   Stage 2: PyTorch {} → Universal IPC ✅').format(unused2.get('worker_torch_version')))
-    safe_print(_('   Stage 3: PyTorch {} → Universal IPC ✅').format(unused3.get('worker_torch_version')))
+    safe_print(_('   Stage 1: PyTorch {} → Universal IPC ✅').format(unused1.get('torch_version') or unused1.get('version') or universes[0]['torch_spec']))
+    safe_print(_('   Stage 2: PyTorch {} → Universal IPC ✅').format(unused2.get('torch_version') or unused2.get('version') or universes[1]['torch_spec']))
+    safe_print(_('   Stage 3: PyTorch {} → Universal IPC ✅').format(unused3.get('torch_version') or unused3.get('version') or universes[2]['torch_spec']))
     safe_print(f"\n   💡 Same GPU tensor passed through 3 different PyTorch versions")
     safe_print(_('   💡 WITHOUT copying to CPU or serialization!'))
     safe_print(f"   💡 Total time: {total_pipeline_gpu:.2f}ms (TRUE zero-copy)")
