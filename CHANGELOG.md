@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.2] — 2026-05-04
+
+State Healing, Strict ABI Protection, and High-Performance C Dispatch
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/_vendor/uv_ffi/__init__.py (36 lines changed)
+- UPDATE: src/omnipkg/commands/run.py (24 lines changed)
+- UPDATE: src/omnipkg/core.py (342 lines changed)
+- UPDATE: src/omnipkg/dispatcher.c (238 lines changed)
+- UPDATE: src/omnipkg/installation/verification_strategy.py (2 lines changed)
+- UPDATE: src/omnipkg/isolation/patchers.py (4 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (209 lines changed)
+- UPDATE: src/omnipkg/loader.py (2372 lines changed)
+
+**🧪 Tests:**
+- UPDATE: src/tests/test_multiverse_healing.py (22 lines)
+- UPDATE: src/tests/test_tensorflow_switching.py (24 lines)
+
+**⚙️ Configuration:**
+- pyproject.toml (2 lines)
+
+**Additional Changes:**
+- fix: fix state schizophrenia by exorcising duplicate dist-info ghosts and fix strict mode sys.path
+- perf: optimize dispatcher latency
+- feat(loader, daemon): Implement strict ABI contamination tracking and worker isolation
+- fix: remove timeout to support long-running tasks
+- fix: Update 1 code files
+- fix(runtime): auto-install missing libcrypt compat for managed Python on Arch
+
+**Bug Fixes:**
+- fix: nested pkg resolved_bubble_deps now BFS-walks own dep tree only
+
+_15 files changed, 2715 insertions(+), 648 deletions(-)_
+
 ## [3.2.1] — 2026-04-27
 
 Critical bugfix: KB key corruption and bubble path normalization
