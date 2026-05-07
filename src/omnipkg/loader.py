@@ -221,6 +221,7 @@ class omnipkgLoader:
         "packaging",
         "filelock",
         "colorama",
+        "setuptools",   # <-- ADD THIS LINE
         "tabulate",
         "psutil",
         "distro",
@@ -2148,9 +2149,27 @@ class omnipkgLoader:
 
     def _check_numpy_abi_conflict(self, pkg_name: str, requested_version: str) -> None:
         """
-        Raise ProcessCorruptedException if numpy's mapped .so is ABI-incompatible
-        with the requested version AND a daemon worker is available to handle it.
-        If no worker is available, just log and return — in-process heal runs instead.
+        Attempt an in-process numpy heal first; only delegate to daemon if that fails.
+
+        When numpy's C extension (.so) is already mapped by the OS linker, CPython
+        will reuse it for any subsequent import regardless of sys.path — it never
+        re-dlopen() the same symbol.  Whether that mapped .so is ABI-compatible with
+        the requested version's Python layer is unknown until we actually try the
+        import.  Therefore the correct strategy is:
+
+          1. Try a direct in-process import of numpy from the new bubble/main-env path.
+             This is O(μs) if compatible (Python layer loads on top of the mapped .so).
+          2. If the import raises (ImportError, AttributeError, or any exception),
+             the .so is genuinely ABI-incompatible with this version's Python layer.
+             NOW raise ProcessCorruptedException so WorkerDelegationMixin can route
+             the call to a daemon worker that has no pre-mapped .so conflicts.
+
+        This avoids the previous behaviour of raising preemptively on any version
+        mismatch, which triggered daemon delegation even for cases where the in-process
+        path would have worked fine (e.g. 1.24.3 mapped .so with 1.26.4 Python layer
+        when both share the same C ABI).  The old 2.5.0 loader never called this
+        function at all and relied purely on sys.path + module-purge; we replicate
+        that success by making the try-first/delegate-on-failure path the default.
         """
         if pkg_name != "numpy":
             return
@@ -2165,23 +2184,28 @@ class omnipkgLoader:
                 break
         if not _mapped_ver or _mapped_ver == requested_version:
             return
+
+        # Versions differ — but don't preemptively fail.  Try the import first.
         try:
-            _m = _mapped_ver.split(".")
-            _r = requested_version.split(".")
-            _map_maj = int(_m[0]); _map_min = int(_m[1]) if len(_m) > 1 else 0
-            _req_maj = int(_r[0]); _req_min = int(_r[1]) if len(_r) > 1 else 0
-            _abi_bad = (
-                _map_maj != _req_maj
-                or (_map_min < 26 <= _req_min)
-                or (_req_min < 26 <= _map_min)
-            )
-            if not _abi_bad:
+            import numpy as _np_probe
+            _actual = getattr(_np_probe, "__version__", "unknown")
+            if _actual == requested_version:
+                # Import succeeded AND gave us the right version — no daemon needed.
                 return
-            # Only raise if we can actually delegate — daemon available and not inside one.
-            # If we raise but WorkerDelegationMixin can't get a worker, it returns self
-            # with _abi_conflict_detected=True which is safe but the exception still
-            # propagates through all nested with-blocks. So only raise when delegation
-            # will actually succeed.
+            # Import succeeded but the mapped .so locked us into the wrong version.
+            # Treat this as an ABI conflict — fall through to delegation logic.
+            _probe_err = ImportError(
+                f"version drift: requested {requested_version!r} but got {_actual!r} "
+                f"(mapped .so constraint from {_mapped_ver!r})"
+            )
+            if not self.quiet:
+                safe_print(
+                    f"   ↕️  Version drift: requested {requested_version} "
+                    f"got {_actual} (mapped .so constraint)"
+                )
+        except Exception as _probe_err:
+            # In-process import failed — the mapped .so is genuinely incompatible.
+            # Now check whether we can delegate to a daemon worker.
             _can_delegate = (
                 getattr(self, "_worker_fallback_enabled", False)
                 and DAEMON_AVAILABLE
@@ -2191,7 +2215,8 @@ class omnipkgLoader:
                 if not self.quiet:
                     safe_print(
                         f"   ⚠️  ABI conflict: mapped={_mapped_ver!r} → "
-                        f"requested={requested_version!r} — delegating to daemon"
+                        f"requested={requested_version!r} — in-process failed "
+                        f"({type(_probe_err).__name__}: {_probe_err}), delegating to daemon"
                     )
                 raise ProcessCorruptedException(
                     f"numpy ABI conflict: mapped={_mapped_ver!r}, requested={requested_version!r}"
@@ -2199,13 +2224,10 @@ class omnipkgLoader:
             else:
                 if not self.quiet:
                     safe_print(
-                        f"   ↕️  ABI note: mapped={_mapped_ver!r} → "
-                        f"requested={requested_version!r} (no daemon, attempting in-process)"
+                        f"   ↕️  ABI conflict: mapped={_mapped_ver!r} → "
+                        f"requested={requested_version!r} — no daemon available, "
+                        f"continuing in-process (may be unstable)"
                     )
-        except ProcessCorruptedException:
-            raise
-        except Exception:
-            pass
 
     def _enter_single(self):
         self._profile_start("TOTAL_ACTIVATION")
@@ -2586,8 +2608,25 @@ class omnipkgLoader:
 
                     self._profile_start("cleanup_after_uncloak")
                     self._aggressive_module_cleanup(pkg_name)
-                    self._scrub_sys_path_of_bubbles()
-                    self._ensure_main_site_packages_in_path()
+                    # Mirror PATH B: only scrub bubble paths when NOT nested.
+                    # When nested (depth > 1) we must preserve the parent bubble's
+                    # path in sys.path so the parent context remains importable after
+                    # we exit.  _scrub_sys_path_of_bubbles() would strip it.
+                    if not self._is_nested:
+                        self._scrub_sys_path_of_bubbles()
+                        self._ensure_main_site_packages_in_path()
+                    else:
+                        if not self.quiet:
+                            safe_print("      - ⏭️  Preserving parent bubble paths")
+                        # Only add main site-packages if not already present
+                        # (parent STRICT mode removed it; parent OVERLAY mode kept it)
+                        main_site_str = str(self.site_packages_root)
+                        if main_site_str not in sys.path:
+                            sys.path.append(main_site_str)
+                            if not self.quiet:
+                                safe_print(
+                                    f"   🔌 Adding main site-packages for {self._current_package_spec}"
+                                )
                     importlib.invalidate_caches()
                     self._profile_end("cleanup_after_uncloak", print_now=self._profiling_enabled)
 
@@ -2861,9 +2900,6 @@ class omnipkgLoader:
                     for p in self.original_sys_path:
                         if not self._is_main_site_packages(p) and p != bubble_path_str:
                             new_sys_path.append(p)
-                    _site_str = str(self.site_packages_root)
-                    if _site_str not in new_sys_path:
-                        new_sys_path.append(_site_str)
                     sys.path[:] = new_sys_path
                     self._debug_sys_path("strict[1D] after rebuild")
 
@@ -3166,7 +3202,19 @@ class omnipkgLoader:
             # main-env package — it is not in sys.path (the worker uses overlay mode
             # with the bubble prepended), so cloaking it is unnecessary and only
             # causes confusion in the worker's exit/cleanup path.
-            if not _is_daemon_worker:
+            #
+            # NESTING GUARD: Skip this phase when nested (depth > 1).
+            # When we're already inside an outer bubble (e.g. numpy-1.24.3 at depth=1),
+            # cloaking the main-env copy (e.g. numpy-1.26.4.dist-info) here prevents
+            # a deeper nested loader at depth=2 from finding it via PATH B (direct
+            # main-env lookup).  Instead it forces PATH A (restore-from-cloak), which
+            # triggers _check_numpy_abi_conflict, which raises ProcessCorruptedException
+            # and tries to delegate to a daemon worker — but the daemon is already
+            # poisoned by the in-process mapped .so from the outer bubble.  STRICT mode
+            # sys.path already excludes main site-packages at [0], so the main-env copy
+            # is invisible to THIS loader's imports regardless; cloaking it only harms
+            # deeper loaders that legitimately need it.
+            if not _is_daemon_worker and not self._is_nested:
                 try:
                     _canonical_pkg = pkg_name.lower().replace("-", "_")
                     _main_pkg_dir = self.site_packages_root / _canonical_pkg
@@ -3266,11 +3314,6 @@ class omnipkgLoader:
                 for p in self.original_sys_path:
                     if not self._is_main_site_packages(p) and p != bubble_path_str:
                         new_sys_path.append(p)
-                # Keep main site-packages as fallback so packages not shadowed
-                # by this bubble (e.g. requests, httpie) remain importable.
-                _site_str = str(self.site_packages_root)
-                if _site_str not in new_sys_path:
-                    new_sys_path.append(_site_str)
                 sys.path[:] = new_sys_path
                 self._debug_sys_path("strict after rebuild")
             self._profile_end("setup_syspath", print_now=self._profiling_enabled)
