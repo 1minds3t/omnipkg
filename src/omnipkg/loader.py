@@ -4085,8 +4085,13 @@ class omnipkgLoader:
             # but they may leave modules from a different version in sys.modules.
             # At depth=1 we own the final cleanup, so we do a full pass over
             # the known C-extension switcher families.
+            _patchers_mod = sys.modules.get("omnipkg.isolation.patchers")
+            _tf_pids = getattr(_patchers_mod, "_tf_loaded_pids", set()) if _patchers_mod else set()
+            _tf_linker_locked = os.getpid() in _tf_pids
             _CE_SWITCHERS = ("numpy", "torch", "scipy", "pandas", "tensorflow")
             for _sw in _CE_SWITCHERS:
+                if _sw == "tensorflow" and _tf_linker_locked:
+                    continue
                 _stale = [
                     k for k in list(sys.modules)
                     if k == _sw or k.startswith(_sw + ".")
@@ -5719,6 +5724,13 @@ class WorkerDelegationMixin:
             _pkg_lower in omnipkgLoader.ABI_PACKAGES
             and _abi_indicator_map.get(_pkg_lower, f"{_pkg_lower}._") in sys.modules
         )
+        # Also check _tf_loaded_pids — TF purges its modules on __exit__ but
+        # the .so stays mapped. sys.modules check alone misses this case.
+        if not _abi_so_mapped and _pkg_lower == "tensorflow":
+            _patchers = sys.modules.get("omnipkg.isolation.patchers")
+            _tf_pids = getattr(_patchers, "_tf_loaded_pids", set()) if _patchers else set()
+            if os.getpid() in _tf_pids:
+                _abi_so_mapped = True
         if _abi_so_mapped and self._worker_fallback_enabled and DAEMON_AVAILABLE:
             if not self.quiet:
                 safe_print(

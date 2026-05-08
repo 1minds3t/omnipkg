@@ -209,3 +209,8 @@ src/omnipkg/_vendor/wheels/
 .omnipkg_baseline
 ci-wheel-cache/
 build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

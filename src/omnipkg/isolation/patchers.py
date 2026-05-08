@@ -428,7 +428,6 @@ def smart_tf_patcher():
 
             # Only check for reload if THIS WORKER previously loaded TF successfully
             if current_pid in _tf_loaded_pids and "tensorflow" not in sys.modules:
-                safe_print("☢️  [OMNIPKG] FATAL TENSORFLOW RELOAD DETECTED!")
                 raise ProcessCorruptedException(
                     "Attempted to reload TensorFlow in a process where its C++ libraries were already initialized."
                 )

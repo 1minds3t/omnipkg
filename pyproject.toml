@@ -152,7 +152,7 @@ omnipkg = "omnipkg.dispatcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["omnipkg*", "omnipkg.*", "tests*"]
+include = ["omnipkg*", "omnipkg.*", "omnipkg.tests*"]
 exclude = [
     "build*",
     "dist*",
