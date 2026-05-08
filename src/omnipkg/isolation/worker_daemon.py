@@ -2052,9 +2052,12 @@ while True:
                 # ☢️ ABI CONTAMINATION — check for new C extensions (.so) loaded during task
                 _post_task_modules = set(sys.modules.keys())
                 _new_modules = _post_task_modules - _pre_task_modules
+                _worker_pkg = PKG_SPEC.split('==')[0].replace('-','_').lower() if PKG_SPEC else ''
                 _new_so = any(
                     getattr(sys.modules.get(m), '__file__', None) and
-                    str(getattr(sys.modules.get(m), '__file__', '')).endswith('.so')
+                    str(getattr(sys.modules.get(m), '__file__', '')).endswith('.so') and
+                    '.omnipkg_versions' in str(getattr(sys.modules.get(m), '__file__', '')) and
+                    _worker_pkg and not str(getattr(sys.modules.get(m), '__file__', '')).split('.omnipkg_versions/')[-1].startswith(_worker_pkg)
                     for m in _new_modules
                 )
                 _ABI_CEXTS = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2', 'pytorch_lightning', 'torchmetrics'}
