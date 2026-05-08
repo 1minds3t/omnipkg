@@ -1742,6 +1742,7 @@ def chaos_test_13_pytorch_lightning_storm():
             "torch": "torch==2.0.1+cu118",
             "lightning": "pytorch-lightning==1.9.0",
             "numpy": "numpy==1.26.4",
+            "transformers": "transformers==4.47.0",
             "name": "PyTorch 2.0.1 + Lightning 1.9.0",
         },
         {
@@ -1850,10 +1851,29 @@ with omnipkgLoader("{config['lightning']}"):
 
             # Execute code that loads lightning within the torch environment
             code_to_run = f"""
+import sys as _sys
+print("[DBG] sys.path[:4]:", _sys.path[:4])
+_torch_mods = [k for k in _sys.modules if k == 'torch' or k.startswith('torch.')]
+_np_mods = [k for k in _sys.modules if k == 'numpy' or k.startswith('numpy.')]
+_pl_mods = [k for k in _sys.modules if 'lightning' in k or 'pytorch_lightning' in k]
+print(f"[DBG] torch in sys.modules: {{len(_torch_mods)}} entries, first 5: {{_torch_mods[:5]}}")
+print(f"[DBG] numpy in sys.modules: {{len(_np_mods)}} entries")
+print(f"[DBG] lightning in sys.modules: {{len(_pl_mods)}} entries: {{_pl_mods[:5]}}")
+if 'torch' in _sys.modules:
+    _t = _sys.modules['torch']
+    print(f"[DBG] torch module file: {{getattr(_t, '__file__', 'NO FILE')}}")
+    print(f"[DBG] torch._C bound: {{hasattr(_t, '_C')}}")
+    print(f"[DBG] torch.__version__: {{getattr(_t, '__version__', 'MISSING')}}")
+
 from omnipkg.loader import omnipkgLoader
 
 # We're already in the torch environment, now add lightning
-with omnipkgLoader("{config['lightning']}"):
+with omnipkgLoader(*[s for s in ["{config['lightning']}", "{config.get('transformers', '')}"] if s]):
+    import sys as _sys2
+    print(f"[DBG-INNER] sys.path[0]: {{_sys2.path[0]}}")
+    _inner_torch = [k for k in _sys2.modules if k == 'torch' or k.startswith('torch._')]
+    print(f"[DBG-INNER] torch submodules already loaded: {{len(_inner_torch)}}")
+    print(f"[DBG-INNER] torch.__file__ if present: {{getattr(_sys2.modules.get('torch'), '__file__', 'NOT IN MODULES')}}")
     import pytorch_lightning as pl
     import torch
     import numpy as np
@@ -1915,11 +1935,18 @@ with omnipkgLoader("{config['lightning']}"):
                         "error": result.get("error", "Unknown error"),
                     }
                 )
-
                 safe_print(f"      ⏱️  Failed after {config_time*1000:.2f}ms")
                 safe_print(_('      💥 Failed: {}').format(result.get('error', 'Unknown error')))
-                if verbose and result.get("traceback"):
-                    safe_print(f"      Traceback: {result['traceback'][:500]}")
+                if result.get("stdout"):
+                    safe_print("      [stdout before crash]:")
+                    for line in result['stdout'].strip().splitlines():
+                        safe_print(f"        {line}")
+                if result.get("traceback"):
+                    safe_print("      [traceback]:")
+                    for line in result['traceback'].strip().splitlines():
+                        safe_print(f"        {line}")
+                if result.get("stderr"):
+                    safe_print(f"      stderr:\n" + "\n".join(f"        {l}" for l in result['stderr'].strip().splitlines()))
 
         except Exception as e:
             config_time = time.perf_counter() - config_start

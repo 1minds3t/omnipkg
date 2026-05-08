@@ -14516,8 +14516,22 @@ class omnipkg:
         all_inst_pattern = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:*"
         for inst_key in (self.cache_client.keys(all_inst_pattern) or []):
             if inst_key not in version_map:
+                # Peek at the record before blindly labeling it "nested"
+                inst_data = self.cache_client.hgetall(inst_key) or {}
+                owner = inst_data.get("owner_package", "")
+                owner_canonical = canonicalize_name(owner.split("-")[0]) if owner else ""
+                
+                if owner_canonical and owner_canonical != c_name:
+                    # Truly owned by a different package — it's nested
+                    actual_itype = "nested"
+                else:
+                    # Self-referential or no owner — treat as bubble
+                    actual_itype = inst_data.get("install_type", "bubble")
+                    if actual_itype == "nested":
+                        actual_itype = "bubble"  # correct the stale KB label too
+                
                 keys_to_fetch.append(inst_key)
-                version_map[inst_key] = ("unknown", "nested")
+                version_map[inst_key] = ("unknown", actual_itype)
 
         # Batch fetch all instance records
         redis_results = []
@@ -14626,10 +14640,21 @@ class omnipkg:
                 if inst.get("install_type") in ["active", "bubble"]:
                     to_uninstall_options.append(inst)
                 else:
-                    owner = inst.get("owner_package", "another package")
-                    safe_print(
-                        _("   - 🛡️  Skipping {} v{} ({}): It is a protected dependency of '{}'.").format(inst.get('Name'), inst.get('Version'), inst.get('install_type'), owner)
-                    )
+                    owner = inst.get("owner_package", "")
+                    # If the owner is just this package itself (self-referential bubble),
+                    # treat it as a bubble, not a protected nested dep
+                    owner_canonical = canonicalize_name(owner.split("-")[0]) if owner else ""
+                    if owner_canonical == c_name:
+                        # It's not truly nested in another package — reclassify it
+                        inst = dict(inst)  # don't mutate original
+                        inst["install_type"] = "bubble"
+                        to_uninstall_options.append(inst)
+                    else:
+                        safe_print(
+                            _("   - 🛡️  Skipping {} v{} ({}): It is a protected dependency of '{}'.").format(
+                                inst.get('Name'), inst.get('Version'), inst.get('install_type'), owner
+                            )
+                        )
 
             if not to_uninstall_options:
                 safe_print(
@@ -14746,6 +14771,7 @@ class omnipkg:
                 item_path_str = item.get("path")  # Get the path safely
 
                 if item_type == "active":
+                    print(f"[DEL-DEBUG2] item_type={item_type!r} item_path_str={item_path_str!r} item_name={item_name!r}")
                     safe_print(
                         _("🗑️ Uninstalling '{}' from main environment via pip...").format(item_name)
                     )
@@ -14759,9 +14785,10 @@ class omnipkg:
 
                     # A critical sanity check to ensure we're deleting the correct directory.
                     expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
-
                     expected_bubble_name_alt = f"{item_name}-{item_version}"
-                    if bubble_dir.name in (expected_bubble_name, expected_bubble_name_alt) and bubble_dir.is_dir():
+                    expected_bubble_name_underscored = f"{item_name.replace('-', '_')}-{item_version}"
+                    print(f"[DEL-DEBUG] bubble_dir.name='{bubble_dir.name}' checking against: {expected_bubble_name!r}, {expected_bubble_name_alt!r}, {expected_bubble_name_underscored!r}")
+                    if bubble_dir.name in (expected_bubble_name, expected_bubble_name_alt, expected_bubble_name_underscored) and bubble_dir.is_dir():
                         safe_print(_("🗑️  Deleting bubble directory: {}").format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
                     else:

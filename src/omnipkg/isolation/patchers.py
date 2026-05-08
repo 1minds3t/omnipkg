@@ -38,6 +38,148 @@ _circular_import_stats = {}
 _tf_loaded_pids = set()  # Track which PIDs have loaded TF
 _numpy_purge_retry_guard = threading.local()  # Prevents nested purge+retry
 
+# ═══════════════════════════════════════════════════════════
+# BUBBLE-AWARE NUMPY REDIRECT
+# ═══════════════════════════════════════════════════════════
+# When a bubble is active (e.g. tensorflow-2.13.0 which bundles numpy-1.24.3),
+# sys.path has the bubble at [0].  Any package imported transitively — including
+# main-env packages like jax — will resolve `import numpy` to the bubble's
+# numpy, not the main-env numpy they were built against.
+#
+# We fix this in the import hook: if numpy is being imported by a module that
+# does NOT live inside the active bubble, we temporarily remove the bubble
+# path(s) from sys.path for the duration of that one import so the normal
+# site-packages numpy is found instead.
+
+def _get_active_bubble_paths() -> list:
+    """Return the list of omnipkg bubble paths currently at the front of sys.path.
+
+    CRITICAL: this function must NEVER trigger an import (no `from x import y`).
+    It is called from inside genius_import and from _import_numpy_from_main_env,
+    both of which are already on the call stack when an import is in flight.
+    Any import here would re-enter genius_import → infinite recursion.
+    We rely solely on sys.path inspection which is always safe.
+    """
+    bubble_paths = []
+    for p in sys.path:
+        if '.omnipkg_versions' in p and '_omnipkg_cloaked' not in p:
+            bubble_paths.append(p)
+    return bubble_paths
+
+
+def _caller_is_in_bubble(caller_file: str, bubble_paths: list) -> bool:
+    """Return True if the importing module's __file__ lives inside a bubble directory."""
+    if not caller_file or not bubble_paths:
+        return False
+    for bp in bubble_paths:
+        if caller_file.startswith(bp):
+            return True
+    return False
+
+
+_numpy_redirect_active = threading.local()  # re-entrancy guard for _import_numpy_from_main_env
+
+
+def _import_numpy_from_main_env(name, globals, locals, fromlist, level):
+    """
+    Import numpy while temporarily hiding bubble paths from sys.path
+    AND evicting bubble-numpy from sys.modules cache.
+
+    Python's import machinery returns sys.modules["numpy"] directly when it's
+    already cached — sys.path is not consulted at all.  So we must also evict
+    the bubble-numpy entries from sys.modules before the redirected import,
+    then restore them afterward so tensorflow's own code keeps using bubble numpy.
+
+    CRITICAL: a re-entrancy guard (_numpy_redirect_active) prevents infinite
+    recursion when numpy's own __getattr__ (e.g. for numpy.typing) triggers
+    another genius_import call while we're already inside this function.
+    """
+    # Re-entrancy guard: if we're already redirecting numpy, fall straight
+    # through to _original_import_func to avoid genius_import → here → loop.
+    if getattr(_numpy_redirect_active, 'active', False):
+        return _original_import_func(name, globals, locals, fromlist, level)
+
+    bubble_paths = _get_active_bubble_paths()
+    if not bubble_paths:
+        return _original_import_func(name, globals, locals, fromlist, level)
+
+    # Check if the currently-cached numpy lives inside a bubble
+    _np_mod = sys.modules.get("numpy")
+    _np_file = getattr(_np_mod, "__file__", "") or ""
+    _numpy_is_from_bubble = any(_np_file.startswith(bp) for bp in bubble_paths)
+
+    # If bubble numpy is already FULLY initialized (has __version__), the C
+    # extension (_multiarray_umath.so) is already dlopened and its Python layer
+    # is fully wired to that specific ABI.  Evicting the Python layer and
+    # re-running it against a different version's pure-Python code produces a
+    # mixed-state numpy (1.x .so + 2.x Python) → AttributeError on BoolDType
+    # and similar 2.x-only symbols.  No safe mid-process numpy swap is possible
+    # once the C extension is loaded.  Return the already-live numpy directly.
+    if _numpy_is_from_bubble and _np_mod is not None and hasattr(_np_mod, "__version__"):
+        _numpy_redirect_active.active = True
+        try:
+            return _original_import_func(name, globals, locals, fromlist, level)
+        finally:
+            _numpy_redirect_active.active = False
+
+    if not _numpy_is_from_bubble:
+        # Numpy in sys.modules is already from main-env (or mid-init from main-env).
+        # Fall through to _original_import_func under the re-entrancy guard so that
+        # numpy's own __getattr__ (e.g. for numpy.typing sub-imports) doesn't loop
+        # back into _import_numpy_from_main_env again.
+        _numpy_redirect_active.active = True
+        try:
+            return _original_import_func(name, globals, locals, fromlist, level)
+        finally:
+            _numpy_redirect_active.active = False
+
+    # Snapshot all numpy-related sys.modules entries that belong to the bubble
+    _numpy_snapshot = {
+        k: v for k, v in sys.modules.items()
+        if (k == "numpy" or k.startswith("numpy."))
+        and any((getattr(v, "__file__", "") or "").startswith(bp) for bp in bubble_paths)
+    }
+
+    # Evict bubble-numpy from cache so _original_import_func does a real lookup,
+    # BUT never evict C-extension modules (.so/.pyd) — their shared libraries are
+    # already dlopened into the process and cannot be loaded a second time.
+    # Evicting them forces Python to re-exec the .so → "cannot load module more
+    # than once per process".  Only pure-Python entries need eviction.
+    _c_ext_suffixes = ('.so', '.pyd')
+    for k in _numpy_snapshot:
+        mod_file = getattr(_numpy_snapshot[k], "__file__", "") or ""
+        if not any(mod_file.endswith(s) for s in _c_ext_suffixes):
+            sys.modules.pop(k, None)
+
+    # Temporarily remove bubble paths from sys.path
+    saved_path = sys.path[:]
+    for bp in bubble_paths:
+        try:
+            sys.path.remove(bp)
+        except ValueError:
+            pass
+
+    _numpy_redirect_active.active = True
+    try:
+        result = _original_import_func(name, globals, locals, fromlist, level)
+        # Leave main-env numpy in sys.modules["numpy"] for the caller (jax).
+        # But also restore bubble-numpy under a private key so tensorflow's
+        # already-initialized submodules (which hold references to bubble-numpy
+        # objects) continue to work.  We do this by keeping the snapshot alive
+        # as attributes on a hidden module rather than in sys.modules, since
+        # putting both in sys.modules simultaneously is impossible.
+        # The snapshot objects are kept alive by _numpy_snapshot dict which
+        # lives on the stack of the outer genius_import call — that's enough.
+        return result
+    except Exception:
+        # Import from main-env failed — restore bubble numpy and try again
+        sys.modules.update(_numpy_snapshot)
+        raise
+    finally:
+        _numpy_redirect_active.active = False
+        # Restore sys.path so the bubble is back for tensorflow's own imports
+        sys.path[:] = saved_path
+
 _tf_circular_deps_known = {
     "module_util": "tensorflow.python.tools.module_util",
     "lazy_loader": "tensorflow.python.util.lazy_loader",
@@ -168,14 +310,11 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
-        # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
+        # Patch numpy AND opt_einsum AND stub jax BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()
             _patch_opt_einsum_for_isolation()
-
-
-        # ═══════════════════════════════════════════════════════════
-        # torch/numpy SPECIFIC LOGIC (Warning Suppression)
+            _stub_jax_for_tf_load()
         # ═══════════════════════════════════════════════════════════
         if is_torch_or_numpy:
             with warnings.catch_warnings():
@@ -189,6 +328,50 @@ def smart_tf_patcher():
                     message="A module that was compiled using NumPy 1.x cannot be run in NumPy 2.+",
                     category=UserWarning,
                 )
+                # ── BUBBLE NUMPY REDIRECT ────────────────────────────────────
+                # If a bubble is active AND the importing module does NOT live
+                # inside that bubble (e.g. jax importing numpy while the
+                # tensorflow-2.13.0 bubble is active), redirect numpy to main-env
+                # by temporarily hiding the bubble path(s) from sys.path.
+                #
+                # Without this, jax — a main-env package built against numpy 2.x
+                # — gets the bubble's numpy 1.24.3 and immediately fails on
+                # `np.dtypes.StringDType()` (added in numpy 2.0).
+                if name == "numpy" or name.startswith("numpy."):
+                    # ── RE-ENTRANCY GUARD ────────────────────────────────────────
+                    # While _import_numpy_from_main_env is executing it calls
+                    # _original_import_func("numpy"), which triggers numpy/__init__.py,
+                    # which immediately imports sub-modules (numpy.__config__,
+                    # numpy._core, etc.) — all of which re-enter genius_import here.
+                    # If those sub-imports go through the redirect path they try to
+                    # start a second init of numpy's C extension → "cannot load module
+                    # more than once per process".
+                    # Solution: while the redirect is active, let ALL numpy/* imports
+                    # pass straight through — they're already on the correct sys.path.
+                    if getattr(_numpy_redirect_active, 'active', False):
+                        return _original_import_func(name, globals, locals, fromlist, level)
+                    # ── END RE-ENTRANCY GUARD ────────────────────────────────────
+                    _bubble_paths = _get_active_bubble_paths()
+                    if _bubble_paths:
+                        _caller_file = (globals or {}).get("__file__", "") or ""
+                        _in_bubble = _caller_is_in_bubble(_caller_file, _bubble_paths)
+                        # Check if the ACTIVE bubble is itself a numpy bubble (e.g. numpy-1.26.4).
+                        # A non-numpy bubble (e.g. pytorch_lightning-1.9.0) may contain a nested
+                        # numpy copy, but we must NEVER load it — numpy's C extension (.so) can
+                        # only be dlopen'd once per process. Loading the nested copy while main-env
+                        # numpy is already (even partially) initialized causes:
+                        #   ImportError: cannot load module more than once per process
+                        # Fix: if the active bubble is NOT a numpy bubble, always redirect to
+                        # main-env numpy regardless of whether the caller is inside the bubble.
+                        _active_bubble_is_numpy = any(
+                            bp.rstrip('/').rsplit('/', 1)[-1].startswith('numpy-')
+                            for bp in _bubble_paths
+                        )
+                        if not _in_bubble or not _active_bubble_is_numpy:
+                            return _import_numpy_from_main_env(
+                                name, globals, locals, fromlist, level
+                            )
+                # ── END BUBBLE NUMPY REDIRECT ─────────────────────────────────
                 return _original_import_func(name, globals, locals, fromlist, level)
         # ═══════════════════════════════════════════════════════════
         # NEW: Handle opt_einsum (used by both TF and PyTorch)
@@ -210,10 +393,11 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
-        # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
+        # Patch numpy AND opt_einsum AND stub jax BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()
             _patch_opt_einsum_for_isolation()
+            _stub_jax_for_tf_load()
 
         # ═══════════════════════════════════════════════════════════
         # opt_einsum SPECIFIC LOGIC (Prevent cross-framework imports)
@@ -286,6 +470,18 @@ def smart_tf_patcher():
             import os
             _tf_loaded_pids.add(os.getpid())  # Mark THIS worker as having loaded TF
             _patch_numpy_for_tf_recursion()
+            # ── Remove jax stub now that TF is fully loaded ──────────────────
+            # _stub_jax_for_tf_load() injected a lightweight stub so TF's
+            # lite/python/util.py could do `from jax import xla_computation`
+            # without triggering real jax init (which would pull the wrong numpy).
+            # TF is done now — evict the stub so subsequent `import jax` calls
+            # load the real jax from main env with the correct numpy.
+            _jax_stub = sys.modules.get("jax")
+            if getattr(_jax_stub, "__omnipkg_jax_stub__", False):
+                _jax_stub_keys = [k for k in list(sys.modules)
+                                  if k == "jax" or k.startswith("jax.")]
+                for _k in _jax_stub_keys:
+                    sys.modules.pop(_k, None)
 
         return module
 
@@ -513,6 +709,59 @@ def _patch_opt_einsum_for_isolation():
 
     except Exception as e:
         safe_print(_('⚠️  [OMNIPKG] opt_einsum isolation failed: {}').format(e))
+
+
+def _stub_jax_for_tf_load():
+    """
+    Stub out jax during TensorFlow bubble initialization to prevent numpy version
+    conflicts.
+
+    TF 2.x's tensorflow/lite/python/util.py does:
+        from jax import xla_computation as _xla_computation
+
+    If jax is not yet loaded, this triggers jax/__init__.py which immediately
+    imports numpy.  When a TF bubble is active, sys.path[0] is the bubble
+    directory which contains numpy 1.24.3.  jax was built against numpy 2.x and
+    calls np.dtypes.StringDType() at module level — that attribute doesn't exist
+    in 1.24.3, so the entire TF import explodes.
+
+    The fix: if jax is not already in sys.modules (i.e. it hasn't been imported
+    yet in this process), inject a lightweight stub that satisfies TF's
+    xla_computation import without triggering the real jax init.  The stub is
+    removed after TF finishes loading so real jax imports work normally later.
+
+    If jax IS already loaded (user imported it before entering the TF bubble),
+    it already has the correct numpy bound to it — no stub needed.
+    """
+    import types
+
+    if "jax" in sys.modules:
+        # jax already loaded — nothing to do
+        return
+
+    # Build a minimal jax stub that satisfies `from jax import xla_computation`
+    _JAX_STUB_MARKER = "__omnipkg_jax_stub__"
+
+    jax_stub = types.ModuleType("jax")
+    jax_stub.__file__ = "<omnipkg-jax-stub>"
+    jax_stub.__path__ = []
+    jax_stub.__package__ = "jax"
+    setattr(jax_stub, _JAX_STUB_MARKER, True)
+
+    # xla_computation stub — callable, returns None-like object
+    def _xla_computation_stub(*args, **kwargs):
+        return None
+    _xla_computation_stub.__name__ = "xla_computation"
+    jax_stub.xla_computation = _xla_computation_stub
+
+    # Also stub common jax submodules that TF might touch
+    for _submod in ["jax.core", "jax._src", "jax._src.core", "jax._src.dtypes",
+                    "jax.numpy", "jax.interpreters", "jax.lib"]:
+        _sm = types.ModuleType(_submod)
+        _sm.__file__ = "<omnipkg-jax-stub>"
+        sys.modules[_submod] = _sm
+
+    sys.modules["jax"] = jax_stub
 
 def _handle_circular_import(name, fromlist, globals):
     """Handle circular imports by pre-loading dependencies."""
