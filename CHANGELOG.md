@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.3.0] — 2026-05-04
+## [3.3.0] — 2026-05-07
 
-State Healing, Strict ABI Protection, and High-Performance C Dispatch
+State Healing, Strict ABI Protection, and High-Performance C Dispatch Draft
 
 We are proud to release **omnipkg v3.3.0**. This release represents a massive milestone in environmental determinism, memory-safe package management, and raw execution performance.
 
@@ -23,12 +23,18 @@ Raw runs of standard package managers (`pip`, `uv`) frequently leave orphaned `.
 
 Version-switching packages with deep C-extensions (NumPy, PyTorch, TensorFlow, SciPy) inside a single process is historically a recipe for segmentation faults, because the OS dynamic linker cannot cleanly reload a mapped `.so` library in-process.
 * **Contamination Tracking**: Daemon workers now strictly monitor if any sensitive binary ABI libraries have been loaded into memory during a task.
+Surgical Import Redirection & Contextual Masking: Introduced a precision import hook that detects when a main-environment package (e.g., JAX) attempts to import NumPy while a bubble's older version is active. Omnipkg temporarily masks bubble paths in real-time, redirecting the import to the correct main-environment copy — preventing ABI-mismatch crashes without disrupting the active bubble.
+
+Ephemeral Module Stubbing: During TensorFlow initialization, Omnipkg injects a lightweight "ghost" JAX stub to satisfy xla_computation imports, preventing a full JAX boot that would trigger a fatal NumPy version conflict. The stub is atomically evicted once TF finishes loading, leaving real JAX imports unaffected.
 * **Proactive Process Eviction**: If a worker becomes "contaminated" by loading an ABI-sensitive package, it is immediately evicted from the idle pool instead of being recycled. A fresh, clean worker is spawned for subsequent runs, entirely eliminating segfault risks and state contamination.
 * **BFS Dependency Slices**: Improved the metadata builder to use a BFS-walk on the exact `Requires-Dist` tree of nested packages. This ensures nested bubbles only declare and snapshot their *true* transitive closure, rather than bleeding parent packages' unrelated dependencies.
+Topological Activation Ordering: The multi-package loader now performs dependency-aware sorting before activation, ensuring inner dependencies are activated before outer packages — eliminating activation-order shadowing.
 
 We re-engineered the lowest level of our invocation pipeline to minimize operating system context-switching and system call overhead.
 * **Buffered JSON Unescaping**: Rewrote the C-dispatcher's (`dispatcher.c`) JSON parser to decode data directly into a highly-optimized 64KB stack buffer. This avoids the hundred-plus single-character `write()` and `fputc()` syscalls previously generated per daemon packet, resulting in massive speedups in hot-path CLI routing.
-* **Linux Real-Time Scheduling (`SCHED_FIFO`)**: On Linux hosts, the worker daemon now attempts to elevate its execution priority to `SCHED_FIFO` (real-time FIFO scheduler with priority 10), dropping orchestration overhead and process-switching latency to near-zero.
+O(1) Binary Staleness Detection: Replaced MD5 source hashing in the C-dispatcher with atomic mtime comparisons, reducing recompile checks from milliseconds to microseconds.
+* **Linux Real-Time Scheduling (`SCHED_FIFO`)**: On Linux hosts, the worker daemon now attempts to elevate its execution priority to `SCHED_FIFO` (real-time FIFO scheduler
+with priority 10), dropping orchestration overhead and process-switching latency to near-zero.
 
 * **Coordinated Package Locks (`fs_lock_queue`)**: Replaced loose filesystem moves and disparate file locks with a centralized, re-entrant, atomic locking queue. Multiple threads or processes attempting to activate or cloak different versions of the same library (such as TensorFlow 2.12 vs 2.13) are serialized gracefully to prevent filesystem race conditions.
 * **Nested Overlay Fast Path**: Nested `omnipkgLoader` contexts within daemon workers now execute a lightning-fast in-memory path, bypassing heavy filesystem lock routines. Nested bubble activations now cost **<1ms** (down from 100+ms).
@@ -38,26 +44,28 @@ We re-engineered the lowest level of our invocation pipeline to minimize operati
 
 ---
 
----
-
 **📝 Code Changes:**
 - UPDATE: src/omnipkg/_vendor/uv_ffi/__init__.py (36 lines changed)
 - UPDATE: src/omnipkg/commands/run.py (24 lines changed)
-- UPDATE: src/omnipkg/core.py (342 lines changed)
+- UPDATE: src/omnipkg/core.py (383 lines changed)
 - UPDATE: src/omnipkg/dispatcher.c (238 lines changed)
 - UPDATE: src/omnipkg/installation/verification_strategy.py (2 lines changed)
-- UPDATE: src/omnipkg/isolation/patchers.py (4 lines changed)
-- UPDATE: src/omnipkg/isolation/worker_daemon.py (209 lines changed)
-- UPDATE: src/omnipkg/loader.py (2372 lines changed)
+- UPDATE: src/omnipkg/isolation/patchers.py (265 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (275 lines changed)
+- UPDATE: src/omnipkg/loader.py (2415 lines changed)
+- UPDATE: src/omnipkg/package_meta_builder.py (79 lines changed)
 
 **🧪 Tests:**
+- UPDATE: src/tests/test_loader_stress_test.py (66 lines)
 - UPDATE: src/tests/test_multiverse_healing.py (22 lines)
 - UPDATE: src/tests/test_tensorflow_switching.py (24 lines)
 
 **⚙️ Configuration:**
-- pyproject.toml
+- pyproject.toml (2 lines)
 
 **Additional Changes:**
+- Update 1 code files
+- fix(isolation): bubble-aware numpy redirect + jax stub for TF load, fix self-referential nested misclassification
 - Update configuration
 - fix: fix state schizophrenia by exorcising duplicate dist-info ghosts and fix strict mode sys.path
 - perf: optimize dispatcher latency
@@ -69,7 +77,7 @@ We re-engineered the lowest level of our invocation pipeline to minimize operati
 **Bug Fixes:**
 - fix: nested pkg resolved_bubble_deps now BFS-walks own dep tree only
 
-_15 files changed, 2748 insertions(+), 647 deletions(-)_
+_17 files changed, 3261 insertions(+), 693 deletions(-)_
 
 ## [3.2.2] — 2026-05-04
 
