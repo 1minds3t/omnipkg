@@ -1246,6 +1246,7 @@ try:
         setup_data = json.loads(_next_line.strip())
 
     PKG_SPEC = setup_data.get('package_spec', '')
+    os.environ['OMNIPKG_WORKER_SPEC'] = PKG_SPEC
 
     if not PKG_SPEC:
         fatal_error('Missing package_spec')
@@ -1328,21 +1329,25 @@ try:
         sys.stderr.flush()
 
     globals()['_omnipkg_loaders'] = loaders
-
+    # REPLACE:
+    # STEP 3b intentionally removed — numpy bubble must NOT be injected before
+    # torch init. Adding numpy-1.26.4 to sys.path before torch.__init__ runs
+    # causes numpy's source-tree guard to fire inside torch's C extension init,
+    # leaving torch._C unbound. Numpy bubble is added post-READY if needed.
     # ═══════════════════════════════════════════════════════════════
     # STEP 3b: NUMPY COMPATIBILITY SIDECAR
     # torch/tensorflow need a numpy ABI-compatible with their build.
     # Loader auto-installs if missing. Activating before the bare
     # numpy import ensures the right one wins sys.path precedence.
     # ═══════════════════════════════════════════════════════════════
-    if any(fw in PKG_SPEC for fw in ('torch', 'tensorflow')):
-        try:
-            _np_loader = omnipkgLoader('numpy==1.26.4', isolation_mode='overlay', quiet=True)
-            _np_loader.__enter__()
-            loaders.append(_np_loader)
-        except Exception as _np_err:
-            sys.stderr.write(f'⚠️  [DAEMON] numpy sidecar failed: {_np_err}\\n')
-            sys.stderr.flush()
+   #if any(fw in PKG_SPEC for fw in ('torch', 'tensorflow')):
+    #   try:
+    #       _np_loader = omnipkgLoader('numpy==1.26.4', isolation_mode='overlay', quiet=True)
+    #       _np_loader.__enter__()
+    #       loaders.append(_np_loader)
+    #   except Exception as _np_err:
+    #       sys.stderr.write(f'⚠️  [DAEMON] numpy sidecar failed: {_np_err}\\n')
+    #       sys.stderr.flush()
 
     # ═══════════════════════════════════════════════════════════════
     # STEP 4: CLEANUP CLOAKS (Critical - must happen before imports)
@@ -1664,6 +1669,15 @@ try:
                     sys.stderr.flush()
         except Exception as e:
             sys.stderr.write(f'⚠️  [DAEMON] PyTorch import failed: {e}\\n')
+            sys.stderr.flush()
+            # Purge the partial torch init so the task gets a clean import.
+            # A half-initialized torch in sys.modules is worse than none:
+            # re-entering __init__.py hits _C before it's bound.
+            _torch_stubs = [k for k in list(sys.modules.keys())
+                            if k == 'torch' or k.startswith('torch.')]
+            for _k in _torch_stubs:
+                sys.modules.pop(_k, None)
+            sys.stderr.write(f'🧹 [DAEMON] Purged {len(_torch_stubs)} partial torch modules after failed init\\n')
             sys.stderr.flush()
 
 
@@ -2035,10 +2049,17 @@ while True:
                 if _cls:
                     _cls._daemon_did_version_switch = False
 
-                # ☢️ ABI CONTAMINATION — only flag if NEW ABI modules appeared during this task
-                _ABI_CEXTS = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2'}
-                _new_abi = _ABI_CEXTS & (set(sys.modules.keys()) - _pre_task_modules)
-                result['_worker_abi_contaminated'] = bool(_new_abi)
+                # ☢️ ABI CONTAMINATION — check for new C extensions (.so) loaded during task
+                _post_task_modules = set(sys.modules.keys())
+                _new_modules = _post_task_modules - _pre_task_modules
+                _new_so = any(
+                    getattr(sys.modules.get(m), '__file__', None) and
+                    str(getattr(sys.modules.get(m), '__file__', '')).endswith('.so')
+                    for m in _new_modules
+                )
+                _ABI_CEXTS = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2', 'pytorch_lightning', 'torchmetrics'}
+                _new_abi = _ABI_CEXTS & _new_modules
+                result['_worker_abi_contaminated'] = bool(_new_abi or _new_so)
             except Exception:
                 result['_worker_did_nesting'] = False
                 result['_worker_abi_contaminated'] = False
@@ -2793,7 +2814,7 @@ class PersistentWorker:
                     safe_print(f"❌ [DAEMON] Worker process poll status: {self.process.poll()}", file=sys.stderr)
                     raise TimeoutError(f"Task timed out after {timeout}s")
 
-                safe_print(f"✅ [DAEMON] Got response: {response_line[:200]}...", file=sys.stderr)
+                safe_print(f"✅ [DAEMON] Got response: {response_line[:500]}...", file=sys.stderr)
                 parsed = json.loads(response_line.strip())
                 safe_print(f"✅ [DAEMON] Parsed response status: {parsed.get('status')}", file=sys.stderr)
                 # On ERROR: dump full traceback + worker state so failures are debuggable
@@ -2871,20 +2892,32 @@ class PersistentWorker:
                 raise
 
     def health_check(self) -> bool:
-        """Check if worker is responsive. Skips check if worker is mid-task."""
+        """Check if worker is responsive. For ABI packages, probes a real import
+        to catch 'cannot load module more than once per process' before reuse."""
         if getattr(self, '_is_executing', False):
-            # Worker is busy — count as healthy, don't interrupt it
             self.last_health_check = time.time()
             return True
-        try:
-            result = self.execute_shm_task(
-                "health_check", "result = {'status': 'ok'}", {}, {}, timeout=15.0
+        _ABI_PROBE_PKGS = {'torch', 'tensorflow', 'numpy', 'scipy', 'jax'}
+        _pkg_name = self.package_spec.split('==')[0].split('+')[0] if self.package_spec else ''
+        if _pkg_name in _ABI_PROBE_PKGS:
+            _probe_code = (
+                "import importlib, sys\n"
+                f"if '{_pkg_name}' not in sys.modules:\n"
+                f"    importlib.import_module('{_pkg_name}')\n"
+                "result = {'status': 'ok'}"
             )
+        else:
+            _probe_code = "result = {'status': 'ok'}"
+        try:
+            result = self.execute_shm_task("health_check", _probe_code, {}, {}, timeout=15.0)
             self.last_health_check = time.time()
             self.health_check_failures = 0
             return result.get("status") == "COMPLETED"
         except Exception:
             self.health_check_failures += 1
+            # ABI workers that fail the probe are immediately terminal — no retry
+            if _pkg_name in _ABI_PROBE_PKGS:
+                self.health_check_failures = 999
             return False
 
     def force_shutdown(self):

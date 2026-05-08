@@ -2145,6 +2145,11 @@ class omnipkgLoader:
                             pass
  
         self._activation_successful = True
+        if bool(os.environ.get("OMNIPKG_IS_DAEMON_WORKER")):
+            _assigned = os.environ.get("OMNIPKG_WORKER_SPEC", "")
+            _this_spec = self.package_spec if hasattr(self, "package_spec") else ""
+            if _assigned and _this_spec and _assigned != _this_spec:
+                omnipkgLoader._daemon_did_version_switch = True
         return self
 
     def _check_numpy_abi_conflict(self, pkg_name: str, requested_version: str) -> None:
@@ -3768,6 +3773,11 @@ class omnipkgLoader:
     def __enter__(self):
         """Activation entry point - dispatches to multi or single package logic."""
         self._maybe_refresh_dependency_cache()
+        if bool(os.environ.get("OMNIPKG_IS_DAEMON_WORKER")):
+            _assigned = os.environ.get("OMNIPKG_WORKER_SPEC", "")
+            _this_spec = self.package_spec if hasattr(self, "package_spec") else ""
+            if _assigned and _this_spec and _assigned != _this_spec:
+                omnipkgLoader._daemon_did_version_switch = True
         if len(self._package_specs) > 1:
             return self._enter_multi()
         try:
