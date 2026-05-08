@@ -1887,7 +1887,6 @@ class omnipkgMetadataGatherer:
 
             expected_bubble_name = f"{pkg_name_underscored}-{version}"
             expected_bubble_name_base = f"{pkg_name_underscored}-{version.split('+')[0]}"
-            print(f"[CTX-DEBUG] bubble_dir='{bubble_dir_name}' pkg_name='{pkg_name_raw}' version='{version}' expected='{expected_bubble_name}'")
 
             is_own_bubble = (
                 bubble_dir_name == expected_bubble_name
