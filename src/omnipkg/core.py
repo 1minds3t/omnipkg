@@ -5842,7 +5842,7 @@ class BubbleIsolationManager:
             _dbg(f"Successfully wrote {len(json.dumps(manifest_data))} bytes to manifest.")
         except Exception as e:
             # THIS IS THE CORRECTED PART - We actually print the critical error
-            print(f"   [MANIFEST] ❌ CRITICAL ERROR writing manifest: {e}")
+            safe_print(f"   [MANIFEST] ❌ CRITICAL ERROR writing manifest: {e}")
 
         try:
             registry_key = f"{self.parent_omnipkg.redis_key_prefix}bubble_locations"
@@ -7028,7 +7028,7 @@ class omnipkg:
                     text=True,
                     timeout=60,
                 )
-                print(result.stdout, end="")
+                safe_print(result.stdout, end="")
 
                 if result.returncode == 0:
                     native_was_synced = True
@@ -14771,7 +14771,6 @@ class omnipkg:
                 item_path_str = item.get("path")  # Get the path safely
 
                 if item_type == "active":
-                    print(f"[DEL-DEBUG2] item_type={item_type!r} item_path_str={item_path_str!r} item_name={item_name!r}")
                     safe_print(
                         _("🗑️ Uninstalling '{}' from main environment via pip...").format(item_name)
                     )
@@ -14787,7 +14786,6 @@ class omnipkg:
                     expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
                     expected_bubble_name_alt = f"{item_name}-{item_version}"
                     expected_bubble_name_underscored = f"{item_name.replace('-', '_')}-{item_version}"
-                    print(f"[DEL-DEBUG] bubble_dir.name='{bubble_dir.name}' checking against: {expected_bubble_name!r}, {expected_bubble_name_alt!r}, {expected_bubble_name_underscored!r}")
                     if bubble_dir.name in (expected_bubble_name, expected_bubble_name_alt, expected_bubble_name_underscored) and bubble_dir.is_dir():
                         safe_print(_("🗑️  Deleting bubble directory: {}").format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
