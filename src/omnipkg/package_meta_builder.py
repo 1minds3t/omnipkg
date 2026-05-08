@@ -1880,19 +1880,23 @@ class omnipkgMetadataGatherer:
             bubble_dir_name = relative_path.parts[0]
 
             # Get the package's own name and version
-            pkg_name_raw = dist.metadata["Name"]  # Keep the original name with underscores
+            pkg_name_raw = dist.metadata["Name"]
+            # Normalize to underscore form for directory matching (dirs always use underscores)
+            pkg_name_underscored = pkg_name_raw.replace("-", "_")
             version = dist.version
 
-            # Build the expected bubble name using the RAW package name (not canonicalized)
-            expected_bubble_name = f"{pkg_name_raw}-{version}"
-            expected_bubble_name_base = f"{pkg_name_raw}-{version.split('+')[0]}"
+            expected_bubble_name = f"{pkg_name_underscored}-{version}"
+            expected_bubble_name_base = f"{pkg_name_underscored}-{version.split('+')[0]}"
+            print(f"[CTX-DEBUG] bubble_dir='{bubble_dir_name}' pkg_name='{pkg_name_raw}' version='{version}' expected='{expected_bubble_name}'")
+
             is_own_bubble = (
                 bubble_dir_name == expected_bubble_name
+                or bubble_dir_name == f"{pkg_name_raw}-{version}"  # original form as fallback
                 or bubble_dir_name.startswith(f"{expected_bubble_name_base}+")
+                or bubble_dir_name.startswith(f"{pkg_name_raw}-{version.split('+')[0]}+")
             )
             if is_own_bubble:
-                # Extract actual version from bubble dir name (preserves +cu118)
-                _dir_version = bubble_dir_name[len(pkg_name_raw)+1:]
+                _dir_version = bubble_dir_name[len(pkg_name_underscored)+1:]
                 return {"install_type": "bubble", "owner_package": None, "bubble_version": _dir_version}
             else:
                 return {"install_type": "nested", "owner_package": bubble_dir_name}
