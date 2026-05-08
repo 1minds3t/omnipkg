@@ -211,27 +211,37 @@ def phase_setup() -> ConfigManager | None:
 # This is intentional — it lets us demonstrate what the FIRST load looks like.
 # It also means cext limitations appear honestly (can't hide them by reusing state).
 
-def run_script(code: str, label: str, timeout: int = 120) -> tuple[bool, float]:
+def run_script(code: str, label: str, timeout: int = 120, stream: bool = False) -> tuple[bool, float]:
     """Run code in a subprocess. Returns (success, elapsed_ms)."""
     subsection(label)
     tmp = Path("_omnipkg_tf_test.py")
     tmp.write_text(code, encoding="utf-8")
     start = time.perf_counter()
     try:
-        result = subprocess.run(
-            [sys.executable, str(tmp)],
-            capture_output=True, text=True,
-            timeout=timeout, encoding="utf-8", errors="replace",
-        )
-        elapsed = (time.perf_counter() - start) * 1000
-        if result.stdout:
-            for line in result.stdout.splitlines():
-                safe_print(f"  {line}")
-        if result.returncode != 0 and result.stderr:
-            safe_print("  ── stderr ──")
-            for line in result.stderr.splitlines()[-20:]:
-                safe_print(f"  {line}")
-        return result.returncode == 0, elapsed
+        if stream:
+            proc = subprocess.Popen(
+                [sys.executable, "-u", str(tmp)],
+                stdout=None, stderr=None,
+                encoding="utf-8", errors="replace",
+            )
+            proc.wait(timeout=timeout)
+            elapsed = (time.perf_counter() - start) * 1000
+            return proc.returncode == 0, elapsed
+        else:
+            result = subprocess.run(
+                [sys.executable, str(tmp)],
+                capture_output=True, text=True,
+                timeout=timeout, encoding="utf-8", errors="replace",
+            )
+            elapsed = (time.perf_counter() - start) * 1000
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    safe_print(f"  {line}")
+            if result.returncode != 0 and result.stderr:
+                safe_print("  ── stderr ──")
+                for line in result.stderr.splitlines()[-20:]:
+                    safe_print(f"  {line}")
+            return result.returncode == 0, elapsed
     except subprocess.TimeoutExpired:
         elapsed = (time.perf_counter() - start) * 1000
         safe_print(f"  ❌ Timed out after {timeout}s")
@@ -253,7 +263,7 @@ def make_test1(project_root, versions_dir):
     ── API: omnipkgLoader (legacy loader) ───────────────────────────────────
       from omnipkg.loader import omnipkgLoader
 
-      with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config):
+      with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config, quiet=False):
           import tensorflow as tf
           # tf is now the 2.13.0 version from the bubble
           # All dependent packages (keras, typing_extensions) are also
@@ -288,7 +298,7 @@ def main():
     safe_print("  API: omnipkgLoader(\\"tensorflow==2.13.0\\", config=config_manager.config)")
     safe_print("")
 
-    with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config):
+    with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config, quiet=False):
         import tensorflow as tf
         import typing_extensions
         import keras
@@ -387,7 +397,7 @@ def main():
         safe_print(f"  ✅ Outer: typing_extensions = {{outer_ver}}")
 
         safe_print("  ── Inner: tensorflow==2.13.0  (first TF load, cext OK here)")
-        with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config):
+        with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config, quiet=False):
             import tensorflow as tf
             import typing_extensions as te_inner
             inner_te_ver, _ = get_version(te_inner, "typing_extensions", versions_dir)
@@ -448,7 +458,7 @@ def main():
     safe_print("")
 
     safe_print("  ── Load 1: tensorflow==2.13.0  (first load, succeeds)")
-    with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config):
+    with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config, quiet=False):
         import tensorflow as tf
         safe_print(f"  ✅ Loaded: tensorflow = {{tf.__version__}}")
         safe_print(f"     File : {{tf.__file__}}")
@@ -458,7 +468,7 @@ def main():
     safe_print("  ── Load 2: tensorflow==2.12.0  (SAME process — cext swap attempt)")
     safe_print("  The loader should detect TF is already loaded as a cext and refuse.")
     safe_print("")
-    with omnipkgLoader("tensorflow==2.12.0", config=config_manager.config):
+    with omnipkgLoader("tensorflow==2.12.0", config=config_manager.config, quiet=False):
         import tensorflow as tf2
         actual = tf2.__version__
         safe_print(f"  ⚠️  tensorflow reports version: {{actual}}")
@@ -714,7 +724,7 @@ def main():
     safe_print("  Loader must refuse gracefully — no crash, no corrupt state.")
     safe_print("")
     ok, ms = run_script(make_test4(project_root, versions_dir),
-                        "Running in subprocess", timeout=180)
+                        "Running in subprocess", timeout=180, stream=True)
     results["test4"] = ok
     timings["test4"] = ms
     safe_print(f"\n  Result: {'✅ PASSED' if ok else '❌ FAILED'}  ({fmt(ms)} total)")
