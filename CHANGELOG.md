@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.1] — 2026-05-08
+
+prevent interpreter corruption on second TF load in same process
+
+**2026-05-08 · patch release · 2 commits since v3.3.0**
+
+---
+
+## Bug fixes
+
+After loading TF 2.13.0 and exiting the context, a second
+`with omnipkgLoader("tensorflow==2.12.0")` block in the same process would
+fall through to in-process activation. The existing `_tf_loaded_pids` guard
+only fires when `omnipkg.isolation.patchers` was previously imported — in bare
+subprocesses (test runner, user scripts) that module is never loaded, so the
+guard was silently skipped and the loader attempted to activate the wrong
+version against an already-mapped `.so`.
+
+Two fixes, both in `loader.py`:
+
+- **Second-load detection** — `WorkerDelegationMixin.__enter__` now checks
+  `_tf_loaded_pids` directly in addition to `sys.modules`, so a process that
+  already initialized TF's C++ backend is caught even after `__exit__` purged
+  the Python layer.
+- **Zombie purge guard** — the post-exit zombie scan (checking `__file__` for
+  `.omnipkg_versions` paths) was wiping `tensorflow.*` modules even when
+  `pywrap_tensorflow` was still linker-mapped. Those modules are now skipped
+  when the lock is active, matching the same guard already used by
+  `_aggressive_module_cleanup`.
+
+Result: the loader detects the locked `.so`, sets `_abi_conflict_detected=True`,
+returns the already-loaded version, and refuses to corrupt state. No crash, no
+re-init failure. The daemon path remains the correct approach for genuine
+cross-version switching.
+
+> **Cross-platform note:** all ABI detection uses `sys.modules` +
+> `_tf_loaded_pids` — no platform-specific code. Works on Linux, macOS, and
+> Windows without changes.
+
+---
+
+## Refactoring
+
+`src/tests/` → `src/omnipkg/tests/` so the test package no longer leaks a bare
+`tests` package into end-user `site-packages`. `pyproject.toml` include pattern
+and `cli.py`'s `TESTS_DIR` path updated to match.
+
+---
+
+## Cleanup
+
+- Removed ungated `☢️ FATAL TENSORFLOW RELOAD DETECTED!` print from
+  `patchers.py` — the exception is still raised, just without the noise.
+- Removed stray `[CTX-DEBUG]` print from `package_meta_builder.py`.
+- `.gitignore`: exclude `__pycache__/`, `*.pyc`, `*.pyo`.
+- Test subprocess runner: added `stream=True` mode so test 4 gets live stdout
+  instead of buffered output.
+
+---
+
+**Other Changes:**
+- fix(loader): detect linker-locked TF .so via /proc/self/maps; guard zombie purge
+- fix(package_meta_builder): remove ungated CTX-DEBUG print
+
+_21 files changed, 50 insertions(+), 25 deletions(-)_
+
 ## [3.3.0] — 2026-05-07
 
 State Healing, Strict ABI Protection, and High-Performance C Dispatch Draft
