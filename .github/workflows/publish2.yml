@@ -221,9 +221,14 @@ jobs:
     name: "Publish all wheels to PyPI + GH Release"
     needs: [build-wheels, build-noarch]
     runs-on: ubuntu-latest
+    if: |
+      startsWith(inputs.ref, 'v') &&
+      !cancelled() &&
+      (needs.build-wheels.result == 'success' || needs.build-wheels.result == 'failure') &&
+      needs.build-noarch.result == 'success'
     # Only publish when ref looks like a version tag (v3.1.1, v2.5.0, etc.).
     # Running from main, a branch, or a bare SHA -> skipped automatically.
-    if: startsWith(inputs.ref, 'v')
+    if: startsWith(inputs.ref, 'v') && !cancelled()
     permissions:
       contents: write  # required to upload assets to the GH Release
       id-token: write  # required for PyPI trusted publishing (OIDC)
