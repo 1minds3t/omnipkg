@@ -32,8 +32,7 @@ from .core import ConfigManager
 from .core import omnipkg as OmnipkgCore
 
 project_root = Path(__file__).resolve().parent.parent
-TESTS_DIR = Path(__file__).parent / "tests"
-DEMO_DIR = Path(__file__).parent
+TESTS_DIR = Path(__file__).resolve().parent / "tests"
 try:
     FILE_PATH = Path(__file__).resolve()
 except NameError:
