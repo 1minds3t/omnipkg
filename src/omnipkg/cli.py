@@ -45,15 +45,6 @@ def _dbg(msg: str):
     if _DBG:
         print(f"[DEBUG-CLI] {msg}", file=sys.stderr, flush=True)
 
-# Debug path resolution
-_dbg(f"__file__ = {__file__}")
-_dbg(f"Path(__file__).resolve() = {Path(__file__).resolve()}")
-_dbg(f"Path(__file__).resolve().parent = {Path(__file__).resolve().parent}")
-_dbg(f"TESTS_DIR = {TESTS_DIR}")
-_dbg(f"TESTS_DIR.exists() = {TESTS_DIR.exists()}")
-if TESTS_DIR.exists():
-    _dbg(f"TESTS_DIR contents: {list(TESTS_DIR.glob('*.py'))[:5]}")  # First 5 files
-
 _VERSION_CACHE: dict = {}  # exe_path -> (major, minor)
 
 def get_actual_python_version(cm=None):
