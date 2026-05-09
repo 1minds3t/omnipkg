@@ -33,10 +33,15 @@ from .core import omnipkg as OmnipkgCore
 
 project_root = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).resolve().parent / "tests"
-try:
-    FILE_PATH = Path(__file__).resolve()
-except NameError:
-    FILE_PATH = Path.cwd()
+
+# Debug path resolution
+_dbg(f"__file__ = {__file__}")
+_dbg(f"Path(__file__).resolve() = {Path(__file__).resolve()}")
+_dbg(f"Path(__file__).resolve().parent = {Path(__file__).resolve().parent}")
+_dbg(f"TESTS_DIR = {TESTS_DIR}")
+_dbg(f"TESTS_DIR.exists() = {TESTS_DIR.exists()}")
+if TESTS_DIR.exists():
+    _dbg(f"TESTS_DIR contents: {list(TESTS_DIR.glob('*.py'))[:5]}")  # First 5 files
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DEBUG HELPER — use everywhere instead of bare print(..., file=sys.stderr)
