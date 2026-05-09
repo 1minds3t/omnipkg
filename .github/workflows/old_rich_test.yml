@@ -94,7 +94,7 @@ jobs:
           omnipkg python adopt 3.11
 
           echo "--- Running test_old_rich.py with 8pkg run ---"
-          8pkg run src/tests/test_old_rich.py
+          8pkg run src/omnipkg/tests/test_old_rich.py
 
           echo "✅ Old Rich test completed successfully!"
 
