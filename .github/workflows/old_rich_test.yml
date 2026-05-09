@@ -86,8 +86,8 @@ jobs:
         run: |
           set -e
           echo "=== Running Old Rich Test ==="
-
           export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
+          export OMNIPKG_DEBUG=1  # <-- ADD THIS LINE
           echo "Config path: $OMNIPKG_CONFIG_PATH"
 
           echo "--- Initializing omnipkg ---"
