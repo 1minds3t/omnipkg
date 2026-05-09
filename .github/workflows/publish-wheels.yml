@@ -221,6 +221,7 @@ jobs:
     name: "Publish all wheels to PyPI + GH Release"
     needs: [build-wheels, build-noarch]
     runs-on: ubuntu-latest
+    environment: pypi       
     if: |
       startsWith(inputs.ref, 'v') &&
       !cancelled() &&
