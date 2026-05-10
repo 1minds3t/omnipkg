@@ -1,256 +1,255 @@
-
-name: Build Platform-Specific Wheels (Explicit Matrix)
+name: Publish omnipkg (Standard Wheels)
 
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'Branch, tag, or SHA to build (e.g. main, v3.1.1, abc1234)'
-        required: false
-        default: 'main'
-        type: string
-
+      tag:
+        description: 'Tag to publish (e.g. v3.3.1)'
+        required: true
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
-  build-wheels:
-    name: "Wheels | ${{ matrix.platform }} | Py${{ matrix.py_ver }}"
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ── LINUX x86_64 ───────────────────────────────────────────────────
-          - { platform: linux_x86_64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: false }
-          - { platform: linux_x86_64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: true  }
-          - { platform: linux_x86_64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: x86_64,  use_qemu: false, prerelease: true  }
-          # ── LINUX aarch64 ──────────────────────────────────────────────────
-          - { platform: linux_aarch64, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: false }
-          - { platform: linux_aarch64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: true  }
-          - { platform: linux_aarch64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true, prerelease: true  }
-          # ── LINUX armv7l ───────────────────────────────────────────────────
-          - { platform: linux_armv7, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: false }
-          - { platform: linux_armv7, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: true  }
-          - { platform: linux_armv7, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true, prerelease: true  }
-          # ── LINUX ppc64le ──────────────────────────────────────────────────
-          - { platform: linux_ppc64le, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: false }
-          - { platform: linux_ppc64le, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: true  }
-          - { platform: linux_ppc64le, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true, prerelease: true  }
-          # ── LINUX s390x ────────────────────────────────────────────────────
-          - { platform: linux_s390x, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: false }
-          - { platform: linux_s390x, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: true  }
-          - { platform: linux_s390x, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true, prerelease: true  }
-          # ── LINUX i686 ─────────────────────────────────────────────────────
-          - { platform: linux_i686, py_ver: "3.7",  py_tag: "cp37",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.8",  py_tag: "cp38",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.9",  py_tag: "cp39",  runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: false }
-          - { platform: linux_i686, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: true  }
-          - { platform: linux_i686, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: i686, use_qemu: false, prerelease: true  }
-          # ── LINUX riscv64 — only 3.10+ have prebuilt QEMU images ───────────
-          - { platform: linux_riscv64, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
-          - { platform: linux_riscv64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
-          - { platform: linux_riscv64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
-          - { platform: linux_riscv64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true, prerelease: false }
-          # ── macOS x86_64 ───────────────────────────────────────────────────
-          - { platform: macos_x86_64, py_ver: "3.7",  py_tag: "cp37",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.8",  py_tag: "cp38",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.9",  py_tag: "cp39",  runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.10", py_tag: "cp310", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.11", py_tag: "cp311", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.12", py_tag: "cp312", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.13", py_tag: "cp313", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: false }
-          - { platform: macos_x86_64, py_ver: "3.14", py_tag: "cp314", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: true  }
-          - { platform: macos_x86_64, py_ver: "3.15", py_tag: "cp315", runner: macos-15-intel, cibw_archs: x86_64, use_qemu: false, prerelease: true  }
-          # ── macOS arm64 ────────────────────────────────────────────────────
-          - { platform: macos_arm64, py_ver: "3.7",  py_tag: "cp37",  runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.8",  py_tag: "cp38",  runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.9",  py_tag: "cp39",  runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.10", py_tag: "cp310", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.11", py_tag: "cp311", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.12", py_tag: "cp312", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.13", py_tag: "cp313", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: false }
-          - { platform: macos_arm64, py_ver: "3.14", py_tag: "cp314", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: true  }
-          - { platform: macos_arm64, py_ver: "3.15", py_tag: "cp315", runner: macos-15, cibw_archs: arm64, use_qemu: false, prerelease: true  }
-          # ── Windows AMD64 ──────────────────────────────────────────────────
-          - { platform: win_amd64, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: false }
-          - { platform: win_amd64, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: true  }
-          - { platform: win_amd64, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: AMD64, use_qemu: false, prerelease: true  }
-          # ── Windows ARM64 — only 3.9+ supported ───────────────────────────
-          - { platform: win_arm64, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
-          - { platform: win_arm64, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
-          - { platform: win_arm64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
-          - { platform: win_arm64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
-          - { platform: win_arm64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: false }
-          - { platform: win_arm64, py_ver: "3.14", py_tag: "cp314", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: true  }
-          - { platform: win_arm64, py_ver: "3.15", py_tag: "cp315", runner: windows-latest, cibw_archs: ARM64, use_qemu: false, prerelease: true  }
-          # ── Windows x86 32-bit — cibw uses 'x86' not 'Win32' ──────────────
-          - { platform: win32, py_ver: "3.7",  py_tag: "cp37",  runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-          - { platform: win32, py_ver: "3.8",  py_tag: "cp38",  runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-          - { platform: win32, py_ver: "3.9",  py_tag: "cp39",  runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-          - { platform: win32, py_ver: "3.10", py_tag: "cp310", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-          - { platform: win32, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-          - { platform: win32, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-          - { platform: win32, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: x86, use_qemu: false, prerelease: false }
-
+  # ── Linux x86_64 manylinux (cp37-abi3) ──────────────────────────────────
+  build-linux-x86_64-glibc:
+    name: "linux x86_64 glibc"
+    runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.tag }}
 
-      - name: Set up QEMU (Linux cross-arch only)
-        if: matrix.use_qemu == true
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
-
-      # Compute CIBW_ENABLE — prerelease pythons need explicit opt-in in 2.21+
-      - name: Set cibw enable flags
-        id: cibw_flags
-        shell: bash
+      - name: Build + auditwheel
         run: |
-          if [ "${{ matrix.prerelease }}" = "true" ]; then
-            echo "enable=cpython-prerelease" >> $GITHUB_OUTPUT
-          else
-            echo "enable=" >> $GITHUB_OUTPUT
-          fi
-      # ── Build wheel — hard fail, no fallback ─────────────────────────────
-      - name: Build wheel
-        uses: pypa/cibuildwheel@v2.23.0
-        env:
-          CIBW_ENVIRONMENT: >-
-            OMNIPKG_SKIP_C_EXT=0
-          CIBW_BUILD_VERBOSITY: 1
-          CIBW_BEFORE_BUILD: "pip install packaging>=23.0"
-          CIBW_BEFORE_TEST: >-
-            pip install --only-binary :all:
-            --extra-index-url https://exotic-wheels.github.io/
-            uv-ffi>=0.10.8.post7 cryptography>=46.0.7 psutil
-          CIBW_BUILD: "${{ matrix.py_tag }}-*"
-          CIBW_ARCHS: "${{ matrix.cibw_archs }}"
-          # CIBW_SKIP: "pp*"
-          CIBW_ENABLE: "${{ steps.cibw_flags.outputs.enable }}"
-          CIBW_TEST_COMMAND: "omnipkg --version"
-          # CIBW_TEST_SKIP: "*-manylinux_i686 *-musllinux_i686 *-win32"
-          # auditwheel: pass through if no ELF (pure wheel) instead of dying
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
-            auditwheel repair -w {dest_dir} {wheel} ||
-            (auditwheel show {wheel} 2>&1 | grep -q 'no ELF' && cp {wheel} {dest_dir})
-          CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
-          CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
-          CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
-          CIBW_MANYLINUX_PPC64LE_IMAGE:  "quay.io/pypa/manylinux_2_28_ppc64le:latest"
-          CIBW_MANYLINUX_S390X_IMAGE:    "quay.io/pypa/manylinux_2_28_s390x:latest"
-          CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:2025.02.28-1"
-          CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:2025.02.28-1"
-          CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:2025.02.28-1"
-          CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
-          CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
+          podman run --rm \
+            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/manylinux2014_x86_64:latest \
+            /bin/bash -c "
+              /python37/bin/python3 -m pip install build --quiet &&
+              cd /io &&
+              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              auditwheel repair /io/dist-raw/*.whl -w /io/dist/
+            "
 
-      - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.platform }}-py${{ matrix.py_ver }}
-          path: ./wheelhouse/*.whl
-          if-no-files-found: error
+          name: wheel-linux-x86_64-glibc
+          path: dist/*.whl
 
-  build-noarch:
-    name: "Wheels | noarch | py3-none-any"
-    runs-on: ubuntu-latest
+  # ── Linux aarch64 manylinux (cp37-abi3) ─────────────────────────────────
+  build-linux-aarch64-glibc:
+    name: "linux aarch64 glibc"
+    runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.tag }}
 
-      - name: Build noarch wheel
+      - name: Build + auditwheel
+        run: |
+          podman run --rm --platform linux/arm64 \
+            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/manylinux2014_aarch64:latest \
+            /bin/bash -c "
+              /python37/bin/python3 -m pip install build --quiet &&
+              cd /io &&
+              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              auditwheel repair /io/dist-raw/*.whl -w /io/dist/
+            "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-aarch64-glibc
+          path: dist/*.whl
+
+  # ── Linux x86_64 musllinux (cp37-abi3) ──────────────────────────────────
+  build-linux-x86_64-musl:
+    name: "linux x86_64 musl"
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Build + auditwheel
+        run: |
+          podman run --rm \
+            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/musllinux_1_2_x86_64:latest \
+            /bin/bash -c "
+              /python37/bin/python3 -m pip install build --quiet &&
+              cd /io &&
+              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              auditwheel repair /io/dist-raw/*.whl -w /io/dist/
+            "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-x86_64-musl
+          path: dist/*.whl
+
+  # ── Linux aarch64 musllinux (cp37-abi3) ─────────────────────────────────
+  build-linux-aarch64-musl:
+    name: "linux aarch64 musl"
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Build + auditwheel
+        run: |
+          podman run --rm --platform linux/arm64 \
+            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/musllinux_1_2_aarch64:latest \
+            /bin/bash -c "
+              /python37/bin/python3 -m pip install build --quiet &&
+              cd /io &&
+              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              auditwheel repair /io/dist-raw/*.whl -w /io/dist/
+            "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-aarch64-musl
+          path: dist/*.whl
+
+  # ── Windows AMD64 ────────────────────────────────────────────────────────
+  build-win-amd64:
+    name: "windows amd64"
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Build wheel
+        shell: powershell
+        run: |
+          $py37 = "C:\omnipkg\interpreters\cpython-3.7.9\python.exe"
+          & $py37 -m pip install build --quiet
+          & $py37 -m build --wheel --outdir dist\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-win-amd64
+          path: dist/*.whl
+
+  # ── Windows ARM64 ────────────────────────────────────────────────────────
+  build-win-arm64:
+    name: "windows arm64"
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Build wheel
+        shell: powershell
+        run: |
+          $py37 = "C:\omnipkg\interpreters\cpython-3.7.9\python.exe"
+          & $py37 -m pip install build --quiet
+          & $py37 -m build --wheel --outdir dist\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-win-arm64
+          path: dist/*.whl
+
+  # ── macOS universal2 ─────────────────────────────────────────────────────
+  build-macos-universal2:
+    name: "macos universal2"
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Build universal2 wheel
         run: |
           pip install build
-          OMNIPKG_SKIP_C_EXT=1 python -m build --wheel --outdir wheelhouse/
-      - name: Upload noarch wheel artifact
-        uses: actions/upload-artifact@v4
+          ARCHFLAGS="-arch x86_64 -arch arm64" \
+          _PYTHON_HOST_PLATFORM="macosx-11.0-universal2" \
+          python -m build --wheel --outdir dist/
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-noarch
-          path: ./wheelhouse/*.whl
-          if-no-files-found: error
-  publish:
-    name: "Publish all wheels to PyPI + GH Release"
-    needs: [build-wheels, build-noarch]
+          name: wheel-macos-universal2
+          path: dist/*.whl
+
+  # ── noarch + sdist ───────────────────────────────────────────────────────
+  build-noarch:
+    name: "noarch + sdist"
     runs-on: ubuntu-latest
-    environment: pypi       
-    if: |
-      startsWith(inputs.ref, 'v') &&
-      !cancelled() &&
-      (needs.build-wheels.result == 'success' || needs.build-wheels.result == 'failure') &&
-      needs.build-noarch.result == 'success'
-    # Only publish when ref looks like a version tag (v3.1.1, v2.5.0, etc.).
-    # Running from main, a branch, or a bare SHA -> skipped automatically.
-    permissions:
-      contents: write  # required to upload assets to the GH Release
-      id-token: write  # required for PyPI trusted publishing (OIDC)
     steps:
-      - name: Download all wheel artifacts
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build noarch wheel + sdist
+        run: |
+          pip install build
+          OMNIPKG_SKIP_C_EXT=1 python -m build --outdir dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-noarch
+          path: dist/
+
+  # ── Publish ──────────────────────────────────────────────────────────────
+  publish:
+    name: "Publish to PyPI"
+    needs:
+      - build-linux-x86_64-glibc
+      - build-linux-aarch64-glibc
+      - build-linux-x86_64-musl
+      - build-linux-aarch64-musl
+      - build-win-amd64
+      - build-win-arm64
+      - build-macos-universal2
+      - build-noarch
+    runs-on: ubuntu-latest
+    environment: pypi
+    if: |
+      !cancelled() &&
+      needs.build-noarch.result == 'success'
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: wheels-*
+          pattern: wheel-*
           path: dist/
           merge-multiple: true
 
-      - name: List wheels to be published
+      - name: List
         run: ls -lh dist/
 
-      - name: Upload wheels to GitHub Release
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.ref }}
+          tag_name: ${{ inputs.tag }}
           files: dist/*.whl
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          skip-existing: true   # idempotent — safe to re-run if some already uploaded
+          skip-existing: true
