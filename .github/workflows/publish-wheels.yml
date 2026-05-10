@@ -78,11 +78,12 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
             auditwheel repair -w {dest_dir} {wheel} ||
             (auditwheel show {wheel} 2>&1 | grep -q 'no ELF' && cp {wheel} {dest_dir})
-          CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux_2_28_x86_64:latest"
-          CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux_2_28_aarch64:latest"
-          CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
-          CIBW_MANYLINUX_PPC64LE_IMAGE:  "quay.io/pypa/manylinux_2_28_ppc64le:latest"
-          CIBW_MANYLINUX_S390X_IMAGE:    "quay.io/pypa/manylinux_2_28_s390x:latest"
+          CIBW_MANYLINUX_X86_64_IMAGE:   "quay.io/pypa/manylinux2014_x86_64"
+          CIBW_MANYLINUX_AARCH64_IMAGE:  "quay.io/pypa/manylinux2014_aarch64"
+          CIBW_MANYLINUX_PPC64LE_IMAGE:  "quay.io/pypa/manylinux2014_ppc64le"
+          CIBW_MANYLINUX_S390X_IMAGE:    "quay.io/pypa/manylinux2014_s390x"
+          # armv7l does not have a manylinux2014 image, use the oldest available modern one that works
+          CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_24_armv7l"
           CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:2025.02.28-1"
           CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:2025.02.28-1"
           CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:2025.02.28-1"
