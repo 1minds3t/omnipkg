@@ -7,3 +7,4 @@ mkdocs-minify-plugin
 mkdocs-redirects
 pymdown-extensions
 ruamel.yaml
+pymdown-extensions>=10.21.2

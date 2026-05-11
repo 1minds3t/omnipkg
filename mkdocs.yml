@@ -91,12 +91,12 @@ plugins:
     enable_parallel_processing: false
 - redirects:
     redirect_maps:
-
+      en/latest/index.md: index.md
 
 markdown_extensions:
 - admonition
 - meta                        # ADD THIS LINE (parse YAML front matter)
-- codehilite
+#- codehilite
 - footnotes
 - tables                      # Added: Missing from original
 - toc:
