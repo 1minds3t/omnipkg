@@ -16,8 +16,14 @@ import os
 import sys
 import subprocess
 import shutil
+import platform
 from pathlib import Path
 
+# Automatically detect WASM environment and skip all C compilation
+IS_WASM = sys.platform in ('emscripten', 'wasm32')
+if IS_WASM:
+    os.environ['OMNIPKG_SKIP_C_EXT'] = '1'
+    
 SKIP_C_EXTENSIONS = os.environ.get('OMNIPKG_SKIP_C_EXT', '0') == '1'
 
 # ── Dispatcher binary install (shared by both install and develop commands) ──
@@ -26,62 +32,130 @@ def _install_dispatcher_binary(install_dir=None):
     """
     Compile the C dispatcher and overwrite the pip-generated 8pkg/omnipkg
     wrapper scripts with the fast binary.
-    Silently skips if gcc isn't available or compilation fails.
+    Supports gcc (Linux/macOS) and MSVC cl.exe (Windows).
     """
     repo_root = Path(__file__).parent
-    c_source = repo_root / "tools" / "dispatcher_bin" / "dispatcher.c"
-
+    c_source = repo_root / "src" / "omnipkg" / "dispatcher.c"
     if not c_source.exists():
         print("  [dispatcher] No C source found, skipping binary install")
         return
 
-    if not shutil.which("gcc"):
-        print("  [dispatcher] gcc not found, skipping binary install (Python dispatcher will be used)")
+    # --- Compiler detection ---
+    compiler = None
+    compiler_args = []
+    compile_env = os.environ.copy()
+
+    if sys.platform == "win32":
+        cl = shutil.which("cl")
+        print(f"  [dispatcher] win32: cl in PATH = {cl}")
+        if not cl:
+            import glob as _cgl
+            for _pat in [
+                "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
+            ]:
+                _matches = _cgl.glob(_pat)
+                print(f"  [dispatcher] glob {_pat} -> {_matches}")
+                if _matches:
+                    cl = _matches[0]
+                    break
+        print(f"  [dispatcher] final compiler = {cl}")
+        
+        if cl:
+            compiler = cl
+            compiler_args = ["/O2", "/Fe:{out}", "{src}", "ws2_32.lib"]
+            # Reconstruct MSVC environment (what vcvarsall.bat does)
+            try:
+                cl_path = Path(cl)
+                msvc_root = cl_path.parent.parent.parent.parent
+                msvc_include = str(msvc_root / "include")
+                msvc_lib = str(msvc_root / "lib" / "x64")
+                sdk_includes, sdk_libs = [], []
+                sdk_base = Path("C:/Program Files (x86)/Windows Kits/10")
+                if not sdk_base.exists():
+                    sdk_base = Path("C:/Program Files/Windows Kits/10")
+                if sdk_base.exists():
+                    inc_base = sdk_base / "include"
+                    lib_base = sdk_base / "lib"
+                    sdk_versions = sorted(inc_base.iterdir(), reverse=True)
+                    if sdk_versions:
+                        sdk_ver = sdk_versions[0]
+                        for sub in ("ucrt", "um", "shared"):
+                            p = sdk_ver / sub
+                            if p.exists():
+                                sdk_includes.append(str(p))
+                        lib_ver = lib_base / sdk_ver.name
+                        for sub in ("ucrt/x64", "um/x64"):
+                            p = lib_ver / sub.replace("/", os.sep)
+                            if p.exists():
+                                sdk_libs.append(str(p))
+                compile_env["INCLUDE"] = os.pathsep.join([msvc_include] + sdk_includes)
+                compile_env["LIB"] = os.pathsep.join([msvc_lib] + sdk_libs)
+            except Exception as e:
+                print(f"  [dispatcher] Warning: could not derive MSVC env: {e}")
+        else:
+            gcc = shutil.which("gcc") or shutil.which("x86_64-w64-mingw32-gcc")
+            if gcc:
+                compiler = gcc
+                compiler_args = ["-O2", "-o", "{out}", "{src}", "-lws2_32"]
+    else:
+        gcc = shutil.which("gcc")
+        if gcc:
+            compiler = gcc
+            compiler_args = ["-O2", "-o", "{out}", "{src}", "-ldl"]
+        if sys.platform == "darwin":
+            archflags = os.environ.get("ARCHFLAGS", "")
+            if archflags:
+                compiler_args = ["-O2"] + archflags.split() + ["-o", "{out}", "{src}"]
+            elif platform.machine() == "arm64":
+                compiler_args = ["-O2", "-arch", "x86_64", "-arch", "arm64", "-o", "{out}", "{src}"]
+
+    if not compiler:
+        print("  [dispatcher] no compiler found — using Python dispatcher")
         return
 
     if install_dir is None:
-        install_dir = Path(sys.executable).parent  # $VENV/bin
+        install_dir = Path(sys.executable).parent
 
-    binary_out = Path(install_dir) / "_omnipkg_dispatch_bin"
+    _exe = ".exe" if sys.platform == "win32" else ""
+    binary_out = Path(install_dir) / f"_omnipkg_dispatch_bin{_exe}"
+    binary_out.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [compiler] + [
+        a.format(out=str(binary_out), src=str(c_source))
+        for a in compiler_args
+    ]
 
     try:
-        result = subprocess.run(
-            ["gcc", "-O2", "-o", str(binary_out), str(c_source)],
-            capture_output=True, text=True
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, env=compile_env)
         if result.returncode != 0:
-            print(f"  [dispatcher] Compilation failed, using Python dispatcher:")
-            subprocess.run(
-                ["gcc", "-v", "-O2", "-o", str(binary_out), str(c_source)],
-                capture_output=False,
-                text=True
-            )
+            print(f"  [dispatcher] Compilation failed: {result.stderr[:200]}")
             return
 
         import time
-        print(f"  [dispatcher] Looking for scripts in: {install_dir}")
-        print(f"  [dispatcher] Files in dir: {list(Path(install_dir).glob('*pkg*'))}")
+        replaced = []
         for attempt in range(10):
             replaced = []
             for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-                target = Path(install_dir) / name
+                target = Path(install_dir) / (name + _exe)
                 if target.exists():
                     shutil.copy2(str(binary_out), str(target))
-                    os.chmod(str(target), 0o755)
+                    if sys.platform != "win32":
+                        os.chmod(str(target), 0o755)
                     replaced.append(name)
             if replaced:
                 break
             time.sleep(0.5)
 
-        binary_out.unlink()
         if replaced:
-            print(f"  [dispatcher] ✅ Fast C dispatcher installed in {install_dir}")
+            binary_out.unlink(missing_ok=True)
+            print(f"  [dispatcher] ✅ Fast C dispatcher installed over: {replaced}")
         else:
-            print(f"  [dispatcher] No entry points found in {install_dir} — run after pip installs scripts")
+            print(f"  [dispatcher] Bundling compiled C dispatcher into the wheel.")
 
     except Exception as e:
         print(f"  [dispatcher] Skipping C dispatcher: {e}")
-
 
 def _build_uv_ffi(install_dir=None):
     """
@@ -156,7 +230,9 @@ else:
         sources=["src/omnipkg/isolation/atomic_ops.c"],
         extra_compile_args=_c_args,
         optional=True,
-        py_limited_api=True,   # ← add this
+        py_limited_api=True,   
+        # 3. FIX: You MUST define the macro for the target Python version (3.7)
+        define_macros=[('Py_LIMITED_API', '0x03070000')],
     )
 
     class OptionalBuildExt(build_ext):
@@ -222,6 +298,25 @@ class DevelopWithDispatcher(develop):
         super().run()
         _install_dispatcher_binary(Path(sys.executable).parent)
         _build_uv_ffi(Path(sys.executable).parent)
+
+# 4. FIX: Force the wheel to be tagged as cp37-abi3
+try:
+    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
+    class BdistWheelCommand(_bdist_wheel):
+        def get_tag(self):
+            python, abi, plat = super().get_tag()
+            # If it's a CPython wheel, force it to cp37-abi3
+            if python.startswith("cp"):
+                return "cp37", "abi3", plat
+            return python, abi, plat
+except ImportError:
+    BdistWheelCommand = None
+
+ext_modules = [atomic_extension]
+cmdclass = {'build_ext': OptionalBuildExt}
+
+if BdistWheelCommand:
+    cmdclass['bdist_wheel'] = BdistWheelCommand
 
 
 cmdclass['install'] = InstallWithDispatcher

@@ -10,6 +10,8 @@ Referenced in pyproject.toml:
   build-backend = "build_hooks"
   backend-path = ["."]          ← tells pip to look in repo root for this module
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Compatibility shim for Python < 3.11 — locale.getencoding() added in 3.11
 # Without this, packaging/_musllinux.py crashes in manylinux containers
 import locale
@@ -32,19 +34,15 @@ import sys
 from pathlib import Path
 import shutil
 
-
 def _run_post_install():
-    marker = Path(sys.executable).parent / ".omnipkg_dispatch_compiled"
-    if marker.exists():
-        marker.unlink()
-    hook = Path(__file__).parent / "tools" / "dispatcher_bin" / "_post_install.py"
-    if hook.exists():
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("_post_install", hook)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        mod.install_dispatcher_binary(Path(sys.executable).parent)
-
+    if sys.platform in ('emscripten', 'wasm32'):
+        return
+    try:
+        sys.path.insert(0, str(Path(__file__).parent / "src"))
+        from omnipkg.dispatcher import _maybe_install_c_dispatcher
+        _maybe_install_c_dispatcher()
+    except Exception as e:
+        print(f"  [dispatcher] post-install skipped: {e}")
 
 # Override build_editable — this is what `pip install -e .` calls
 def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
