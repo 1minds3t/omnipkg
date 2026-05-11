@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to publish (e.g. v3.3.1)'
-        required: true
+        description: 'Tag or branch (e.g. v3.3.1 or development)'
+        required: false
+        default: 'development'
 
 permissions:
   contents: write
@@ -15,7 +16,7 @@ jobs:
   # ── Linux x86_64 manylinux (cp37-abi3) ──────────────────────────────────
   build-linux-x86_64-glibc:
     name: "linux x86_64 glibc"
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,7 +43,7 @@ jobs:
   # ── Linux aarch64 manylinux (cp37-abi3) ─────────────────────────────────
   build-linux-aarch64-glibc:
     name: "linux aarch64 glibc"
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,7 +70,7 @@ jobs:
   # ── Linux x86_64 musllinux (cp37-abi3) ──────────────────────────────────
   build-linux-x86_64-musl:
     name: "linux x86_64 musl"
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -96,7 +97,7 @@ jobs:
   # ── Linux aarch64 musllinux (cp37-abi3) ─────────────────────────────────
   build-linux-aarch64-musl:
     name: "linux aarch64 musl"
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,7 +124,7 @@ jobs:
   # ── Windows AMD64 ────────────────────────────────────────────────────────
   build-win-amd64:
     name: "windows amd64"
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,7 +145,7 @@ jobs:
   # ── Windows ARM64 ────────────────────────────────────────────────────────
   build-win-arm64:
     name: "windows arm64"
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -242,6 +243,7 @@ jobs:
         run: ls -lh dist/
 
       - name: Upload to GitHub Release
+        if: startsWith(inputs.tag, 'v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
@@ -249,6 +251,7 @@ jobs:
           fail_on_unmatched_files: false
 
       - name: Publish to PyPI
+        if: startsWith(inputs.tag, 'v')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
