@@ -389,21 +389,33 @@ def _maybe_install_c_dispatcher():
     compiler_args = []
 
     if sys.platform == "win32":
-        # Try MSVC cl.exe first (in PATH or common VS install locations)
-        cl = shutil.which("cl")
+        # Always search VS install locations directly for a 64-bit cl.exe.
+        # Do NOT use shutil.which("cl") — the shell PATH may contain an x86
+        # cl.exe (e.g. from a Developer Command Prompt targeting x86), which
+        # produces a 32-bit binary that cannot replace the 64-bit 8pkg.exe.
+        # We prefer Hostx64\x64 (native 64-bit host + 64-bit output) and fall
+        # back to HostX86\x64 (32-bit host cross-compiling to 64-bit output).
+        import glob as _cgl
+        cl = None
+        _vs_patterns = [
+            # Native 64-bit host → 64-bit output (best)
+            "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            # 32-bit host → 64-bit output (cross; works on WOW64 machines)
+            "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
+            "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
+        ]
+        for _pat in _vs_patterns:
+            _matches = sorted(_cgl.glob(_pat), reverse=True)  # sort so newest VS wins
+            if _matches:
+                cl = _matches[0]
+                break
+        # Last resort: whatever cl.exe is in PATH — but warn in debug so it's
+        # visible when the wrong architecture is picked up.
         if not cl:
-            # vcvarsall not run — search common MSVC install paths directly
-            import glob as _cgl
-            _vs_patterns = [
-                "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
-                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
-                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
-            ]
-            for _pat in _vs_patterns:
-                _matches = _cgl.glob(_pat)
-                if _matches:
-                    cl = _matches[0]
-                    break
+            cl = shutil.which("cl")
+            if cl and debug:
+                print(f"[C-INSTALL] WARNING: using cl.exe from PATH ({cl}) — may be wrong arch", file=sys.stderr)
         if cl:
             compiler = cl
             compiler_args = ["/O2", "/Fe:{out}", "{src}", "ws2_32.lib"]
@@ -507,10 +519,16 @@ def _maybe_install_c_dispatcher():
     if sys.platform == "win32" and "cl" in (compiler or "").lower():
         try:
             cl_path = Path(compiler)
-            # cl.exe lives at: .../MSVC/<ver>/bin/HostX64/x64/cl.exe
-            msvc_root = cl_path.parent.parent.parent.parent
+            # cl.exe lives at: .../MSVC/<ver>/bin/Host<X>/x64/cl.exe
+            # The LAST directory component before cl.exe is the TARGET arch
+            # (x64, x86, arm, arm64).  We derive lib paths from this so we
+            # never accidentally mix architectures (e.g. x86 compiler + x64 libs).
+            target_arch = cl_path.parent.name.lower()   # e.g. "x64" or "x86"
+            msvc_root   = cl_path.parent.parent.parent.parent  # .../MSVC/<ver>/
             msvc_include = str(msvc_root / "include")
-            msvc_lib     = str(msvc_root / "lib" / "x64")
+            msvc_lib     = str(msvc_root / "lib" / target_arch)
+            if debug:
+                print(f"[C-INSTALL] cl.exe target_arch={target_arch}  msvc_lib={msvc_lib}", file=sys.stderr)
             sdk_includes, sdk_libs = [], []
             sdk_base = Path("C:/Program Files (x86)/Windows Kits/10")
             if not sdk_base.exists():
@@ -526,7 +544,7 @@ def _maybe_install_c_dispatcher():
                         if p.exists():
                             sdk_includes.append(str(p))
                     lib_ver = lib_base / sdk_ver.name
-                    for sub in ("ucrt/x64", "um/x64"):
+                    for sub in (f"ucrt/{target_arch}", f"um/{target_arch}"):
                         p = lib_ver / sub.replace("/", os.sep)
                         if p.exists():
                             sdk_libs.append(str(p))
@@ -861,27 +879,35 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool) -> None:
                 print(f"[C-INSTALL] ghost: could not write C source: {e}", file=sys.stderr)
             return
 
-        # Find a compiler — same search order as _maybe_install_c_dispatcher
+        # Find a compiler — same search order as _maybe_install_c_dispatcher.
+        # Always prefer VS install globs over shutil.which("cl") so we get the
+        # correct target architecture (Hostx64/x64) not whatever the shell PATH
+        # happens to expose first (which may be HostX86/x86).
         import glob as _cgl
-        cl = shutil.which("cl")
+        cl = None
+        for _pat in [
+            "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
+            "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
+        ]:
+            _m = sorted(_cgl.glob(_pat), reverse=True)
+            if _m:
+                cl = _m[0]
+                break
         if not cl:
-            for _pat in [
-                "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
-                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
-            ]:
-                _m = _cgl.glob(_pat)
-                if _m:
-                    cl = _m[0]
-                    break
+            cl = shutil.which("cl")
 
         if cl:
-            # Build INCLUDE/LIB env the same way _maybe_install_c_dispatcher does
+            # Build INCLUDE/LIB env — derive target arch from the compiler path
+            # so we never mix architectures (e.g. x86 compiler + x64 libs).
             compile_env = os.environ.copy()
             try:
                 cl_path = Path(cl)
+                target_arch = cl_path.parent.name.lower()  # x64 or x86
                 msvc_root = cl_path.parent.parent.parent.parent
                 msvc_include = str(msvc_root / "include")
-                msvc_lib = str(msvc_root / "lib" / "x64")
+                msvc_lib = str(msvc_root / "lib" / target_arch)
                 sdk_includes, sdk_libs = [], []
                 sdk_base = Path("C:/Program Files (x86)/Windows Kits/10")
                 if not sdk_base.exists():
@@ -897,7 +923,7 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool) -> None:
                             if p.exists():
                                 sdk_includes.append(str(p))
                         lib_ver = lib_base / sdk_ver.name
-                        for sub in ("ucrt/x64", "um/x64"):
+                        for sub in (f"ucrt/{target_arch}", f"um/{target_arch}"):
                             p = lib_ver / sub.replace("/", os.sep)
                             if p.exists():
                                 sdk_libs.append(str(p))
