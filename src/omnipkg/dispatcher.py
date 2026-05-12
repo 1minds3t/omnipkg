@@ -757,10 +757,18 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
             print(f"[C-INSTALL] ghost: ghost.c not found in any candidate — cannot swap", file=sys.stderr)
         return
 
-    # ── Ghost exe cached by src_hash prefix in temp dir ───────────────────────
+    # ── Ghost exe cached by ghost.c's OWN hash in temp dir ──────────────────
+    # CRITICAL: cache key must be derived from ghost.c's content, NOT from
+    # dispatcher.c's hash (src_hash).  Using src_hash meant that fixing ghost.c
+    # had no effect until dispatcher.c also changed — the cached ghost exe
+    # filename stayed the same and `if not ghost_exe.exists()` skipped recompile.
     ghost_dir = Path(tempfile.gettempdir()) / "omnipkg"
     ghost_dir.mkdir(parents=True, exist_ok=True)
-    ghost_tag = src_hash[:8] if src_hash else "nogit"
+    try:
+        ghost_self_hash = hashlib.md5(ghost_c_src.read_bytes()).hexdigest()[:8]
+    except Exception:
+        ghost_self_hash = src_hash[:8] if src_hash else "nogit"
+    ghost_tag = ghost_self_hash
     ghost_exe = ghost_dir / f"omnipkg_ghost_{ghost_tag}.exe"
 
     if not ghost_exe.exists():
