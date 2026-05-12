@@ -486,7 +486,13 @@ def _maybe_install_c_dispatcher():
                 adopted_ok = False
                 if adopted_marker.exists():
                     try:
-                        adopted_ok = adopted_marker.read_text(encoding="utf-8").strip() == src_hash
+                        # Handle both marker formats:
+                        #   "hash:path"  written by ghost.c and _install_binary_into_bin_dir
+                        #   "hash"       written by _push_binary_to_bin_dir (older format)
+                        # Always extract the hash prefix so both compare correctly.
+                        adopted_content = adopted_marker.read_text(encoding="utf-8").strip()
+                        adopted_stored_hash = adopted_content.split(":", 1)[0].strip()
+                        adopted_ok = (adopted_stored_hash == src_hash)
                     except Exception:
                         pass
                 if not adopted_ok:
@@ -685,8 +691,11 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
                 print(f"[C-INSTALL] could not replace {target}: {e}", file=sys.stderr)
 
     # ── Ghost spawn (Windows only) ────────────────────────────────────────────
-    # Spawn one ghost process that handles ALL pending swaps sequentially.
-    # Each swap: wait for our PID to die, MoveFileExA the new binary into place.
+    # Spawn one ghost process that handles ALL pending swaps.
+    # Ghost waits for our PID to die, then CopyFileA each _tmp.exe -> target,
+    # verifies size, deletes _tmp, and writes the marker.
+    # (Old approach used MoveFileExA which deleted src after the first copy,
+    # causing all subsequent targets to fail with ERROR_FILE_NOT_FOUND.)
     if ghost_needed:
         _mk_path = target_bin / '.omnipkg_dispatch_compiled'
         _mk_content = f'{src_hash}:{c_src}' if (src_hash and c_src) else ''
@@ -895,6 +904,7 @@ def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) 
     # the currently-running exe (the running exe lives in native_bin, not in any
     # adopted interpreter's bin/).  So on Windows we do a plain direct copy here;
     # no ghost spawn needed.
+    src_size = src_binary.stat().st_size if src_binary.exists() else 0
     replaced = []
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
         target = target_bin / (name + _exe)
@@ -902,18 +912,34 @@ def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) 
             try:
                 shutil.copy2(str(src_binary), str(target))
                 os.chmod(str(target), 0o755)
+                # Verify the copy actually landed (catches silent partial writes)
+                dst_size = target.stat().st_size if target.exists() else 0
+                if src_size > 0 and dst_size != src_size:
+                    if debug:
+                        print(f"[C-INSTALL] push: VERIFY FAILED {target}: expected {src_size}B got {dst_size}B", file=sys.stderr)
+                    continue
                 replaced.append(name + _exe)
-            except Exception as e:
                 if debug:
-                    print(f"[C-INSTALL] push: could not replace {target}: {e}", file=sys.stderr)
+                    print(f"[C-INSTALL] push: replaced {target} ({dst_size}B)", file=sys.stderr)
+            except Exception as e:
+                # Always surface copy failures — silent skip is why pushes appear to
+                # succeed but the binary never actually lands.
+                print(f"[WARNING-C-INSTALL] push: could not replace {target}: {e}", file=sys.stderr)
 
     if replaced and src_hash:
         try:
-            (target_bin / ".omnipkg_dispatch_compiled").write_text(src_hash, encoding="utf-8")
+            # Write "hash:path" format to match _install_binary_into_bin_dir and ghost.c.
+            # _push_binary_to_bin_dir previously wrote hash-only, which caused the
+            # adopted-bin marker comparison in _maybe_install_c_dispatcher to need
+            # special-casing. Using the same format everywhere simplifies the check.
+            c_src_path = native_bin / "dispatcher.c"  # best-effort; C side doesn't use it
+            marker_content = f"{src_hash}:{c_src_path}" if c_src_path.exists() else src_hash
+            (target_bin / ".omnipkg_dispatch_compiled").write_text(marker_content, encoding="utf-8")
             if debug:
-                print(f"[C-INSTALL] push: marker written -> {target_bin}", file=sys.stderr)
-        except Exception:
-            pass
+                print(f"[C-INSTALL] push: marker written ({src_hash[:8]}…) -> {target_bin}", file=sys.stderr)
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] push: could not write marker in {target_bin}: {e}", file=sys.stderr)
 
 def determine_target_python() -> Path:
     """
@@ -1988,10 +2014,13 @@ def _ensure_all_version_shims(bin_dir: Path, debug_mode: bool = False) -> None:
                 bat_path = bin_dir / f"{base_name}{flat}.bat"
                 bat_content = f'@echo off\r\n"{src_exe}" --python {ver} %*\r\n'
                 # Idempotency: skip only if existing content is already correct.
+                # Normalize CRLF before comparing: Python's read_text() on Windows
+                # may return \n-only even though the file has \r\n on disk (universal
+                # newlines mode), causing a spurious mismatch on every invocation.
                 if bat_path.exists():
                     try:
                         existing = bat_path.read_text(encoding="ascii")
-                        if existing == bat_content:
+                        if existing.replace('\r\n', '\n') == bat_content.replace('\r\n', '\n'):
                             continue  # already correct — truly idempotent
                         # Content is stale (e.g. src_exe path changed) — rewrite below
                         if debug_mode:
@@ -2141,10 +2170,13 @@ def install_versioned_entrypoints(
             _ver = f"{_maj}.{_min}"
             bat_content = f'@echo off\r\n"{src_bat}" --python {_ver} %*\r\n'
             # Idempotency: skip only if existing content is already correct.
+            # Normalize CRLF before comparing: Python's read_text() on Windows
+            # may return \n-only even though the file has \r\n on disk (universal
+            # newlines mode), causing a spurious mismatch on every invocation.
             if link_bat.exists():
                 try:
                     existing = link_bat.read_text(encoding="ascii")
-                    if existing == bat_content:
+                    if existing.replace('\r\n', '\n') == bat_content.replace('\r\n', '\n'):
                         continue  # already correct
                     if debug_mode:
                         print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {link_bat.name} — rewriting", file=sys.stderr)
