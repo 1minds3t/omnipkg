@@ -2924,31 +2924,49 @@ class PersistentWorker:
             return False
 
     def force_shutdown(self):
-        """Forcefully shutdown worker."""
+        """Forcefully shutdown worker using a belt-and-suspenders approach."""
         with self.lock:
             if self.process:
                 try:
-                    # First check if already dead (workers that ran run_cli call sys.exit)
+                    # 1. Check if already dead
                     if self.process.poll() is None:
-                        # Still running — try graceful shutdown
+                        # Try graceful shutdown via stdin first
                         try:
                             self.process.stdin.write(json.dumps({"type": "shutdown"}) + "\n")
                             self.process.stdin.flush()
                         except Exception:
                             pass
-                    self.process.wait(timeout=2)
-                except Exception:
+                    
+                    # Give it a tiny window to exit gracefully
                     try:
-                        if not IS_WINDOWS:
-                            os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
-                        else:
-                            self.process.terminate()
+                        self.process.wait(timeout=1)
                     except Exception:
                         pass
+                except Exception:
+                    pass
+
+                # 2. THE NUCLEAR STRIKE
+                try:
+                    if not IS_WINDOWS:
+                        # Linux: Kill the entire process group
+                        os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
+                    else:
+                        # Windows: Step A - Standard Python termination
+                        self.process.terminate() 
+                        
+                        # Windows: Step B - Recursive Tree Kill via taskkill
+                        # This nukes the process AND every single child/grandchild it spawned
+                        subprocess.run(
+                            ["taskkill", "/F", "/T", "/PID", str(self.process.pid)],
+                            capture_output=True, 
+                            check=False
+                        )
+                except Exception:
+                    pass
                 finally:
                     self.process = None
 
-            # 🔥 FIX: Close log file handle
+            # Close handles to release file locks immediately
             if hasattr(self, "log_file") and self.log_file:
                 try:
                     self.log_file.close()
@@ -5015,8 +5033,8 @@ class WorkerPoolDaemon:
         # Shutdown executor first (non-blocking)
         try:
             self.executor.shutdown(wait=False)
-        except Exception:
-            pass
+        except Exception as e:
+            self.log(f"[SHUTDOWN] ⚠️ Executor shutdown failed: {e}")
 
         # Collect all PIDs before we start killing
         all_pids = []
@@ -5026,8 +5044,8 @@ class WorkerPoolDaemon:
             try:
                 if worker.process and worker.process.pid:
                     all_pids.append(worker.process.pid)
-            except Exception:
-                pass
+            except Exception as e:
+                self.log(f"  ⚠️ Could not retrieve PID for UV worker {py_exe}: {e}")
 
         # Idle CLI workers
         for py_exe, pool in list(getattr(self, "idle_pools", {}).items()):
@@ -5036,8 +5054,8 @@ class WorkerPoolDaemon:
                     w = pool.get_nowait()
                     if w.process and w.process.pid:
                         all_pids.append(w.process.pid)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.log(f"  ⚠️ Could not retrieve PID from idle pool {py_exe}: {e}")
 
         # Spec workers
         with self.pool_lock:
@@ -5049,13 +5067,14 @@ class WorkerPoolDaemon:
                 if w and w.process and w.process.pid:
                     all_pids.append(w.process.pid)
                 info["worker"].force_shutdown()
-            except Exception:
-                pass
+            except Exception as e:
+                self.log(f"  🚨 Critical failure during worker force_shutdown: {e}")
 
         # Wait up to 2s for graceful termination
         import time as _st
         deadline = _st.time() + 2.0
         remaining = list(all_pids)
+        self.log(f"[SHUTDOWN] Waiting for {len(remaining)} processes to exit gracefully...")
         while remaining and _st.time() < deadline:
             _st.sleep(0.05)
             still_alive = []
@@ -5071,13 +5090,24 @@ class WorkerPoolDaemon:
                         os.kill(pid, 0)
                         still_alive.append(pid)
                 except (OSError, Exception):
-                    pass
+                    # Process is gone - this is the desired outcome
+                    pass 
             remaining = still_alive
 
         # Force kill anything still alive
         for pid in remaining:
             try:
                 if IS_WINDOWS:
+                    # 1. THE NUCLEAR STRIKE FIRST
+                    # We kill the tree while the parent is still alive 
+                    # so Windows can correctly identify and kill all descendants.
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        capture_output=True, check=False
+                    )
+                    
+                    # 2. THE CLEANUP (Belt and Suspenders)
+                    # Just in case taskkill missed the root for some bizarre reason
                     import ctypes
                     handle = ctypes.windll.kernel32.OpenProcess(1, False, pid)
                     if handle:
@@ -5085,9 +5115,11 @@ class WorkerPoolDaemon:
                         ctypes.windll.kernel32.CloseHandle(handle)
                 else:
                     os.kill(pid, signal.SIGKILL)
-                self.log(f"  Force-killed straggler PID {pid}")
-            except Exception:
-                pass
+                
+                self.log(f"  Force-killed tree for straggler PID {pid}")
+            except Exception as e:
+                # 🔥 LOG THE ERROR: Now we know if it was AccessDenied or ProcessNotFound
+                self.log(f"  🚨 Failed to kill PID {pid}: {e}")
         # Stop fs_watcher BEFORE cleaning up socket/pid files
         # The watchdog Observer thread is non-daemon and will block sys.exit forever
         # if we don't explicitly stop it here.
@@ -5106,14 +5138,18 @@ class WorkerPoolDaemon:
                 continue
             try:
                 os.unlink(path)
-            except OSError:
-                pass
+            except FileNotFoundError:
+                pass # Already gone, no need to log
+            except Exception as e:
+                # 🔥 LOG THE ERROR: This tells us if a process is still locking the PID file
+                self.log(f"  ⚠️  Failed to unlink {path}: {e}")
         # Also clean connection announcement file
         try:
             conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
             os.unlink(conn_file)
-        except OSError:
-            pass
+        except Exception as e:
+            # 🔥 LOG THE ERROR: Now we can see if the temp folder has permission issues
+            self.log(f"  ⚠️  Failed to unlink connection file {conn_file}: {e}")
 
     @classmethod
     def is_running(cls) -> bool:

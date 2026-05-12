@@ -170,6 +170,8 @@ class BubbleProfiler:
 
 
 class omnipkgLoader:
+    _dep_cache_built_at = 0.0
+    _dependency_cache = None
     """
     Activates isolated package environments with optional persistent worker pool.
     """
@@ -388,6 +390,7 @@ class omnipkgLoader:
             # Set key prefix
             base = config.get("redis_key_prefix", "omnipkg:pkg:").split(":")[0]
             self.redis_key_prefix = f"{base}:env_{env_id}:{py_ver}:pkg:"
+            omnipkgLoader._dep_cache_built_at = time.time()
 
         except Exception as e:
             # If cache init fails, set to None (will skip KB optimization)
@@ -403,14 +406,16 @@ class omnipkgLoader:
         """
         try:
             from omnipkg.isolation.fs_lock_queue import DepCacheSentinel
-            if sentinel_is_dirty := DepCacheSentinel(self.multiversion_base).is_dirty_since(
+            sentinel_is_dirty = DepCacheSentinel(self.multiversion_base).is_dirty_since(
                 omnipkgLoader._dep_cache_built_at
-            ):
+            )
+            if sentinel_is_dirty:
                 if not self.quiet:
                     safe_print("   ♻️  [cache] FS change detected — refreshing dep cache")
                 omnipkgLoader._dependency_cache = None
-        except Exception:
-            pass
+        except Exception as e:
+            # FIXED: Replaced 'pass' with an error message
+            safe_print(f"   ⚠️  [cache] Error occurred while checking dependency cache: {e}")
 
     def _profile_start(self, label):
         """Start timing a profiled section"""
@@ -1025,6 +1030,7 @@ class omnipkgLoader:
 
         # --- Store the result in the cache for next time ---
         omnipkgLoader._dependency_cache = dependencies
+        omnipkgLoader._dep_cache_built_at = time.time()
         return dependencies
 
     def _detect_omnipkg_dependencies(self):
