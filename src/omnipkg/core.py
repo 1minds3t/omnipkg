@@ -913,7 +913,7 @@ class ConfigManager:
 
                         # ⚠️ CRITICAL FIX: If the path is NOT inside .omnipkg/interpreters/, it's native
                         # BUT also check if it's the SAME version as a downloaded one
-                        if not str(path).startswith(str(managed_interpreters_dir)):
+                        if not str(path).lower().startswith(str(managed_interpreters_dir).lower()):
                             if path.exists():  # Only preserve if still exists
                                 native_interpreters[version] = path_str
                                 safe_print(
@@ -1267,6 +1267,7 @@ class ConfigManager:
                         "pip",
                         "install",
                         "--no-cache-dir",
+                        "--extra-index-url", "https://exotic-wheels.github.io",
                     ] + sorted(list(filtered_deps))
                     try:
                         run_verbose(deps_install_cmd, "Failed to install omnipkg dependencies.")
@@ -1985,7 +1986,11 @@ class ConfigManager:
                     ]
                     source_python_dir = None
                     for possible_dir in possible_install_dirs:
-                        if possible_dir.exists() and (possible_dir / "bin").exists():
+                        if not possible_dir.exists():
+                            continue
+                        # Windows legacy builds have python.exe at root, Linux/mac have bin/
+                        has_python = (possible_dir / "python.exe").exists() or (possible_dir / "bin").exists()
+                        if has_python:
                             source_python_dir = possible_dir
                             break
 
@@ -11462,7 +11467,7 @@ class omnipkg:
         interpreter_path_obj = Path(interpreter_path)
         managed_interpreters_dir = self.config_manager.venv_path / ".omnipkg" / "interpreters"
 
-        is_native = not str(interpreter_path_obj).startswith(str(managed_interpreters_dir))
+        is_native = not str(interpreter_path_obj).lower().startswith(str(managed_interpreters_dir).lower())
         if is_native:
             safe_print(
                 _("❌ SAFETY LOCK: Cannot remove native Python interpreter ({}).").format(version)
@@ -11520,18 +11525,8 @@ class omnipkg:
                 safe_print(_("   ✅ Symlink removed."))
             elif interpreter_root_dir.is_dir():
                 shutil.rmtree(interpreter_root_dir)
-                safe_print(_("   ✅ Directory removed."))
-                # Clean up versioned symlinks in native bin
-                native_bin = Path(sys.executable).parent
-                mm_nodot = version.replace(".", "")
-                for base_name in ("8pkg", "omnipkg", "8PKG", "OMNIPKG"):
-                    link = native_bin / f"{base_name}{mm_nodot}"
-                    try:
-                        if link.is_symlink() or link.exists():
-                            link.unlink()
-                            safe_print(_("   🧹 Removed versioned shim: {}").format(link.name))
-                    except Exception:
-                        pass
+                safe_print(_("   ✅ Directory removed."))  
+
             else:
                 interpreter_root_dir.unlink()
                 safe_print(_("   ✅ File removed."))
@@ -11539,25 +11534,27 @@ class omnipkg:
             safe_print(_("❌ Failed to remove: {}").format(e))
             return 1
 
-        # Also remove any versioned shims pointing to this interpreter (Unix symlinks
-        # created by older omnipkg versions, or Windows .bat files)
-        shims_dir = self.config_manager.venv_path / ".omnipkg" / "shims"
-        if shims_dir.exists():
-            mm_nodot = version.replace(".", "")
-            stale_patterns = [
-                f"python{version}", f"python{mm_nodot}",
-                f"pip{version}", f"pip{mm_nodot}",
-                f"python{version}.bat", f"python{mm_nodot}.bat",
-                f"pip{version}.bat", f"pip{mm_nodot}.bat",
-            ]
-            for name in stale_patterns:
-                p = shims_dir / name
-                try:
-                    if p.exists() or p.is_symlink():
-                        p.unlink()
-                        safe_print(_("   🧹 Removed stale shim: {}").format(name))
-                except Exception:
-                    pass
+        # Retarget versioned shims to base dispatcher so C can intercept and auto-adopt
+        native_bin = Path(sys.executable).parent
+        mm_nodot = version.replace(".", "")
+        try:
+            from omnipkg.dispatcher import install_versioned_entrypoints
+            venv_root = self.config_manager.venv_path
+            base_dispatcher = native_bin / "omnipkg"
+            if base_dispatcher.exists():
+                install_versioned_entrypoints(base_dispatcher, version, venv_root)
+        except Exception as e:
+            # Fallback: manual retarget
+            for base_name in ("8pkg", "omnipkg"):
+                versioned = native_bin / f"{base_name}{mm_nodot}"
+                base = native_bin / base_name
+                if base.exists() and (versioned.is_symlink() or versioned.exists()):
+                    try:
+                        versioned.unlink()
+                        versioned.symlink_to(base.name)
+                        safe_print(_("   🔗 Retargeted shim: {} → {}").format(versioned.name, base.name))
+                    except Exception as e2:
+                        safe_print(_("   ⚠️  Could not retarget {}: {}").format(versioned.name, e2))
 
         # Clean up knowledge base
         if hasattr(self, "cache_client") and self.cache_client is not None:
@@ -16700,7 +16697,7 @@ print(json.dumps(results))
                     numpy_constraint = get_numpy_constraint(pkg_name, pkg_ver)
                     
                     if numpy_constraint:
-# Check what numpy was installed
+                    # Check what numpy was installed
                         numpy_check = subprocess.run(
                             [self.config["python_executable"], "-c",
                              f"import sys; sys.path.insert(0, '{target_directory}'); import numpy; print(numpy.__version__)"],
