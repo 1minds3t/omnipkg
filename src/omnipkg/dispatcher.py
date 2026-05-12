@@ -328,11 +328,10 @@ def _collect_all_dispatcher_bin_dirs() -> list:
     """
     from pathlib import Path
     native_bin = Path(sys.executable).parent
-    # On Windows python.exe is in root but entry-point exes live in Scripts/
     if sys.platform == 'win32':
-        _scripts = native_bin / 'Scripts'
-        if _scripts.exists():
-            native_bin = _scripts
+        _s = native_bin / 'Scripts'
+        if _s.exists():
+            native_bin = _s
     dirs = [native_bin]
     try:
         venv_root = Path(sys.prefix)
@@ -645,6 +644,9 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     if sys.platform == "win32":
         try:
             running_exe_resolved = Path(sys.argv[0]).resolve()
+            # sys.argv[0] on Windows is often bare 'C:\...\8pkg' without .exe
+            if running_exe_resolved.suffix.lower() != '.exe':
+                running_exe_resolved = running_exe_resolved.with_suffix('.exe')
         except Exception:
             pass
 
@@ -661,7 +663,6 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
         if sys.platform == "win32" and running_exe_resolved is not None:
             try:
                 target_resolved = target.resolve()
-                # Windows FS is case-insensitive — compare lowercased paths
                 is_running = (str(target_resolved).lower() == str(running_exe_resolved).lower())
             except Exception:
                 is_running = False
@@ -670,9 +671,7 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
                 if debug:
                     print(f"[C-INSTALL] install: {target.name} is the running exe — scheduling ghost swap", file=sys.stderr)
                 ghost_needed.append((Path(binary_tmp), target))
-                # DO NOT add to replaced here — ghost writes the marker
-                # after swap completes. Optimistic marker write here caused
-                # hash-match=True on next run, skipping ghost permanently.
+                # DO NOT write marker here — ghost writes it after swap completes.
                 continue
 
         # ── Normal path: direct copy (Unix always; Windows for non-running exes) ─
@@ -688,10 +687,10 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     # Spawn one ghost process that handles ALL pending swaps sequentially.
     # Each swap: wait for our PID to die, MoveFileExA the new binary into place.
     if ghost_needed:
-        _marker_path = target_bin / '.omnipkg_dispatch_compiled'
-        _marker_content = f'{src_hash}:{c_src}' if (src_hash and c_src) else ''
+        _mk_path = target_bin / '.omnipkg_dispatch_compiled'
+        _mk_content = f'{src_hash}:{c_src}' if (src_hash and c_src) else ''
         _ghost_spawn_windows(ghost_needed, src_hash, debug,
-                             marker_path=_marker_path, marker_content=_marker_content)
+                             marker_path=_mk_path, marker_content=_mk_content)
 
     # Versioned shims 3.7-3.15 — native bin only.
     # Adopted interpreter bin dirs are not the dispatch root.
@@ -837,7 +836,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Step 5b: write marker file so next invocation sees hash-match */
+    /* Step 5b: write marker so next invocation skips recompile */
     if (all_ok && marker_path[0] && marker_content[0]) {
         FILE *mf = fopen(marker_path, "w");
         if (mf) { fputs(marker_content, mf); fclose(mf); }
