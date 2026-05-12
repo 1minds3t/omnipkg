@@ -658,6 +658,7 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
             pass
 
     ghost_needed = []  # (binary_tmp_path, target_path) pairs to hand off to ghost
+    primary_via_ghost = False  # True when 8pkg.exe (ghost[0]) owns the marker write
 
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
         target = target_bin / (name + _exe)
@@ -677,6 +678,9 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
             if is_running:
                 if debug:
                     print(f"[C-INSTALL] install: {target.name} is the running exe — scheduling ghost swap", file=sys.stderr)
+                if len(ghost_needed) == 0:
+                    # First ghost entry == ghost[0] == primary; it owns the marker write.
+                    primary_via_ghost = True
                 ghost_needed.append((Path(binary_tmp), target))
                 # DO NOT add to replaced — ghost writes marker after swap.
                 continue
@@ -710,10 +714,11 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     # - Adopted: that interpreter's own bin/ gets its own C binary after adoption.
     # The C binary must never be copied here for non-adopted interpreters.
 
-    # Write "hash:abspath_to_dispatcher.c" into marker so:
-    #   - Python side: hash detects source changes
-    #   - C side: reads the path directly, no candidate guessing needed
-    if replaced and src_hash and c_src:
+    # Write marker from Python only when ghost[0] is NOT responsible for it.
+    # If 8pkg.exe went via ghost, ghost[0] writes the marker after MoveFileExA
+    # completes. Writing it here first causes the next invocation to see
+    # hash-match before the swap lands, leaving 8pkg.exe as the old Python binary.
+    if replaced and src_hash and c_src and not primary_via_ghost:
         try:
             (target_bin / ".omnipkg_dispatch_compiled").write_text(
                 f"{src_hash}:{c_src}", encoding="utf-8"
