@@ -328,6 +328,11 @@ def _collect_all_dispatcher_bin_dirs() -> list:
     """
     from pathlib import Path
     native_bin = Path(sys.executable).parent
+    # On Windows python.exe is in root but entry-point exes live in Scripts/
+    if sys.platform == 'win32':
+        _scripts = native_bin / 'Scripts'
+        if _scripts.exists():
+            native_bin = _scripts
     dirs = [native_bin]
     try:
         venv_root = Path(sys.prefix)
@@ -474,58 +479,23 @@ def _maybe_install_c_dispatcher():
             stored_hash = marker_content.split(":", 1)[0].strip()
         except Exception:
             stored_hash = ""
-        if stored_hash == src_hash and src_hash:
-            # On Windows: if the marker says "compiled" but we're still running
-            # the Python dispatcher, the ghost swap either hasn't happened yet
-            # or failed silently.  Detect by checking the running exe size:
-            # our C dispatcher is <80 KB; the pip Python launcher is >100 KB.
-            # If it's still the pip launcher, delete the stale marker so the
-            # compile + ghost-swap path runs again this invocation.
-            if sys.platform == "win32":
-                try:
-                    running_exe = Path(sys.argv[0]).resolve()
-                    if running_exe.suffix.lower() == ".exe" and running_exe.stat().st_size > 100_000:
-                        if debug:
-                            print(f"[C-INSTALL] stale marker: {running_exe.name} "
-                                  f"is {running_exe.stat().st_size//1024} KB — still pip launcher. "
-                                  f"Deleting marker to re-trigger ghost swap.", file=sys.stderr)
-                        marker.unlink(missing_ok=True)
-                        # Fall through to recompile block below
-                    else:
-                        # Exe is our C binary — sync adopted bins and return
-                        for adopted_bin in _collect_all_dispatcher_bin_dirs()[1:]:
-                            adopted_marker = adopted_bin / ".omnipkg_dispatch_compiled"
-                            adopted_ok = False
-                            if adopted_marker.exists():
-                                try:
-                                    adopted_ok = adopted_marker.read_text(encoding="utf-8").strip() == src_hash
-                                except Exception:
-                                    pass
-                            if not adopted_ok:
-                                _push_binary_to_bin_dir(bin_dir, adopted_bin, src_hash, debug)
-                        if debug:
-                            print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
-                        return
-                except Exception as _se:
-                    if debug:
-                        print(f"[C-INSTALL] stale-marker size-check failed: {_se} — proceeding", file=sys.stderr)
-                    # Marker exists and check failed — assume up to date, return
-                    return
-            else:
-                # Unix: no ghost-swap race; marker match always means C binary is live
-                for adopted_bin in _collect_all_dispatcher_bin_dirs()[1:]:  # skip native (index 0)
-                    adopted_marker = adopted_bin / ".omnipkg_dispatch_compiled"
-                    adopted_ok = False
-                    if adopted_marker.exists():
-                        try:
-                            adopted_ok = adopted_marker.read_text(encoding="utf-8").strip() == src_hash
-                        except Exception:
-                            pass
-                    if not adopted_ok:
-                        _push_binary_to_bin_dir(bin_dir, adopted_bin, src_hash, debug)
-                if debug:
-                    print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
-                return
+        if stored_hash == src_hash and src_hash:            # Native bin is up to date. Also push to any adopted bin dirs that
+            # are missing their marker or have a stale hash — this heals adopted
+            # interpreters that were added after the last compile.
+            for adopted_bin in _collect_all_dispatcher_bin_dirs()[1:]:  # skip native (index 0)
+                adopted_marker = adopted_bin / ".omnipkg_dispatch_compiled"
+                adopted_ok = False
+                if adopted_marker.exists():
+                    try:
+                        adopted_ok = adopted_marker.read_text(encoding="utf-8").strip() == src_hash
+                    except Exception:
+                        pass
+                if not adopted_ok:
+                    # Push native binary to this adopted bin/ without recompiling
+                    _push_binary_to_bin_dir(bin_dir, adopted_bin, src_hash, debug)
+            if debug:
+                print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
+            return
 
     # ── Failure marker check (all platforms) ─────────────────────────────────
     # If we previously failed to compile this exact source hash, don't retry
@@ -691,7 +661,8 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
         if sys.platform == "win32" and running_exe_resolved is not None:
             try:
                 target_resolved = target.resolve()
-                is_running = (target_resolved == running_exe_resolved)
+                # Windows FS is case-insensitive — compare lowercased paths
+                is_running = (str(target_resolved).lower() == str(running_exe_resolved).lower())
             except Exception:
                 is_running = False
 
@@ -699,11 +670,9 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
                 if debug:
                     print(f"[C-INSTALL] install: {target.name} is the running exe — scheduling ghost swap", file=sys.stderr)
                 ghost_needed.append((Path(binary_tmp), target))
-                # DO NOT add to replaced here — marker will be written by the
-                # ghost process itself after the swap completes.  Writing the
-                # marker optimistically here causes the next invocation to see
-                # hash-match=True and skip the compile entirely, leaving the
-                # pip-installed Python launcher in place forever.
+                # DO NOT add to replaced here — ghost writes the marker
+                # after swap completes. Optimistic marker write here caused
+                # hash-match=True on next run, skipping ghost permanently.
                 continue
 
         # ── Normal path: direct copy (Unix always; Windows for non-running exes) ─
@@ -719,7 +688,10 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     # Spawn one ghost process that handles ALL pending swaps sequentially.
     # Each swap: wait for our PID to die, MoveFileExA the new binary into place.
     if ghost_needed:
-        _ghost_spawn_windows(ghost_needed, src_hash, debug, marker_path=target_bin / ".omnipkg_dispatch_compiled", marker_content=f"{src_hash}:{c_src}" if c_src else "")
+        _marker_path = target_bin / '.omnipkg_dispatch_compiled'
+        _marker_content = f'{src_hash}:{c_src}' if (src_hash and c_src) else ''
+        _ghost_spawn_windows(ghost_needed, src_hash, debug,
+                             marker_path=_marker_path, marker_content=_marker_content)
 
     # Versioned shims 3.7-3.15 — native bin only.
     # Adopted interpreter bin dirs are not the dispatch root.
@@ -865,13 +837,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Step 5b: write marker file so next invocation skips recompile */
+    /* Step 5b: write marker file so next invocation sees hash-match */
     if (all_ok && marker_path[0] && marker_content[0]) {
         FILE *mf = fopen(marker_path, "w");
-        if (mf) {
-            fputs(marker_content, mf);
-            fclose(mf);
-        }
+        if (mf) { fputs(marker_content, mf); fclose(mf); }
     }
 
     /* Step 6: optional re-exec so the same invocation finishes as pure C */
@@ -1030,8 +999,6 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
     cmd_args = [str(ghost_exe), "--ghost", str(my_pid)]
     for src, dst in swaps:
         cmd_args += [str(src), str(dst)]
-    # Pass marker path+content so ghost writes it after swap, closing the
-    # hash-check loop that was broken by the old optimistic marker write.
     if marker_path and marker_content:
         cmd_args += ["--marker", str(marker_path), marker_content]
 
