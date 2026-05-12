@@ -2036,7 +2036,10 @@ def main():
                     _("🗑️  Uninstalling Python interpreter(s): {}").format(", ".join(python_versions))
                 )
                 for version in python_versions:
-                    result = pkg_instance.remove_interpreter(version, force=args.force)
+                    result = pkg_instance.remove_interpreter(
+                        version, 
+                        force=args.force or not is_interactive
+                    )
                     if result != 0:
                         safe_print(_("⚠️  Warning: Failed to remove Python {}").format(version))
 
