@@ -861,20 +861,25 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
             continue
 
         # Build argv: ghost exe moves itself to target, primary also writes marker
+        log_path = ghost_dir / f"_ghost_{idx}_{target_stem}.log"
         cmd_args = [str(ghost_exe), "--ghost", str(my_pid), str(target)]
         if idx == 0 and marker_path and marker_content:
             cmd_args += ["--marker", str(marker_path), marker_content]
+        cmd_args += ["--log", str(log_path)]
 
         if debug:
+            print(f"[C-INSTALL] ghost[{idx}]: log -> {log_path}", file=sys.stderr)
             print(f"[C-INSTALL] ghost[{idx}]: spawning {cmd_args}", file=sys.stderr)
 
         try:
+            ghost_log_fh = open(str(log_path), "w")
             subprocess.Popen(
                 cmd_args,
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, stdout=ghost_log_fh, stderr=ghost_log_fh,
                 close_fds=True,
                 creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
             )
+            ghost_log_fh.close()
             if debug:
                 print(f"[C-INSTALL] ghost[{idx}]: spawned — will self-move to {target.name} after our exit", file=sys.stderr)
         except Exception as e:
