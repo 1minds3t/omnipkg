@@ -480,6 +480,17 @@ def _maybe_install_c_dispatcher():
                 print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
             return
 
+    # ── Failure marker check (all platforms) ─────────────────────────────────
+    # If we previously failed to compile this exact source hash, don't retry
+    # on every invocation — that would spin forever.  Write a small marker file
+    # next to the compile-success marker; delete it only when the source changes.
+    if src_hash:
+        failure_marker = bin_dir / f".omnipkg_dispatch_failed_{src_hash[:16]}"
+        if failure_marker.exists():
+            if debug:
+                print(f"[C-INSTALL] compile previously failed for this source hash — skipping (delete {failure_marker.name} to retry)", file=sys.stderr)
+            return
+
     # ── Compile ───────────────────────────────────────────────────────────────
     binary_tmp = bin_dir / ("_omnipkg_dispatch_tmp.exe" if sys.platform == "win32" else "_omnipkg_dispatch_tmp")
     compiler_cmd = [compiler] + [
@@ -540,6 +551,21 @@ def _maybe_install_c_dispatcher():
         if r.returncode != 0:
             if debug:
                 print(f"[C-INSTALL] compile FAILED — staying on Python dispatcher", file=sys.stderr)
+            # Write failure marker so we don't retry on every invocation for
+            # this exact source hash.  Marker is cleared automatically when the
+            # source changes (different hash -> different marker filename).
+            if src_hash:
+                try:
+                    failure_marker = bin_dir / f".omnipkg_dispatch_failed_{src_hash[:16]}"
+                    failure_marker.write_text(
+                        "compile failed\ncompiler: " + compiler + "\nhash: " + src_hash + "\n",
+                        encoding="utf-8",
+                    )
+                    if debug:
+                        print(f"[C-INSTALL] wrote failure marker: {failure_marker}", file=sys.stderr)
+                except Exception as _fm_e:
+                    if debug:
+                        print(f"[C-INSTALL] could not write failure marker: {_fm_e}", file=sys.stderr)
             return
 
         # ── Install into native bin/ + all adopted interpreter bin/ dirs ──────
@@ -568,7 +594,14 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     Copy the freshly compiled binary into target_bin, replacing all omnipkg
     entry-point names and updating the hash marker.  Returns list of names replaced.
 
-    Versioned shims (8pkg37…8pkg315) are only written for the native bin dir.
+    On Windows the currently-running exe cannot be overwritten directly (the OS
+    holds an exclusive file lock while the process runs).  We detect this case
+    and use ghost-spawn: compile a tiny C ghost helper, spawn it detached, then
+    exit.  The ghost waits for our PID to die and atomically swaps the file via
+    MoveFileExA(MOVEFILE_REPLACE_EXISTING).  The very next 8pkg invocation is
+    the pure-C binary — no Python involved.
+
+    Versioned shims (8pkg37-8pkg315) are only written for the native bin dir.
     Adopted interpreter bin dirs get only the plain 8pkg/omnipkg binaries.
     """
     import shutil
@@ -581,18 +614,57 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
         print(f"[C-INSTALL] install: target_bin={target_bin} exists={target_bin.exists()}", file=sys.stderr)
         print(f"[C-INSTALL] install: target_bin contents={list(target_bin.iterdir()) if target_bin.exists() else 'N/A'}", file=sys.stderr)
         print(f"[C-INSTALL] install: binary_tmp={binary_tmp} exists={Path(binary_tmp).exists()}", file=sys.stderr)
+
+    # On Windows, figure out what the currently-running exe is so we can
+    # route it through ghost-spawn instead of a direct copy (which would
+    # fail with ERROR_SHARING_VIOLATION while Python holds the lock).
+    running_exe_resolved = None
+    if sys.platform == "win32":
+        try:
+            running_exe_resolved = Path(sys.argv[0]).resolve()
+        except Exception:
+            pass
+
+    ghost_needed = []  # (binary_tmp_path, target_path) pairs to hand off to ghost
+
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
         target = target_bin / (name + _exe)
         if debug:
             print(f"[C-INSTALL] install: checking {target} exists={target.exists()}", file=sys.stderr)
-        if target.exists():
+        if not target.exists():
+            continue
+
+        # ── Windows: detect if this target IS the currently-running exe ────────
+        if sys.platform == "win32" and running_exe_resolved is not None:
             try:
-                shutil.copy2(str(binary_tmp), str(target))
-                os.chmod(str(target), 0o755)
-                replaced.append(str(target))
-            except Exception as e:
+                target_resolved = target.resolve()
+                is_running = (target_resolved == running_exe_resolved)
+            except Exception:
+                is_running = False
+
+            if is_running:
                 if debug:
-                    print(f"[C-INSTALL] could not replace {target}: {e}", file=sys.stderr)
+                    print(f"[C-INSTALL] install: {target.name} is the running exe — scheduling ghost swap", file=sys.stderr)
+                ghost_needed.append((Path(binary_tmp), target))
+                # We'll write the marker after ghost is spawned; mark as replaced
+                # optimistically so the marker block below fires.
+                replaced.append(str(target))
+                continue
+
+        # ── Normal path: direct copy (Unix always; Windows for non-running exes) ─
+        try:
+            shutil.copy2(str(binary_tmp), str(target))
+            os.chmod(str(target), 0o755)
+            replaced.append(str(target))
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] could not replace {target}: {e}", file=sys.stderr)
+
+    # ── Ghost spawn (Windows only) ────────────────────────────────────────────
+    # Spawn one ghost process that handles ALL pending swaps sequentially.
+    # Each swap: wait for our PID to die, MoveFileExA the new binary into place.
+    if ghost_needed:
+        _ghost_spawn_windows(ghost_needed, src_hash, debug)
 
     # Versioned shims 3.7-3.15 — native bin only.
     # Adopted interpreter bin dirs are not the dispatch root.
@@ -617,6 +689,290 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
                 print(f"[C-INSTALL] could not write marker in {target_bin}: {e}", file=sys.stderr)
 
     return replaced
+
+
+# ── Inline ghost C source ──────────────────────────────────────────────────────
+# Compiled on first ghost-swap need, cached by src_hash prefix.
+# The ghost process:
+#   1. Receives parent PID and a list of (src, dst) path pairs as argv.
+#   2. Opens parent PID with SYNCHRONIZE access and waits up to 10s for it to exit
+#      (WaitForSingleObject) — this is the key step: we must wait for the Python
+#      process to fully die so Windows releases the file lock on the running exe.
+#   3. Once the parent is gone, MoveFileExA(src, dst, MOVEFILE_REPLACE_EXISTING)
+#      for each pair — this is an atomic rename so there is no window where the
+#      target exe is absent.
+#   4. Optionally re-execs the new binary with the original argv so the very same
+#      invocation completes as pure C, not Python.  Callers that don't need re-exec
+#      (e.g. batch installs) just don't pass --reexec.
+#
+# All steps from the bootstrap.c POC are preserved:
+#   - DETACHED_PROCESS | CREATE_NO_WINDOW: ghost survives parent death.
+#   - MOVEFILE_REPLACE_EXISTING: atomic overwrite.
+#   - OpenProcess(SYNCHRONIZE): clean parent-death detection, no polling loop.
+#   - inherit_handles=False equivalent (CREATE_NO_WINDOW | DETACHED_PROCESS
+#     together prevent handle inheritance implicitly; we also pass bInheritHandles=FALSE
+#     to CreateProcess in the caller via subprocess.Popen(close_fds=True)).
+_GHOST_C_SOURCE = r"""
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+/*
+ * omnipkg_ghost — Windows ghost-swap helper
+ *
+ * Usage:
+ *   omnipkg_ghost --ghost <parent_pid> <src1> <dst1> [<src2> <dst2> ...] [--reexec <exe> <arg>...]
+ *
+ * Steps (all from the bootstrap POC, nothing omitted):
+ *   1. Parse args into swap pairs and optional re-exec spec.
+ *   2. OpenProcess(SYNCHRONIZE, parent_pid) — obtain handle to watch parent death.
+ *   3. WaitForSingleObject(hParent, 10000) — block until parent exits (file lock released).
+ *   4. CloseHandle(hParent).
+ *   5. For each (src, dst): MoveFileExA(src, dst, MOVEFILE_REPLACE_EXISTING).
+ *   6. If --reexec was given: CreateProcess(exe, args) and exit.
+ */
+
+#define MAX_SWAPS 16
+
+int main(int argc, char *argv[]) {
+    if (argc < 5 || strcmp(argv[1], "--ghost") != 0) {
+        fprintf(stderr, "omnipkg_ghost: bad args
+");
+        return 1;
+    }
+
+    int parent_pid = atoi(argv[2]);
+
+    /* Parse (src, dst) pairs until we hit --reexec or end of args */
+    char *srcs[MAX_SWAPS];
+    char *dsts[MAX_SWAPS];
+    int n_swaps = 0;
+    char *reexec_exe = NULL;
+    char reexec_cmdline[32768] = {0};
+
+    int i = 3;
+    while (i < argc) {
+        if (strcmp(argv[i], "--reexec") == 0) {
+            i++;
+            if (i < argc) {
+                reexec_exe = argv[i++];
+                /* Rebuild command line for CreateProcess from remaining argv */
+                int pos = 0;
+                pos += snprintf(reexec_cmdline + pos, sizeof(reexec_cmdline) - pos, ""%s"", reexec_exe);
+                while (i < argc && pos < (int)sizeof(reexec_cmdline) - 4) {
+                    pos += snprintf(reexec_cmdline + pos, sizeof(reexec_cmdline) - pos, " "%s"", argv[i++]);
+                }
+            }
+            break;
+        }
+        if (n_swaps < MAX_SWAPS && i + 1 < argc) {
+            srcs[n_swaps] = argv[i];
+            dsts[n_swaps] = argv[i + 1];
+            n_swaps++;
+            i += 2;
+        } else {
+            i++;
+        }
+    }
+
+    /* Step 2: open parent with SYNCHRONIZE so we can wait on it */
+    HANDLE hParent = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)parent_pid);
+
+    /* Step 3: wait for parent to die (releases file locks on the running exe) */
+    if (hParent) {
+        WaitForSingleObject(hParent, 10000);
+        /* Step 4: close handle */
+        CloseHandle(hParent);
+    } else {
+        /* Parent already gone — proceed immediately */
+        Sleep(100);
+    }
+
+    /* Step 5: atomic MoveFileExA for every swap pair */
+    int all_ok = 1;
+    for (int s = 0; s < n_swaps; s++) {
+        if (MoveFileExA(srcs[s], dsts[s], MOVEFILE_REPLACE_EXISTING)) {
+            /* success — no output needed for silent operation */
+        } else {
+            fprintf(stderr, "omnipkg_ghost: swap FAILED %s -> %s (err=%lu)
+",
+                    srcs[s], dsts[s], GetLastError());
+            all_ok = 0;
+        }
+    }
+
+    /* Step 6: optional re-exec so the same invocation finishes as pure C */
+    if (reexec_exe && all_ok && reexec_cmdline[0]) {
+        STARTUPINFOA si = { sizeof(si) };
+        PROCESS_INFORMATION pi = {0};
+        /* Use CREATE_NO_WINDOW so re-exec doesn't flash a new console */
+        if (!CreateProcessA(reexec_exe, reexec_cmdline,
+                            NULL, NULL,
+                            FALSE,              /* bInheritHandles=FALSE */
+                            CREATE_NO_WINDOW,
+                            NULL, NULL, &si, &pi)) {
+            fprintf(stderr, "omnipkg_ghost: re-exec failed (err=%lu)
+", GetLastError());
+        } else {
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        }
+    }
+
+    return all_ok ? 0 : 1;
+}
+"""
+
+
+def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool) -> None:
+    """
+    Compile the inline ghost C source (if needed) and spawn it detached.
+
+    swaps: list of (binary_tmp: Path, target: Path) tuples.
+    src_hash: MD5 of dispatcher.c — used to version the ghost exe name so
+              multiple installs don't trample each other.
+    debug: mirrors OMNIPKG_DEBUG.
+
+    Key flags (all from the POC, none omitted):
+      DETACHED_PROCESS (0x00000008) — ghost survives parent death.
+      CREATE_NO_WINDOW (0x08000000) — no console flash.
+      close_fds=True — no file handle leaks to ghost (equiv. bInheritHandles=FALSE).
+    """
+    import subprocess, shutil, tempfile
+    from pathlib import Path
+
+    if sys.platform != "win32":
+        return  # safety guard
+
+    # ── 1. Locate ghost exe (compile once per src_hash prefix) ────────────────
+    ghost_dir = Path(tempfile.gettempdir()) / "omnipkg"
+    ghost_dir.mkdir(parents=True, exist_ok=True)
+    ghost_tag = src_hash[:8] if src_hash else "nogit"
+    ghost_exe = ghost_dir / f"omnipkg_ghost_{ghost_tag}.exe"
+
+    if not ghost_exe.exists():
+        # Write ghost C source to a temp file and compile it
+        ghost_c = ghost_dir / f"omnipkg_ghost_{ghost_tag}.c"
+        try:
+            ghost_c.write_text(_GHOST_C_SOURCE, encoding="utf-8")
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] ghost: could not write C source: {e}", file=sys.stderr)
+            return
+
+        # Find a compiler — same search order as _maybe_install_c_dispatcher
+        import glob as _cgl
+        cl = shutil.which("cl")
+        if not cl:
+            for _pat in [
+                "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            ]:
+                _m = _cgl.glob(_pat)
+                if _m:
+                    cl = _m[0]
+                    break
+
+        if cl:
+            # Build INCLUDE/LIB env the same way _maybe_install_c_dispatcher does
+            compile_env = os.environ.copy()
+            try:
+                cl_path = Path(cl)
+                msvc_root = cl_path.parent.parent.parent.parent
+                msvc_include = str(msvc_root / "include")
+                msvc_lib = str(msvc_root / "lib" / "x64")
+                sdk_includes, sdk_libs = [], []
+                sdk_base = Path("C:/Program Files (x86)/Windows Kits/10")
+                if not sdk_base.exists():
+                    sdk_base = Path("C:/Program Files/Windows Kits/10")
+                if sdk_base.exists():
+                    inc_base = sdk_base / "include"
+                    lib_base = sdk_base / "lib"
+                    sdk_versions = sorted(inc_base.iterdir(), reverse=True)
+                    if sdk_versions:
+                        sdk_ver = sdk_versions[0]
+                        for sub in ("ucrt", "um", "shared"):
+                            p = sdk_ver / sub
+                            if p.exists():
+                                sdk_includes.append(str(p))
+                        lib_ver = lib_base / sdk_ver.name
+                        for sub in ("ucrt/x64", "um/x64"):
+                            p = lib_ver / sub.replace("/", os.sep)
+                            if p.exists():
+                                sdk_libs.append(str(p))
+                compile_env["INCLUDE"] = os.pathsep.join([msvc_include] + sdk_includes)
+                compile_env["LIB"] = os.pathsep.join([msvc_lib] + sdk_libs)
+            except Exception as e:
+                if debug:
+                    print(f"[C-INSTALL] ghost: could not derive MSVC env: {e}", file=sys.stderr)
+
+            cmd = [cl, str(ghost_c), f"/Fe:{ghost_exe}", "/nologo", "/link", "kernel32.lib"]
+        else:
+            gcc = shutil.which("gcc") or shutil.which("x86_64-w64-mingw32-gcc")
+            compile_env = os.environ.copy()
+            if gcc:
+                cmd = [gcc, str(ghost_c), "-O2", f"-o{ghost_exe}", "-lkernel32"]
+            else:
+                if debug:
+                    print(f"[C-INSTALL] ghost: no compiler available — cannot ghost-swap", file=sys.stderr)
+                return
+
+        if debug:
+            print(f"[C-INSTALL] ghost: compiling {ghost_c} -> {ghost_exe}", file=sys.stderr)
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=15, env=compile_env)
+            if r.returncode != 0:
+                if debug:
+                    print(f"[C-INSTALL] ghost: compile failed rc={r.returncode}", file=sys.stderr)
+                    if r.stderr:
+                        print(f"[C-INSTALL] ghost: {r.stderr.decode(errors='replace')}", file=sys.stderr)
+                return
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] ghost: compile exception: {e}", file=sys.stderr)
+            return
+
+        # Clean up source file; keep exe
+        try:
+            ghost_c.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    if not ghost_exe.exists():
+        if debug:
+            print(f"[C-INSTALL] ghost: exe not found after compile — aborting", file=sys.stderr)
+        return
+
+    # ── 2. Build ghost argv ────────────────────────────────────────────────────
+    # Format: ghost_exe --ghost <parent_pid> <src1> <dst1> [<src2> <dst2> ...]
+    my_pid = os.getpid()
+    cmd_args = [str(ghost_exe), "--ghost", str(my_pid)]
+    for src, dst in swaps:
+        cmd_args += [str(src), str(dst)]
+
+    if debug:
+        print(f"[C-INSTALL] ghost: spawning {cmd_args}", file=sys.stderr)
+
+    # ── 3. Spawn ghost detached ────────────────────────────────────────────────
+    # DETACHED_PROCESS | CREATE_NO_WINDOW — ghost survives parent death, no flash.
+    # close_fds=True — no file handle leaks (equiv. bInheritHandles=FALSE).
+    DETACHED_PROCESS = 0x00000008
+    CREATE_NO_WINDOW  = 0x08000000
+    try:
+        subprocess.Popen(
+            cmd_args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+        )
+        if debug:
+            print(f"[C-INSTALL] ghost: spawned (PID will wait for us to die, then swap)", file=sys.stderr)
+    except Exception as e:
+        if debug:
+            print(f"[C-INSTALL] ghost: Popen failed: {e}", file=sys.stderr)
 
 
 def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) -> None:
@@ -654,14 +1010,18 @@ def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) 
     if debug:
         print(f"[C-INSTALL] push: {src_binary} -> {target_bin}", file=sys.stderr)
 
+    # Push targets are always adopted-interpreter bin/ dirs — they are never
+    # the currently-running exe (the running exe lives in native_bin, not in any
+    # adopted interpreter's bin/).  So on Windows we do a plain direct copy here;
+    # no ghost spawn needed.
     replaced = []
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-        target = target_bin / name
+        target = target_bin / (name + _exe)
         if target.exists():
             try:
                 shutil.copy2(str(src_binary), str(target))
                 os.chmod(str(target), 0o755)
-                replaced.append(name)
+                replaced.append(name + _exe)
             except Exception as e:
                 if debug:
                     print(f"[C-INSTALL] push: could not replace {target}: {e}", file=sys.stderr)
