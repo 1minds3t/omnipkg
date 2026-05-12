@@ -644,9 +644,11 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     if sys.platform == "win32":
         try:
             running_exe_resolved = Path(sys.argv[0]).resolve()
-            # sys.argv[0] on Windows is often bare 'C:\...\8pkg' without .exe
-            if running_exe_resolved.suffix.lower() != '.exe':
-                running_exe_resolved = running_exe_resolved.with_suffix('.exe')
+            # sys.argv[0] on Windows omits .exe — normalize so path comparison works
+            if sys.platform == 'win32' and running_exe_resolved.suffix.lower() != '.exe':
+                _with_exe = running_exe_resolved.with_suffix('.exe')
+                if _with_exe.exists():
+                    running_exe_resolved = _with_exe
         except Exception:
             pass
 
@@ -671,7 +673,7 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
                 if debug:
                     print(f"[C-INSTALL] install: {target.name} is the running exe — scheduling ghost swap", file=sys.stderr)
                 ghost_needed.append((Path(binary_tmp), target))
-                # DO NOT write marker here — ghost writes it after swap completes.
+                # DO NOT add to replaced — ghost writes marker after swap.
                 continue
 
         # ── Normal path: direct copy (Unix always; Windows for non-running exes) ─
@@ -836,7 +838,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Step 5b: write marker so next invocation skips recompile */
+    /* Step 5b: write marker after swap so Python side sees hash-match next run */
     if (all_ok && marker_path[0] && marker_content[0]) {
         FILE *mf = fopen(marker_path, "w");
         if (mf) { fputs(marker_content, mf); fclose(mf); }
@@ -955,7 +957,7 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
                 if debug:
                     print(f"[C-INSTALL] ghost: could not derive MSVC env: {e}", file=sys.stderr)
 
-            cmd = [cl, str(ghost_c), f"/Fe:{ghost_exe}", "/nologo", "/link", "kernel32.lib"]
+            cmd = [cl, "/nologo", f"/Fe:{ghost_exe}", str(ghost_c), "/link", "kernel32.lib"]
         else:
             gcc = shutil.which("gcc") or shutil.which("x86_64-w64-mingw32-gcc")
             compile_env = os.environ.copy()
@@ -970,11 +972,15 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
             print(f"[C-INSTALL] ghost: compiling {ghost_c} -> {ghost_exe}", file=sys.stderr)
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=15, env=compile_env)
+            if debug:
+                print(f"[C-INSTALL] ghost: compile rc={r.returncode}", file=sys.stderr)
+                if r.stdout:
+                    print(f"[C-INSTALL] ghost stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
+                if r.stderr:
+                    print(f"[C-INSTALL] ghost stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
             if r.returncode != 0:
                 if debug:
-                    print(f"[C-INSTALL] ghost: compile failed rc={r.returncode}", file=sys.stderr)
-                    if r.stderr:
-                        print(f"[C-INSTALL] ghost: {r.stderr.decode(errors='replace')}", file=sys.stderr)
+                    print(f"[C-INSTALL] ghost: compile failed rc={r.returncode} src={ghost_c} exists={ghost_c.exists()}", file=sys.stderr)
                 return
         except Exception as e:
             if debug:
