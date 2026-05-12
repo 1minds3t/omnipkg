@@ -717,191 +717,44 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
 
     return replaced
 
-
-# ── Inline ghost C source ──────────────────────────────────────────────────────
-# Compiled on first ghost-swap need, cached by src_hash prefix.
-# The ghost process:
-#   1. Receives parent PID and a list of (src, dst) path pairs as argv.
-#   2. Opens parent PID with SYNCHRONIZE access and waits up to 10s for it to exit
-#      (WaitForSingleObject) — this is the key step: we must wait for the Python
-#      process to fully die so Windows releases the file lock on the running exe.
-#   3. Once the parent is gone, MoveFileExA(src, dst, MOVEFILE_REPLACE_EXISTING)
-#      for each pair — this is an atomic rename so there is no window where the
-#      target exe is absent.
-#   4. Optionally re-execs the new binary with the original argv so the very same
-#      invocation completes as pure C, not Python.  Callers that don't need re-exec
-#      (e.g. batch installs) just don't pass --reexec.
-#
-# All steps from the bootstrap.c POC are preserved:
-#   - DETACHED_PROCESS | CREATE_NO_WINDOW: ghost survives parent death.
-#   - MOVEFILE_REPLACE_EXISTING: atomic overwrite.
-#   - OpenProcess(SYNCHRONIZE): clean parent-death detection, no polling loop.
-#   - inherit_handles=False equivalent (CREATE_NO_WINDOW | DETACHED_PROCESS
-#     together prevent handle inheritance implicitly; we also pass bInheritHandles=FALSE
-#     to CreateProcess in the caller via subprocess.Popen(close_fds=True)).
-_GHOST_C_SOURCE = r"""
-#include <windows.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-/*
- * omnipkg_ghost — Windows ghost-swap helper
- *
- * Usage:
- *   omnipkg_ghost --ghost <parent_pid> <src1> <dst1> [<src2> <dst2> ...] [--reexec <exe> <arg>...]
- *
- * Steps (all from the bootstrap POC, nothing omitted):
- *   1. Parse args into swap pairs and optional re-exec spec.
- *   2. OpenProcess(SYNCHRONIZE, parent_pid) — obtain handle to watch parent death.
- *   3. WaitForSingleObject(hParent, 10000) — block until parent exits (file lock released).
- *   4. CloseHandle(hParent).
- *   5. For each (src, dst): MoveFileExA(src, dst, MOVEFILE_REPLACE_EXISTING).
- *   6. If --reexec was given: CreateProcess(exe, args) and exit.
- */
-
-#define MAX_SWAPS 16
-
-int main(int argc, char *argv[]) {
-    if (argc < 5 || strcmp(argv[1], "--ghost") != 0) {
-        fprintf(stderr, "omnipkg_ghost: bad args\n");
-        return 1;
-    }
-
-    int parent_pid = atoi(argv[2]);
-
-    /* Parse (src, dst) pairs until we hit --reexec/--marker or end of args */
-    char *srcs[MAX_SWAPS];
-    char *dsts[MAX_SWAPS];
-    int n_swaps = 0;
-    char *reexec_exe = NULL;
-    char reexec_cmdline[32768] = {0};
-    char marker_path[4096] = {0};
-    char marker_content[4096] = {0};
-
-    int i = 3;
-    while (i < argc) {
-        if (strcmp(argv[i], "--marker") == 0) {
-            i++;
-            if (i < argc) { strncpy(marker_path, argv[i++], sizeof(marker_path)-1); }
-            if (i < argc) { strncpy(marker_content, argv[i++], sizeof(marker_content)-1); }
-            continue;
-        }
-        if (strcmp(argv[i], "--reexec") == 0) {
-            i++;
-            if (i < argc) {
-                reexec_exe = argv[i++];
-                /* Rebuild command line for CreateProcess from remaining argv */
-                int pos = 0;
-                pos += snprintf(reexec_cmdline + pos, sizeof(reexec_cmdline) - pos, ""%s"", reexec_exe);
-                while (i < argc && pos < (int)sizeof(reexec_cmdline) - 4) {
-                    pos += snprintf(reexec_cmdline + pos, sizeof(reexec_cmdline) - pos, " "%s"", argv[i++]);
-                }
-            }
-            break;
-        }
-        if (n_swaps < MAX_SWAPS && i + 1 < argc) {
-            srcs[n_swaps] = argv[i];
-            dsts[n_swaps] = argv[i + 1];
-            n_swaps++;
-            i += 2;
-        } else {
-            i++;
-        }
-    }
-
-    /* Step 2: open parent with SYNCHRONIZE so we can wait on it */
-    HANDLE hParent = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)parent_pid);
-
-    /* Step 3: wait for parent to die (releases file locks on the running exe) */
-    if (hParent) {
-        WaitForSingleObject(hParent, 10000);
-        /* Step 4: close handle */
-        CloseHandle(hParent);
-    } else {
-        /* Parent already gone — proceed immediately */
-        Sleep(100);
-    }
-
-    /* Step 5: atomic MoveFileExA for every swap pair */
-    int all_ok = 1;
-    for (int s = 0; s < n_swaps; s++) {
-        if (MoveFileExA(srcs[s], dsts[s], MOVEFILE_REPLACE_EXISTING)) {
-            /* success — no output needed for silent operation */
-        } else {
-            fprintf(stderr, "omnipkg_ghost: swap FAILED %s -> %s (err=%lu)\n", srcs[s], dsts[s], GetLastError());
-            all_ok = 0;
-        }
-    }
-
-    /* Step 5b: write marker after swap */
-    if (all_ok && marker_path[0] && marker_content[0]) {
-        FILE *mf = fopen(marker_path, "w");
-        if (mf) { fputs(marker_content, mf); fclose(mf); }
-    }
-
-    /* Step 6: optional re-exec so the same invocation finishes as pure C */
-    if (reexec_exe && all_ok && reexec_cmdline[0]) {
-        STARTUPINFOA si = { sizeof(si) };
-        PROCESS_INFORMATION pi = {0};
-        /* Use CREATE_NO_WINDOW so re-exec doesn't flash a new console */
-        if (!CreateProcessA(reexec_exe, reexec_cmdline,
-                            NULL, NULL,
-                            FALSE,              /* bInheritHandles=FALSE */
-                            CREATE_NO_WINDOW,
-                            NULL, NULL, &si, &pi)) {
-            fprintf(stderr, "omnipkg_ghost: re-exec failed (err=%lu)\n", GetLastError());
-        } else {
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-        }
-    }
-
-    return all_ok ? 0 : 1;
-}
-"""
-
-
 def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=None, marker_content: str = "") -> None:
     """
-    Compile the inline ghost C source (if needed) and spawn it detached.
+    Compile ghost.c (found alongside dispatcher.c) and spawn it detached.
+    ghost.c waits for parent PID to die, then MoveFileExA each swap pair,
+    then writes the marker file.
 
     swaps: list of (binary_tmp: Path, target: Path) tuples.
-    src_hash: MD5 of dispatcher.c — used to version the ghost exe name so
-              multiple installs don't trample each other.
-    debug: mirrors OMNIPKG_DEBUG.
-
-    Key flags (all from the POC, none omitted):
-      DETACHED_PROCESS (0x00000008) — ghost survives parent death.
-      CREATE_NO_WINDOW (0x08000000) — no console flash.
-      close_fds=True — no file handle leaks to ghost (equiv. bInheritHandles=FALSE).
     """
     import subprocess, shutil, tempfile
     from pathlib import Path
 
     if sys.platform != "win32":
-        return  # safety guard
+        return
 
-    # ── 1. Locate ghost exe (compile once per src_hash prefix) ────────────────
+    # ── Locate ghost.c next to dispatcher.c ───────────────────────────────────
+    _here = Path(__file__).parent
+    ghost_c_candidates = [
+        _here / "ghost.c",
+        _here.parent.parent / "tools" / "dispatcher_bin" / "ghost.c",
+        _here.parent / "tools" / "dispatcher_bin" / "ghost.c",
+    ]
+    ghost_c_src = None
+    for c in ghost_c_candidates:
+        if c.exists():
+            ghost_c_src = c
+            break
+    if ghost_c_src is None:
+        if debug:
+            print(f"[C-INSTALL] ghost: ghost.c not found in any candidate — cannot swap", file=sys.stderr)
+        return
+
+    # ── Ghost exe cached by src_hash prefix in temp dir ───────────────────────
     ghost_dir = Path(tempfile.gettempdir()) / "omnipkg"
     ghost_dir.mkdir(parents=True, exist_ok=True)
     ghost_tag = src_hash[:8] if src_hash else "nogit"
     ghost_exe = ghost_dir / f"omnipkg_ghost_{ghost_tag}.exe"
 
     if not ghost_exe.exists():
-        # Write ghost C source to a temp file and compile it
-        ghost_c = ghost_dir / f"omnipkg_ghost_{ghost_tag}.c"
-        try:
-            ghost_c.write_text(_GHOST_C_SOURCE, encoding="utf-8")
-        except Exception as e:
-            if debug:
-                print(f"[C-INSTALL] ghost: could not write C source: {e}", file=sys.stderr)
-            return
-
-        # Find a compiler — same search order as _maybe_install_c_dispatcher.
-        # Always prefer VS install globs over shutil.which("cl") so we get the
-        # correct target architecture (Hostx64/x64) not whatever the shell PATH
-        # happens to expose first (which may be HostX86/x86).
         import glob as _cgl
         cl = None
         for _pat in [
@@ -917,13 +770,11 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
         if not cl:
             cl = shutil.which("cl")
 
+        compile_env = os.environ.copy()
         if cl:
-            # Build INCLUDE/LIB env — derive target arch from the compiler path
-            # so we never mix architectures (e.g. x86 compiler + x64 libs).
-            compile_env = os.environ.copy()
             try:
                 cl_path = Path(cl)
-                target_arch = cl_path.parent.name.lower()  # x64 or x86
+                target_arch = cl_path.parent.name.lower()
                 msvc_root = cl_path.parent.parent.parent.parent
                 msvc_include = str(msvc_root / "include")
                 msvc_lib = str(msvc_root / "lib" / target_arch)
@@ -939,32 +790,27 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
                         sdk_ver = sdk_versions[0]
                         for sub in ("ucrt", "um", "shared"):
                             p = sdk_ver / sub
-                            if p.exists():
-                                sdk_includes.append(str(p))
+                            if p.exists(): sdk_includes.append(str(p))
                         lib_ver = lib_base / sdk_ver.name
                         for sub in (f"ucrt/{target_arch}", f"um/{target_arch}"):
                             p = lib_ver / sub.replace("/", os.sep)
-                            if p.exists():
-                                sdk_libs.append(str(p))
+                            if p.exists(): sdk_libs.append(str(p))
                 compile_env["INCLUDE"] = os.pathsep.join([msvc_include] + sdk_includes)
-                compile_env["LIB"] = os.pathsep.join([msvc_lib] + sdk_libs)
+                compile_env["LIB"]     = os.pathsep.join([msvc_lib] + sdk_libs)
             except Exception as e:
                 if debug:
                     print(f"[C-INSTALL] ghost: could not derive MSVC env: {e}", file=sys.stderr)
-
-            cmd = [cl, "/nologo", f"/Fe:{ghost_exe}", str(ghost_c), "/link", "kernel32.lib"]
+            cmd = [cl, "/nologo", f"/Fe:{ghost_exe}", str(ghost_c_src), "/link", "kernel32.lib"]
         else:
             gcc = shutil.which("gcc") or shutil.which("x86_64-w64-mingw32-gcc")
-            compile_env = os.environ.copy()
-            if gcc:
-                cmd = [gcc, str(ghost_c), "-O2", f"-o{ghost_exe}", "-lkernel32"]
-            else:
+            if not gcc:
                 if debug:
-                    print(f"[C-INSTALL] ghost: no compiler available — cannot ghost-swap", file=sys.stderr)
+                    print(f"[C-INSTALL] ghost: no compiler available", file=sys.stderr)
                 return
+            cmd = [gcc, "-O2", f"-o{ghost_exe}", str(ghost_c_src), "-lkernel32"]
 
         if debug:
-            print(f"[C-INSTALL] ghost: compiling {ghost_c} -> {ghost_exe}", file=sys.stderr)
+            print(f"[C-INSTALL] ghost: compiling {ghost_c_src} -> {ghost_exe}", file=sys.stderr)
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=15, env=compile_env)
             if debug:
@@ -978,19 +824,12 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
                 print(f"[C-INSTALL] ghost: compile exception: {e}", file=sys.stderr)
             return
 
-        # Clean up source file; keep exe
-        try:
-            ghost_c.unlink(missing_ok=True)
-        except Exception:
-            pass
-
     if not ghost_exe.exists():
         if debug:
-            print(f"[C-INSTALL] ghost: exe not found after compile — aborting", file=sys.stderr)
+            print(f"[C-INSTALL] ghost: exe not found after compile", file=sys.stderr)
         return
 
-    # ── 2. Build ghost argv ────────────────────────────────────────────────────
-    # Format: ghost_exe --ghost <parent_pid> <src1> <dst1> [<src2> <dst2> ...]
+    # ── Build ghost argv ───────────────────────────────────────────────────────
     my_pid = os.getpid()
     cmd_args = [str(ghost_exe), "--ghost", str(my_pid)]
     for src, dst in swaps:
@@ -1001,26 +840,21 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
     if debug:
         print(f"[C-INSTALL] ghost: spawning {cmd_args}", file=sys.stderr)
 
-    # ── 3. Spawn ghost detached ────────────────────────────────────────────────
-    # DETACHED_PROCESS | CREATE_NO_WINDOW — ghost survives parent death, no flash.
-    # close_fds=True — no file handle leaks (equiv. bInheritHandles=FALSE).
+    # ── Spawn detached ─────────────────────────────────────────────────────────
     DETACHED_PROCESS = 0x00000008
     CREATE_NO_WINDOW  = 0x08000000
     try:
         subprocess.Popen(
             cmd_args,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             close_fds=True,
             creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
         )
         if debug:
-            print(f"[C-INSTALL] ghost: spawned (PID will wait for us to die, then swap)", file=sys.stderr)
+            print(f"[C-INSTALL] ghost: spawned — will swap after our process exits", file=sys.stderr)
     except Exception as e:
         if debug:
             print(f"[C-INSTALL] ghost: Popen failed: {e}", file=sys.stderr)
-
 
 def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) -> None:
     """
