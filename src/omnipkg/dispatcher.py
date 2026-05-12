@@ -644,7 +644,6 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     if sys.platform == "win32":
         try:
             running_exe_resolved = Path(sys.argv[0]).resolve()
-            # sys.argv[0] on Windows omits .exe — normalize so path comparison works
             if sys.platform == 'win32' and running_exe_resolved.suffix.lower() != '.exe':
                 _with_exe = running_exe_resolved.with_suffix('.exe')
                 if _with_exe.exists():
@@ -765,8 +764,7 @@ _GHOST_C_SOURCE = r"""
 
 int main(int argc, char *argv[]) {
     if (argc < 5 || strcmp(argv[1], "--ghost") != 0) {
-        fprintf(stderr, "omnipkg_ghost: bad args
-");
+        fprintf(stderr, "omnipkg_ghost: bad args\n");
         return 1;
     }
 
@@ -831,14 +829,12 @@ int main(int argc, char *argv[]) {
         if (MoveFileExA(srcs[s], dsts[s], MOVEFILE_REPLACE_EXISTING)) {
             /* success — no output needed for silent operation */
         } else {
-            fprintf(stderr, "omnipkg_ghost: swap FAILED %s -> %s (err=%lu)
-",
-                    srcs[s], dsts[s], GetLastError());
+            fprintf(stderr, "omnipkg_ghost: swap FAILED %s -> %s (err=%lu)\n", srcs[s], dsts[s], GetLastError());
             all_ok = 0;
         }
     }
 
-    /* Step 5b: write marker after swap so Python side sees hash-match next run */
+    /* Step 5b: write marker after swap */
     if (all_ok && marker_path[0] && marker_content[0]) {
         FILE *mf = fopen(marker_path, "w");
         if (mf) { fputs(marker_content, mf); fclose(mf); }
@@ -854,8 +850,7 @@ int main(int argc, char *argv[]) {
                             FALSE,              /* bInheritHandles=FALSE */
                             CREATE_NO_WINDOW,
                             NULL, NULL, &si, &pi)) {
-            fprintf(stderr, "omnipkg_ghost: re-exec failed (err=%lu)
-", GetLastError());
+            fprintf(stderr, "omnipkg_ghost: re-exec failed (err=%lu)\n", GetLastError());
         } else {
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
@@ -974,13 +969,9 @@ def _ghost_spawn_windows(swaps: list, src_hash: str, debug: bool, marker_path=No
             r = subprocess.run(cmd, capture_output=True, timeout=15, env=compile_env)
             if debug:
                 print(f"[C-INSTALL] ghost: compile rc={r.returncode}", file=sys.stderr)
-                if r.stdout:
-                    print(f"[C-INSTALL] ghost stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
-                if r.stderr:
-                    print(f"[C-INSTALL] ghost stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
+                if r.stdout: print(f"[C-INSTALL] ghost stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
+                if r.stderr: print(f"[C-INSTALL] ghost stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
             if r.returncode != 0:
-                if debug:
-                    print(f"[C-INSTALL] ghost: compile failed rc={r.returncode} src={ghost_c} exists={ghost_c.exists()}", file=sys.stderr)
                 return
         except Exception as e:
             if debug:
