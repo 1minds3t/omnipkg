@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import base64  # <--- ENSURE THIS IS HERE
@@ -37,7 +38,7 @@ IS_WINDOWS = platform.system() == "Windows"
 
 @contextmanager
 def _null_ctx():
-    """No-op context manager — used as a lock placeholder when no ABI lock is needed."""
+    """No-op context manager - used as a lock placeholder when no ABI lock is needed."""
     yield
 
 
@@ -45,7 +46,7 @@ def _normalize_exe(path: str) -> str:
     """
     Normalize a Python executable path for reliable cross-platform comparison.
     On Windows, Path.resolve() is needed for drive-letter/junction canonicalization.
-    On macOS/Linux we must NOT call resolve() — venv python binaries are symlinks
+    On macOS/Linux we must NOT call resolve() - venv python binaries are symlinks
     to the framework Python, so resolve() returns the framework path and loses
     all venv context. absolute() makes the path absolute without following symlinks.
     """
@@ -67,9 +68,9 @@ def _venv_python_exe() -> str:
     losing venv context and causing omnipkg import failures.
 
     Solution priority:
-      1. __PYVENV_LAUNCHER__ — set by macOS when a venv symlink was the entry point
-      2. sys.prefix / bin / pythonX.Y — reconstruct from the venv prefix
-      3. sys.executable — last resort (may be the framework path on macOS)
+      1. __PYVENV_LAUNCHER__ - set by macOS when a venv symlink was the entry point
+      2. sys.prefix / bin / pythonX.Y - reconstruct from the venv prefix
+      3. sys.executable - last resort (may be the framework path on macOS)
     """
     if IS_WINDOWS:
         return sys.executable
@@ -101,15 +102,15 @@ def _resolve_python_exe(python_exe: str | None) -> str:
     Resolve a Python interpreter reference to its full absolute path.
 
     Accepts any of:
-      - None / ""          → returns sys.executable (current interpreter)
-      - Full path          → returned as-is after normalization
+      - None / ""          -> returns sys.executable (current interpreter)
+      - Full path          -> returned as-is after normalization
                              e.g. "/home/user/miniforge3/.../python3.11"
-      - Short version      → resolved via omnipkg's interpreter registry
+      - Short version      -> resolved via omnipkg's interpreter registry
                              e.g. "3.11", "3.11.2", "py311", "python3.11"
 
     This means callers never have to know the full path.  The daemon and
     DaemonClient both call this before building the worker_key, so the
-    resolved path is always what ends up in the key — consistent everywhere.
+    resolved path is always what ends up in the key - consistent everywhere.
 
     Raises nothing: if resolution fails it falls back to the input string
     so existing code that passes bad-but-working paths continues to work.
@@ -117,7 +118,7 @@ def _resolve_python_exe(python_exe: str | None) -> str:
     if not python_exe:
         return _venv_python_exe()
 
-    # Already a usable path — don't touch it.
+    # Already a usable path - don't touch it.
     if os.path.isabs(python_exe) and os.path.exists(python_exe):
         return python_exe
 
@@ -130,7 +131,7 @@ def _resolve_python_exe(python_exe: str | None) -> str:
     except Exception:
         pass
 
-    # Unrecognised string — return as-is and let the OS complain later.
+    # Unrecognised string - return as-is and let the OS complain later.
     return python_exe
 
 def _derive_paths_for_exe(python_exe: str) -> dict:
@@ -173,10 +174,10 @@ def _derive_paths_for_exe(python_exe: str) -> dict:
         exe_dir = exe_path.parent
 
         if IS_WINDOWS:
-            # Windows layout: <install_dir>\python.exe  → <install_dir>\Lib\site-packages
+            # Windows layout: <install_dir>\python.exe  -> <install_dir>\Lib\site-packages
             candidate = exe_dir / "Lib" / "site-packages"
         else:
-            # Unix layout: <install_dir>/bin/python → <install_dir>/lib/pythonX.Y/site-packages
+            # Unix layout: <install_dir>/bin/python -> <install_dir>/lib/pythonX.Y/site-packages
             candidate = None
             lib_dir = exe_dir.parent / "lib"
             if lib_dir.exists():
@@ -203,7 +204,7 @@ def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
     Tries ConfigManager._get_paths_for_interpreter() with multiple path variants
     (normalized, original-case, registry scan) to handle Windows case-sensitivity
     issues. Falls back to _derive_paths_for_exe() which reads the filesystem
-    layout directly from the interpreter directory — this ALWAYS works for
+    layout directly from the interpreter directory - this ALWAYS works for
     python-build-standalone managed interpreters regardless of cm state.
     """
     if cm is not None:
@@ -255,13 +256,13 @@ def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
     paths = _derive_paths_for_exe(original_case_path)
     if paths:
         safe_print(
-            f"   📂 [DAEMON] Using filesystem-derived paths for {python_exe_normalized}: "
+            f"    [DAEMON] Using filesystem-derived paths for {python_exe_normalized}: "
             f"site_packages={paths.get('site_packages_path')}",
             file=sys.stderr,
         )
     else:
         safe_print(
-            f"   ⚠️ [DAEMON] Could not resolve paths for {python_exe_normalized} — "
+            f"    [DAEMON] Could not resolve paths for {python_exe_normalized} - "
             f"OMNIPKG_MULTIVERSION_BASE will NOT be set. Package may install to wrong location!",
             file=sys.stderr,
         )
@@ -274,7 +275,7 @@ def _ensure_worker_config(python_exe: str, site_packages: str, multiversion_base
     so ConfigManager._get_our_config_path() finds it and doesn't fall back to
     the global config (which has the wrong multiversion_base for managed interpreters).
 
-    This is intentionally lightweight — no imports from omnipkg core, no subprocesses.
+    This is intentionally lightweight - no imports from omnipkg core, no subprocesses.
     Idempotent: will not overwrite an existing config.
     """
     try:
@@ -284,7 +285,7 @@ def _ensure_worker_config(python_exe: str, site_packages: str, multiversion_base
 
         config_path = exe_path.parent / ".omnipkg_config.json"
         if config_path.exists():
-            # Validate it has the keys we need — patch if missing
+            # Validate it has the keys we need - patch if missing
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     existing = json.load(f)
@@ -314,7 +315,7 @@ def _ensure_worker_config(python_exe: str, site_packages: str, multiversion_base
         tmp.replace(config_path)
 
     except Exception:
-        pass  # Non-fatal — env var OMNIPKG_MULTIVERSION_BASE is still the safety net
+        pass  # Non-fatal - env var OMNIPKG_MULTIVERSION_BASE is still the safety net
 
 
 try:
@@ -322,18 +323,18 @@ try:
     _HAS_ATOMICS = True
     # Directly check command-line args. This is clean and has no side effects.
     if "--verbose" in sys.argv or "-V" in sys.argv:
-        sys.stderr.write(_('✅ [DAEMON] Hardware Atomics LOADED: {}\n').format(omnipkg_atomic))
+        sys.stderr.write(_(' [DAEMON] Hardware Atomics LOADED: {}\n').format(omnipkg_atomic))
 except ImportError as e:
     _HAS_ATOMICS = False
     # Only show the failure warning if the user explicitly asks for verbose output.
     if "--verbose" in sys.argv or "-V" in sys.argv:
-        sys.stderr.write(_('⚠️ [DAEMON] Hardware Atomics FAILED: {}\n').format(e))
+        sys.stderr.write(_(' [DAEMON] Hardware Atomics FAILED: {}\n').format(e))
         # Also keep the helpful debug info inside the verbose check.
         sys.stderr.write(f"   sys.path: {sys.path}\n")
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 0. CONSTANTS & UTILITIES
-# ═══════════════════════════════════════════════════════════════
+# 
 
 OMNIPKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), "omnipkg")
 
@@ -362,9 +363,9 @@ PID_FILE = os.path.join(_VENV_TEMP_DIR, "omnipkg_daemon.pid")
 SHM_REGISTRY_FILE = os.path.join(_VENV_TEMP_DIR, "omnipkg_shm_registry.json")
 DAEMON_LOG_FILE = os.path.join(_VENV_TEMP_DIR, "omnipkg_daemon.log")
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STATE MONITOR (OPTIMISTIC CONCURRENCY CONTROL)
-# ═══════════════════════════════════════════════════════════════
+# 
 class SharedStateMonitor:
     """
     Manages a shared memory control block for Optimistic Concurrency Control.
@@ -464,7 +465,7 @@ class SharedStateMonitor:
                 if time.time() - start > timeout_seconds:
                     raise TimeoutError("Spinlock timeout")
 
-                # 🔥 CRITICAL FIX: YIELD THE GIL!
+                #  CRITICAL FIX: YIELD THE GIL!
                 # Without this, spinning threads starve the lock holder.
                 # time.sleep(0) yields the thread's timeslice.
                 time.sleep(0) 
@@ -472,7 +473,7 @@ class SharedStateMonitor:
 
             # 2. Atomic Attempt: Even -> Odd
             # If successful, we own the lock!
-            if omnipkg_atomic.cas64(addr, current, current + 1):  # ← FIXED!
+            if omnipkg_atomic.cas64(addr, current, current + 1):  #  FIXED!
                 return current + 1
 
             # CAS failed (contention). Backoff slightly.
@@ -482,12 +483,12 @@ class SharedStateMonitor:
         """
         Unlock: CAS(Odd -> Odd + 1). Makes it Even (Free).
         """
-        # 🔥 FIX: Wrap memoryview in ctypes to get address
+        #  FIX: Wrap memoryview in ctypes to get address
         c_obj = ctypes.c_longlong.from_buffer(self.shm.buf)
         addr = ctypes.addressof(c_obj)
 
         # Verify we still own it (sanity check)
-        if not omnipkg_atomic.cas64(addr, my_odd_version, my_odd_version + 1):  # ← FIXED!
+        if not omnipkg_atomic.cas64(addr, my_odd_version, my_odd_version + 1):  #  FIXED!
              # Should never happen if logic is sound
              sys.stderr.write("CRITICAL: Atomic release failed (Version Mismatch)!\n")
 
@@ -511,9 +512,9 @@ class SharedStateMonitor:
             self.shm.unlink()
         except: pass
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # HFT OPTIMIZATION: Silence Resource Tracker
-# ═══════════════════════════════════════════════════════════════
+# 
 
 try:
     from multiprocessing import resource_tracker
@@ -790,17 +791,17 @@ class SHMRegistry:
 # Global SHM registry
 shm_registry = SHMRegistry()
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 1. PERSISTENT WORKER SCRIPT (FIXED - No raw string)
-# ═══════════════════════════════════════════════════════════════
+# 
 # CRITICAL FIX: Proper string escaping in _DAEMON_SCRIPT
 # The issue: sys.stderr.write() calls need proper escaping of backslash-n
 # ALWAYS USE '\\n' IN PLACE OF '\n' INSIDE THE RAW STRING
 # DO NOT PUT DOCSTRINGS INSIDE THE RAW STRING EITHER, IT BREAKS THE ESCAPES
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 1. PERSISTENT WORKER SCRIPT (FIXED - NO BLIND IMPORTS)
-# ═══════════════════════════════════════════════════════════════
+# 
 
 """
 CRITICAL FIX: Correct Import Order in _DAEMON_SCRIPT
@@ -841,21 +842,21 @@ except ImportError:
 os.environ['OMNIPKG_IS_DAEMON_WORKER'] = '1'
 os.environ['OMNIPKG_DISABLE_WORKER_POOL'] = '1'
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STEP 0: SCRUB INHERITED BUBBLE PATHS
 # The parent process may have an omnipkg bubble active when it
 # spawns this worker subprocess.  The bubble path leaks into the
 # child via:
-#   • os.environ["PYTHONPATH"] — prepended by bubble activation
-#   • sys.path itself (inherited via fork / execv with -c)
+#    os.environ["PYTHONPATH"] - prepended by bubble activation
+#    sys.path itself (inherited via fork / execv with -c)
 # If we don't remove it now, Python will import numpy (or any
 # other bubble package) from the PARENT'S active bubble instead
 # of the bubble we are about to activate for this worker spec.
 # This causes "cannot import name 'index_tricks' from partially
 # initialized module 'numpy.lib'" and similar cross-version errors.
-# Scrub unconditionally — the worker will activate the correct
+# Scrub unconditionally - the worker will activate the correct
 # bubble in STEP 3.
-# ═══════════════════════════════════════════════════════════════
+# 
 def _scrub_bubble_paths():
     _marker = '.omnipkg_versions'
     # 1. Strip from sys.path
@@ -891,9 +892,9 @@ def fatal_error(msg, error=None):
     sys.stderr.flush()
     sys.exit(1)
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STEP 1: PRE-WARM OMNIPKG CORE, THEN BLOCK FOR SPEC
-# ═══════════════════════════════════════════════════════════════
+# 
 import time as _wtime
 _t0 = _wtime.perf_counter()
 _preload_ok = False
@@ -928,20 +929,20 @@ try:
             _wpos.close(_wp_dn)
         _UV_FFI_RUN = _uv_ffi_run
         globals()['_UV_FFI_RUN'] = _uv_ffi_run
-        # ── Populate Rust site-packages cache immediately after warm-up ──
-        # pip freeze only warms the Tokio runtime — it does NOT populate the
+        #  Populate Rust site-packages cache immediately after warm-up 
+        # pip freeze only warms the Tokio runtime - it does NOT populate the
         # cache. patch_cache returns False until the cache has been seeded.
         # We call get_site_packages_cache() here to force the initial scan
         # so patch_cache works correctly from the very first message.
         try:
             from omnipkg._vendor.uv_ffi import get_site_packages_cache as _gspc
             _gspc()
-            sys.stderr.write('[WORKER-PRELOAD] ✅ site-packages cache populated' + chr(10))
+            sys.stderr.write('[WORKER-PRELOAD]  site-packages cache populated' + chr(10))
             sys.stderr.flush()
         except Exception as _gsp_ex:
             sys.stderr.write('[WORKER-PRELOAD] cache populate skipped: ' + str(_gsp_ex) + chr(10))
             sys.stderr.flush()
-        # ── FIX 1: wire FFI onto the pre-warmed core object so that
+        #  FIX 1: wire FFI onto the pre-warmed core object so that
         # core._run_pip_install() can find it via getattr(self, '_uv_ffi_run', None)
         # instead of crashing with AttributeError, which kills the worker and
         # forces the C dispatcher to fall back to a cold execv (~300ms).
@@ -949,10 +950,10 @@ try:
             _pre_core._uv_ffi_run = _uv_ffi_run
         except Exception:
             pass
-        sys.stderr.write('[WORKER-PRELOAD] ✅ uv FFI warmed' + chr(10))
+        sys.stderr.write('[WORKER-PRELOAD]  uv FFI warmed' + chr(10))
         sys.stderr.flush()
         # NOTE: No heartbeat thread. Tokio's background threads sleep at near-zero
-        # CPU cost and wake in nanoseconds when block_on() is called — there is no
+        # CPU cost and wake in nanoseconds when block_on() is called - there is no
         # reinit penalty between calls. The old heartbeat loop was the ROOT CAUSE of
         # Tokio runtime panics: if an external `uv` command deleted a .dist-info dir
         # while the heartbeat's `pip freeze` was running inside the Tokio executor,
@@ -981,7 +982,7 @@ try:
 
     setup_data = json.loads(input_line.strip())
 
-    # ── Shared dispatch loop — one worker handles run_cli AND run_uv forever ──
+    #  Shared dispatch loop - one worker handles run_cli AND run_uv forever 
     import io
     class StreamRedirector(io.TextIOBase):
         def __init__(self, stream_name):
@@ -1066,7 +1067,7 @@ try:
                     _rcli._PRELOADED_CM = globals()['_pre_cm']
                 if getattr(_rcli, '_PRELOADED_CORE', None) is None and '_pre_core' in globals():
                     _rcli._PRELOADED_CORE = globals()['_pre_core']
-                # ── FIX 2a: keep _uv_ffi_run wired on whatever core object is now
+                #  FIX 2a: keep _uv_ffi_run wired on whatever core object is now
                 # stashed, in case main() replaced _PRELOADED_CORE with a fresh one.
                 _ffi_fn_rc = globals().get('_UV_FFI_RUN')
                 if _ffi_fn_rc is not None:
@@ -1095,7 +1096,7 @@ try:
             _uv_args = setup_data.get('uv_args', [])
             _ffi_fn = globals().get('_UV_FFI_RUN')
             if _ffi_fn is None:
-                # C dispatcher may have just installed uv_ffi — retry import once before giving up
+                # C dispatcher may have just installed uv_ffi - retry import once before giving up
                 try:
                     from omnipkg._vendor.uv_ffi import run as _retry_ffi
                     # Warm it up the same way startup does
@@ -1164,7 +1165,7 @@ try:
                 _original_stdout.flush()
 
         elif _req_type == 'patch_cache':
-            # Surgical zero-I/O cache update — apply exact delta from FS watcher.
+            # Surgical zero-I/O cache update - apply exact delta from FS watcher.
             # Calls Rust patch_site_packages_cache(installed, removed) which does
             # the same sp.remove_packages()+sp.add_dist() as install.rs, no disk scan.
             _inst = setup_data.get('installed', [])
@@ -1181,10 +1182,10 @@ try:
                 _rem_t  = [tuple(x) for x in _rem]
                 _patched = _pspc(_inst_t, _rem_t)
                 if _patched:
-                    sys.stderr.write(f'[RUN-UV] patch_cache: ✅ patched inst={_inst_t} rem={_rem_t}\\n')
+                    sys.stderr.write(f'[RUN-UV] patch_cache:  patched inst={_inst_t} rem={_rem_t}\\n')
                 else:
                     # False = cache not yet populated (no run() call yet on this worker)
-                    # This is normal on a fresh worker — cache populates on first install
+                    # This is normal on a fresh worker - cache populates on first install
                     sys.stderr.write(f'[RUN-UV] patch_cache: skipped (cache not yet populated) inst={_inst_t} rem={_rem_t}\\n')
             except Exception as _pc_ex:
                 sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
@@ -1212,7 +1213,7 @@ try:
             _original_stdout.write(json.dumps({'status': 'COMPLETED', 'exit_code': 0}) + '\\n')
             _original_stdout.flush()
         elif _req_type == 'invalidate_cache':
-            # Legacy fallback — forces full rescan on next install.
+            # Legacy fallback - forces full rescan on next install.
             try:
                 import sys as _ic_sys, os as _ic_os
                 _ic_sys.path.insert(0, _ic_os.path.join(
@@ -1239,7 +1240,7 @@ try:
                 break
             sys.exit(0)
 
-        # Block for next request — same worker, same warm process
+        # Block for next request - same worker, same warm process
         _next_line = sys.stdin.readline()
         if not _next_line:
             sys.exit(0)
@@ -1250,12 +1251,29 @@ try:
 
     if not PKG_SPEC:
         fatal_error('Missing package_spec')
+
+    #  PID BANNER - printed to stderr immediately on spec assignment 
+    sys.stderr.write(f'[WORKER-PID] spec={PKG_SPEC} pid={os.getpid()}\\n')
+    sys.stderr.flush()
+    # 
+
+    #  PURGE PRE-WARMED ABI PACKAGES 
+    # The idle worker pre-warmed omnipkg.cli, which may have pulled in numpy
+    # from the main environment. If we don't purge it now, the bubble's numpy
+    # (e.g. 2.4.4 for TF 2.20) will conflict with the loaded one (1.26.4).
+    _to_purge = [
+        k for k in sys.modules
+        if any(k == m or k.startswith(m + '.') for m in ('numpy', 'scipy', 'tensorflow', 'torch', 'jax', 'cupy', 'cv2'))
+    ]
+    for _k in _to_purge:
+        sys.modules.pop(_k, None)
+
 except Exception as e:
     fatal_error('Startup configuration failed', e)
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STEP 2: IMPORT OMNIPKG LOADER
-# ═══════════════════════════════════════════════════════════════
+# 
 try:
     from omnipkg.loader import omnipkgLoader
 except ImportError as e:
@@ -1264,9 +1282,9 @@ except ImportError as e:
 if hasattr(omnipkgLoader, '_nesting_depth'):
     omnipkgLoader._nesting_depth = 0
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STEP 3: ACTIVATE BUBBLE (Adds paths to sys.path)
-# ═══════════════════════════════════════════════════════════════
+# 
 try:
     specs = [s.strip() for s in PKG_SPEC.split(',')]
     loaders = []
@@ -1306,7 +1324,7 @@ try:
             new_ld = new_ld + os.pathsep + current_ld
         os.environ['LD_LIBRARY_PATH'] = new_ld
 
-        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA paths (Target: cu{target_cuda_ver})\\n')
+        sys.stderr.write(f' [DAEMON] Injected {len(cuda_lib_paths)} CUDA paths (Target: cu{target_cuda_ver})\\n')
         sys.stderr.flush()
 
         import ctypes
@@ -1317,7 +1335,7 @@ try:
                 if cudart.exists():
                     try:
                         ctypes.CDLL(str(cudart))
-                        sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
+                        sys.stderr.write(f'    Pre-loaded: {cudart.name}\\n')
                         sys.stderr.flush()
                         break
                     except:
@@ -1325,34 +1343,34 @@ try:
             if 'cudart' in locals() and 'ctypes.CDLL' in locals():
                 break
     elif target_cuda_ver:
-        sys.stderr.write(f'ℹ️  [DAEMON] No CUDA libraries found for requested cu{target_cuda_ver}\\n')
+        sys.stderr.write(f'  [DAEMON] No CUDA libraries found for requested cu{target_cuda_ver}\\n')
         sys.stderr.flush()
 
     globals()['_omnipkg_loaders'] = loaders
     # REPLACE:
-    # STEP 3b intentionally removed — numpy bubble must NOT be injected before
+    # STEP 3b intentionally removed - numpy bubble must NOT be injected before
     # torch init. Adding numpy-1.26.4 to sys.path before torch.__init__ runs
     # causes numpy's source-tree guard to fire inside torch's C extension init,
     # leaving torch._C unbound. Numpy bubble is added post-READY if needed.
-    # ═══════════════════════════════════════════════════════════════
+    # 
     # STEP 3b: NUMPY COMPATIBILITY SIDECAR
     # torch/tensorflow need a numpy ABI-compatible with their build.
     # Loader auto-installs if missing. Activating before the bare
     # numpy import ensures the right one wins sys.path precedence.
-    # ═══════════════════════════════════════════════════════════════
+    # 
    #if any(fw in PKG_SPEC for fw in ('torch', 'tensorflow')):
     #   try:
     #       _np_loader = omnipkgLoader('numpy==1.26.4', isolation_mode='overlay', quiet=True)
     #       _np_loader.__enter__()
     #       loaders.append(_np_loader)
     #   except Exception as _np_err:
-    #       sys.stderr.write(f'⚠️  [DAEMON] numpy sidecar failed: {_np_err}\\n')
+    #       sys.stderr.write(f'  [DAEMON] numpy sidecar failed: {_np_err}\\n')
     #       sys.stderr.flush()
 
-    # ═══════════════════════════════════════════════════════════════
+    # 
     # STEP 4: CLEANUP CLOAKS (Critical - must happen before imports)
-    # ═══════════════════════════════════════════════════════════════
-    sys.stderr.write('🧹 [DAEMON] Starting immediate post-activation cleanup...\\n')
+    # 
+    sys.stderr.write(' [DAEMON] Starting immediate post-activation cleanup...\\n')
     sys.stderr.flush()
 
     cleanup_count = 0
@@ -1375,7 +1393,7 @@ try:
             loader._cloaked_main_modules.clear()
 
         if hasattr(loader, '_cloaked_bubbles') and loader._cloaked_bubbles:
-            for cloak_path, original_path in reversed(loader._cloaked_bubbles):
+            for original_path, cloak_path in reversed(loader._cloaked_bubbles):
                 try:
                     if cloak_path.exists():
                         if original_path.exists():
@@ -1393,22 +1411,22 @@ try:
             if hasattr(omnipkgLoader, '_active_main_env_packages'):
                 omnipkgLoader._active_main_env_packages.discard(loader._my_main_env_package)
 
-    sys.stderr.write(f'✅ [DAEMON] Cleanup complete! Restored {cleanup_count} items\\n')
+    sys.stderr.write(f' [DAEMON] Cleanup complete! Restored {cleanup_count} items\\n')
     sys.stderr.flush()
 
 except Exception as e:
     fatal_error(f'Failed to activate {PKG_SPEC}', e)
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STEP 5: RESTORE STDOUT
-# ═══════════════════════════════════════════════════════════════
+# 
 _devnull.close()
 sys.stdout = _original_stdout
 sys.stdout.reconfigure(line_buffering=True)
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # THE REAL FIX: Complete stub backend modules
-# ═══════════════════════════════════════════════════════════════
+# 
 
 def _patch_opt_einsum_worker():
     # Check what frameworks are NOT in this worker's spec
@@ -1486,14 +1504,21 @@ def _patch_opt_einsum_worker():
                 _top_stub = _types.ModuleType(framework)
                 _top_stub.__file__ = '<omnipkg-isolated>'
                 _top_stub.xla_computation = lambda *a, **kw: None  # TF lite uses this
+                if framework == 'jax':
+                    _mon_stub = _types.ModuleType('jax.monitoring')
+                    _mon_stub.record_scalar = lambda *a, **kw: None
+                    _mon_stub.record_event = lambda *a, **kw: None
+                    _mon_stub.record_event_duration_secs = lambda *a, **kw: None
+                    _top_stub.monitoring = _mon_stub
+                    sys.modules['jax.monitoring'] = _mon_stub
                 sys.modules[framework] = _top_stub
 
-        sys.stderr.write(f'🩹 [DAEMON] Isolated worker from: {", ".join(unavailable)}\\n')
+        sys.stderr.write(f' [DAEMON] Isolated worker from: {", ".join(unavailable)}\\n')
         sys.stderr.flush()
 
     except Exception as e:
         import traceback
-        sys.stderr.write(f'⚠️  [DAEMON] Isolation patch failed: {e}\\n')
+        sys.stderr.write(f'  [DAEMON] Isolation patch failed: {e}\\n')
         sys.stderr.write(traceback.format_exc())
         sys.stderr.flush()
 
@@ -1504,11 +1529,26 @@ _patch_opt_einsum_worker()
 # and opt_einsum.backends tries to "from .torch import TorchBackend",
 # it will succeed (getting our stub) instead of crashing
 
-# ═══════════════════════════════════════════════════════════
-# STEP 6: NOW IMPORT FRAMEWORKS (Paths are in sys.path now!)
-# ═══════════════════════════════════════════════════════════
+# STRIP MAIN SITE-PACKAGES FOR ABI-SENSITIVE WORKERS
+# Loader works because it physically cloaks main env site-packages from sys.path.
+# Daemon doesn't cloak, so TF C++ linker sees main env numpy (1.26.4) alongside
+# bubble numpy (2.4.5) and picks the wrong ABI -> dtype size mismatch crash.
+if any(fw in PKG_SPEC for fw in ('tensorflow', 'torch')):
+    _bubble_sp_paths = [p for p in sys.path if '.omnipkg_versions' in p]
+    if _bubble_sp_paths:
+        sys.path[:] = [
+            p for p in sys.path
+            if 'site-packages' not in p or '.omnipkg_versions' in p
+        ]
+        sys.stderr.write('[DAEMON] Stripped main site-packages for ABI isolation' + chr(10))
+        sys.stderr.write('[DAEMON] sys.path now: ' + str(sys.path) + chr(10))
+        sys.stderr.flush()
 
-# 🔥 CRITICAL FIX: Capture stdout during imports
+# 
+# STEP 6: NOW IMPORT FRAMEWORKS (Paths are in sys.path now!)
+# 
+
+#  CRITICAL FIX: Capture stdout during imports
 # TensorFlow's NumPy patcher writes to stdout, breaking JSON protocol
 import io
 _capture_stdout = io.StringIO()
@@ -1519,14 +1559,40 @@ try:
     import ctypes
     import glob
 
-    # Lazy import numpy (always safe to try)
-    try:
-        import numpy as np
-    except ImportError:
-        np = None
-        sys.stderr.write('⚠️  [DAEMON] NumPy not found - SHM features disabled\\n')
-        sys.stderr.flush()
+    # DO NOT import numpy here - it maps the wrong .so before bubble activation.
+    # numpy is lazy-imported at request time (after TF/torch load the bubble numpy).
+    # ABI integrity is checked via filesystem .so probe only - no import needed.
+    np = None
 
+    if 'tensorflow' in PKG_SPEC:
+        #  NUMPY ABI INTEGRITY CHECK (filesystem only - no import)
+        # Probe the bubble's site-packages for numpy's C extension .so.
+        # numpy 2.x: numpy/_core/_multiarray_umath*.so
+        # numpy 1.x: numpy/core/_multiarray_umath*.so
+        # If .so is missing the bubble is corrupt -> exit 43 (no retry).
+        _bubble_sp = os.environ.get('OMNIPKG_BUBBLE_SITE_PACKAGES', '')
+        if not _bubble_sp:
+            _bubble_sp = next(
+                (p for p in sys.path if '.omnipkg_versions' in p and 'site-packages' in p),
+                ''
+            )
+        if _bubble_sp:
+            _np_root = os.path.join(_bubble_sp, 'numpy')
+            _so_v2 = glob.glob(os.path.join(_np_root, '_core', '_multiarray_umath*.so'))
+            _so_v1 = glob.glob(os.path.join(_np_root, 'core', '_multiarray_umath*.so'))
+            _found_so = _so_v2 or _so_v1
+            if os.path.isdir(_np_root) and not _found_so:
+                sys.stderr.write(
+                    f'\\\\n [DAEMON] BROKEN BUBBLE: numpy missing C extension in {_np_root}\\\\n'
+                    f' [DAEMON]   FIX: 8pkg install {PKG_SPEC} --force\\\\n'
+                    f' [DAEMON]   (retrying will not help - exiting with code 43)\\\\n'
+                )
+                sys.stderr.flush()
+                sys.exit(43)
+            elif _found_so:
+                sys.stderr.write(f'[NP-DIAG] numpy C-ext confirmed (pre-import): {_found_so[0]}\\\\n')
+                sys.stderr.flush()
+        #  END NUMPY ABI INTEGRITY CHECK
     # UniversalGpuIpc class (keep your existing code here - don't change it)
     class UniversalGpuIpc:
         _lib = None
@@ -1612,7 +1678,7 @@ try:
         try:
             UniversalGpuIpc.get_lib()
             _universal_gpu_ipc_available = True
-            sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
+            sys.stderr.write(' [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
             sys.stderr.flush()
         except Exception:
             _universal_gpu_ipc_available = False
@@ -1627,6 +1693,13 @@ try:
     # Import TensorFlow if in spec
     if 'tensorflow' in PKG_SPEC:
         try:
+            _np_mods = {k: getattr(sys.modules[k], '__file__', '?') for k in sys.modules if k == 'numpy' or k.startswith('numpy.')}
+            sys.stderr.write('[NP-DEBUG] numpy in sys.modules: ' + str(len(_np_mods)) + chr(10))
+            for _k, _v in list(_np_mods.items())[:5]:
+                sys.stderr.write('[NP-DEBUG]   ' + _k + ' -> ' + str(_v) + chr(10))
+            sys.stderr.write('[NP-DEBUG] bubble sys.path: ' + str([p for p in sys.path if 'omnipkg_versions' in p]) + chr(10))
+            sys.stderr.write('[NP-DEBUG] FULL sys.path: ' + str(sys.path) + chr(10))
+            sys.stderr.flush()
             import tensorflow as tf
             gpus = tf.config.list_physical_devices('GPU')
             if gpus:
@@ -1635,11 +1708,19 @@ try:
                         tf.config.experimental.set_memory_growth(gpu, True)
                     except:
                         pass
-            sys.stderr.write('✅ [DAEMON] TensorFlow initialized (Memory Growth ON)\\n')
+            sys.stderr.write(' [DAEMON] TensorFlow initialized (Memory Growth ON)\\n')
             sys.stderr.flush()
         except Exception as e:
-            sys.stderr.write(f'⚠️  [DAEMON] TensorFlow import failed: {e}\\n')
+            sys.stderr.write(f'  [DAEMON] TensorFlow preload failed (pid={os.getpid()}): {e}\\n')
             sys.stderr.flush()
+            #  CRITICAL: libtensorflow_framework.so is already mmap'd in this process.
+            # Purging sys.modules doesn't un-dlopen the .so - any subsequent
+            # `import tensorflow` will hit TF's internal re-init guard and raise.
+            # This process is permanently poisoned. Exit so the daemon spawns a
+            # fresh worker with a clean address space.
+            sys.stderr.write('  [DAEMON] TF C++ libs mapped but init failed - worker exiting for fresh spawn\\n')
+            sys.stderr.flush()
+            sys.exit(42)  # exit code 42 = TF preload poisoned, needs fresh spawn
 
     # Import PyTorch if in spec
     if 'torch' in PKG_SPEC:
@@ -1647,7 +1728,7 @@ try:
             import torch
             _torch_available = True
             _cuda_available = torch.cuda.is_available()
-            sys.stderr.write(f'🔍 [DAEMON] PyTorch {torch.__version__} initialized\\n')
+            sys.stderr.write(f' [DAEMON] PyTorch {torch.__version__} initialized\\n')
             sys.stderr.flush()
 
             if _cuda_available:
@@ -1659,16 +1740,16 @@ try:
                         if hasattr(test_tensor.storage(), '_share_cuda_'):
                             _native_ipc_mode = True
                             _gpu_ipc_available = True
-                            sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED\\n')
+                            sys.stderr.write(' [DAEMON] NATIVE CUDA IPC ENABLED\\n')
                             sys.stderr.flush()
                     except:
                         pass
                 else:
                     _gpu_ipc_available = True
-                    sys.stderr.write('🚀 [DAEMON] GPU IPC available (Hybrid/Universal)\\n')
+                    sys.stderr.write(' [DAEMON] GPU IPC available (Hybrid/Universal)\\n')
                     sys.stderr.flush()
         except Exception as e:
-            sys.stderr.write(f'⚠️  [DAEMON] PyTorch import failed: {e}\\n')
+            sys.stderr.write(f'  [DAEMON] PyTorch import failed: {e}\\n')
             sys.stderr.flush()
             # Purge the partial torch init so the task gets a clean import.
             # A half-initialized torch in sys.modules is worse than none:
@@ -1677,26 +1758,26 @@ try:
                             if k == 'torch' or k.startswith('torch.')]
             for _k in _torch_stubs:
                 sys.modules.pop(_k, None)
-            sys.stderr.write(f'🧹 [DAEMON] Purged {len(_torch_stubs)} partial torch modules after failed init\\n')
+            sys.stderr.write(f' [DAEMON] Purged {len(_torch_stubs)} partial torch modules after failed init\\n')
             sys.stderr.flush()
 
 
-    # Eagerly resolve Universal IPC at startup — True/False before first request.
+    # Eagerly resolve Universal IPC at startup - True/False before first request.
     try:
         UniversalGpuIpc.get_lib()
         _universal_gpu_ipc_available = True
         _gpu_ipc_available = True
-        sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
+        sys.stderr.write(' [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
         sys.stderr.flush()
     except Exception:
         _universal_gpu_ipc_available = False
 
 finally:
-    # 🔥 RESTORE STDOUT and log any captured output to stderr
+    #  RESTORE STDOUT and log any captured output to stderr
     sys.stdout = _temp_stdout
     _captured = _capture_stdout.getvalue()
     if _captured:
-        sys.stderr.write(f'📝 [DAEMON] Captured stdout during imports:\\n{_captured}')
+        sys.stderr.write(f' [DAEMON] Captured stdout during imports:\\n{_captured}')
         sys.stderr.flush()
 
 from multiprocessing import shared_memory
@@ -1731,30 +1812,30 @@ except NameError:
 
 # Now it's safe to use these variables in the READY signal
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # STEP 7: SEND READY SIGNAL
-# ═══════════════════════════════════════════════════════════════
+# 
 try:
     ready_msg = {'status': 'READY', 'package': PKG_SPEC, 'native_ipc': _native_ipc_mode}
     # CRITICAL FIX: Write to _original_stdout, not sys.stdout (which is /dev/null)
     _original_stdout.write(json.dumps(ready_msg) + '\\n')
     _original_stdout.flush()
-    sys.stderr.write(f'✅ [DAEMON] Sent READY signal for {PKG_SPEC}\\n')
+    sys.stderr.write(f' [DAEMON] Sent READY signal for {PKG_SPEC}\\n')
     sys.stderr.flush()
 except Exception as e:
     sys.stderr.write(f"ERROR: Failed to send READY: {e}\\n")
     sys.stderr.flush()
     sys.exit(1)
-sys.stderr.write('🎯 [WORKER] READY signal sent, entering main execution loop...\\n')
+sys.stderr.write(' [WORKER] READY signal sent, entering main execution loop...\\n')
 sys.stderr.flush()
 
-# ═══════════════════════════════════════════════════════════════
-# PERSISTENT GLOBALS — survives across all task executions
+# 
+# PERSISTENT GLOBALS - survives across all task executions
 # This is what makes model caching work: globals()["_CACHED_MODEL"]
 # set on call 1 is still there on call 2, 3, ... N.
 # Per-task transient values (tensor_in, arr_in, etc.) are injected
 # fresh each call but do NOT leak back into this dict.
-# ═══════════════════════════════════════════════════════════════
+# 
 _worker_globals = {
     '__builtins__': __builtins__,
     'sys': sys,
@@ -1768,9 +1849,9 @@ if _torch_available:
 if np is not None:
     _worker_globals['np'] = np
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # MAIN EXECUTION LOOP
-# ═══════════════════════════════════════════════════════════════
+# 
 
 _last_ipc_tensor = None
 
@@ -1778,7 +1859,7 @@ while True:
     try:
         command_line = sys.stdin.readline()
         if not command_line:
-            sys.stderr.write('🛑 [WORKER] EOF received, exiting\\n')
+            sys.stderr.write(' [WORKER] EOF received, exiting\\n')
             sys.stderr.flush()
             break
         command_line = command_line.strip()
@@ -1794,7 +1875,7 @@ while True:
         # This is SEPARATE from _worker_globals so transient objects don't
         # accumulate across calls (e.g. large tensors freed after each task).
         task_scope = {'input_data': command}
-        # exec_scope merges persistent globals + task-local — code sees both.
+        # exec_scope merges persistent globals + task-local - code sees both.
         # We pass _worker_globals as the globals dict so that assignments like
         #   globals()["_CACHED_MODEL"] = ...
         # persist into _worker_globals and survive to the next call.
@@ -1805,9 +1886,9 @@ while True:
         in_meta = command.get('cuda_in') if is_cuda_request else command.get('shm_in')
         out_meta = command.get('cuda_out') if is_cuda_request else command.get('shm_out')
         actual_cuda_method = 'hybrid'
-        # ═══════════════════════════════════════════════════════════
+        # 
         # INPUT HANDLING - UNIVERSAL IPC FIRST!
-        # ═══════════════════════════════════════════════════════════
+        # 
 
         if in_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in in_meta:
             try:
@@ -1820,12 +1901,12 @@ while True:
                 exec_scope['tensor_in'] = tensor
                 actual_cuda_method = 'universal_ipc'
 
-                sys.stderr.write(f'🔥 [TASK {task_id}] UNIVERSAL IPC input (TRUE ZERO-COPY)\\n')
+                sys.stderr.write(f' [TASK {task_id}] UNIVERSAL IPC input (TRUE ZERO-COPY)\\n')
                 sys.stderr.flush()
 
             except Exception as e:
                 import traceback
-                sys.stderr.write(f'⚠️  [TASK {task_id}] Universal IPC failed: {e}\\n')
+                sys.stderr.write(f'  [TASK {task_id}] Universal IPC failed: {e}\\n')
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
                 in_meta.pop('universal_ipc', None)
@@ -1870,18 +1951,18 @@ while True:
                 exec_scope['tensor_in'] = tensor
                 actual_cuda_method = 'native_ipc'
 
-                sys.stderr.write(f'🔥 [TASK {task_id}] NATIVE IPC input (PyTorch 1.x)\\n')
+                sys.stderr.write(f' [TASK {task_id}] NATIVE IPC input (PyTorch 1.x)\\n')
                 sys.stderr.flush()
             except Exception as e:
                 import traceback
-                sys.stderr.write(f'⚠️  [TASK {task_id}] Native IPC input failed: {e}\\n')
+                sys.stderr.write(f'  [TASK {task_id}] Native IPC input failed: {e}\\n')
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
 
         # HYBRID PATH (SHM + GPU copy)
         if in_meta and 'tensor_in' not in exec_scope:
             if np is None:
-                raise RuntimeError("NumPy is required for SHM inputs but is not available")
+                import numpy as np  # lazy: bubble is active by now
             shm_name = in_meta.get('shm_name') or in_meta.get('name')
             shm_in = shared_memory.SharedMemory(name=shm_name)
             shm_blocks.append(shm_in)
@@ -1895,18 +1976,18 @@ while True:
             if is_cuda_request and _torch_available and _cuda_available:
                 device = torch.device(f"cuda:{in_meta.get('device', 0)}")
                 exec_scope['tensor_in'] = torch.from_numpy(arr_in).to(device)
-                sys.stderr.write(f'🔄 [TASK {task_id}] HYBRID input (SHM→GPU)\\n')
+                sys.stderr.write(f' [TASK {task_id}] HYBRID input (SHM->GPU)\\n')
                 sys.stderr.flush()
             else:
                 exec_scope['tensor_in'] = arr_in
                 exec_scope['arr_in'] = arr_in
 
-        # ═══════════════════════════════════════════════════════════
+        # 
         # OUTPUT HANDLING
-        # ═══════════════════════════════════════════════════════════
+        # 
         arr_out = None
 
-        # UNIVERSAL IPC OUTPUT — client pre-allocated, worker just opens handle
+        # UNIVERSAL IPC OUTPUT - client pre-allocated, worker just opens handle
         if out_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in out_meta:
             try:
                 tensor = UniversalGpuIpc.load(out_meta['universal_ipc'])
@@ -1914,11 +1995,11 @@ while True:
                     raise RuntimeError("Same process - cannot IPC to self")
                 exec_scope['tensor_out'] = tensor
                 actual_cuda_method = 'universal_ipc'
-                sys.stderr.write(f'🔥 [TASK {task_id}] UNIVERSAL IPC output (TRUE ZERO-COPY)\\n')
+                sys.stderr.write(f' [TASK {task_id}] UNIVERSAL IPC output (TRUE ZERO-COPY)\\n')
                 sys.stderr.flush()
             except Exception as e:
                 import traceback
-                sys.stderr.write(f'⚠️  [TASK {task_id}] Universal IPC output failed: {e}\\n')
+                sys.stderr.write(f'  [TASK {task_id}] Universal IPC output failed: {e}\\n')
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
                 out_meta.pop('universal_ipc', None)
@@ -1963,11 +2044,11 @@ while True:
                 if actual_cuda_method == 'hybrid':
                     actual_cuda_method = 'native_ipc'
 
-                sys.stderr.write(f'🔥 [TASK {task_id}] NATIVE IPC output (PyTorch 1.x)\\n')
+                sys.stderr.write(f' [TASK {task_id}] NATIVE IPC output (PyTorch 1.x)\\n')
                 sys.stderr.flush()
             except Exception as e:
                 import traceback
-                sys.stderr.write(f'⚠️  [TASK {task_id}] Native IPC output failed: {e}\\n')
+                sys.stderr.write(f'  [TASK {task_id}] Native IPC output failed: {e}\\n')
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
 
@@ -2000,13 +2081,13 @@ while True:
                 exec_scope['tensor_out'] = arr_out
                 exec_scope['arr_out'] = arr_out
 
-        # ═══════════════════════════════════════════════════════════
+        # 
         # EXECUTE USER CODE
-        # ═══════════════════════════════════════════════════════════
+        # 
         stdout_buffer = io.StringIO()
         stderr_buffer = io.StringIO()
 
-        # torch/np already in _worker_globals from startup — no-op reassign is fine
+        # torch/np already in _worker_globals from startup - no-op reassign is fine
         if _torch_available:
             exec_scope['torch'] = torch
         exec_scope['np'] = np
@@ -2024,10 +2105,10 @@ while True:
                 if hasattr(result_tensor, 'is_cuda') and result_tensor.is_cuda:
                     try:
                         arr_out[:] = result_tensor.cpu().numpy()
-                        sys.stderr.write(f'✅ [TASK {task_id}] HYBRID: Copied GPU→SHM\\n')
+                        sys.stderr.write(f' [TASK {task_id}] HYBRID: Copied GPU->SHM\\n')
                         sys.stderr.flush()
                     except Exception as e:
-                        sys.stderr.write(f'⚠️  [TASK {task_id}] Copy-back failed: {e}\\n')
+                        sys.stderr.write(f'  [TASK {task_id}] Copy-back failed: {e}\\n')
                         sys.stderr.flush()
 
             result = exec_scope.get("worker_result", {})
@@ -2040,7 +2121,7 @@ while True:
             result['stdout'] = stdout_buffer.getvalue()
             result['stderr'] = stderr_buffer.getvalue()
             result['cuda_method'] = actual_cuda_method
-            # ── DIRTY DETECTION ──
+            #  DIRTY DETECTION 
             try:
                 _loader_mod = sys.modules.get('omnipkg.loader')
                 _cls = getattr(_loader_mod, 'omnipkgLoader', None)
@@ -2049,7 +2130,7 @@ while True:
                 if _cls:
                     _cls._daemon_did_version_switch = False
 
-                # ☢️ ABI CONTAMINATION — check for new C extensions (.so) loaded during task
+                #  ABI CONTAMINATION - check for new C extensions (.so) loaded during task
                 _post_task_modules = set(sys.modules.keys())
                 _new_modules = _post_task_modules - _pre_task_modules
                 _worker_pkg = PKG_SPEC.split('==')[0].replace('-','_').lower() if PKG_SPEC else ''
@@ -2066,13 +2147,13 @@ while True:
             except Exception:
                 result['_worker_did_nesting'] = False
                 result['_worker_abi_contaminated'] = False
-            # ── END DIRTY DETECTION ──
+            #  END DIRTY DETECTION 
             _original_stdout.write(json.dumps(result) + '\\n')
             _original_stdout.flush()
 
         except Exception as e:
             import traceback
-            # ☢️ ABI contamination must be reported even on ERROR — this is how
+            #  ABI contamination must be reported even on ERROR - this is how
             # the daemon knows to evict a worker that blew up during assign_spec.
             _abi_cexts_err = {'tensorflow', 'torch', 'numpy', 'scipy', 'jax', 'cupy', 'cv2'}
             _abi_contaminated_err = any(m in sys.modules for m in _abi_cexts_err)
@@ -2085,7 +2166,7 @@ while True:
                 '_worker_did_nesting': False,
                 '_worker_abi_contaminated': _abi_contaminated_err,
             }
-            sys.stderr.write(f'❌ [DAEMON] Sending error for task {task_id}: {str(e)}\\n')
+            sys.stderr.write(f' [DAEMON] Sending error for task {task_id}: {str(e)}\\n')
             sys.stderr.flush()
             # CRITICAL FIX: Write to _original_stdout
             _original_stdout.write(json.dumps(error_response) + '\\n')
@@ -2113,7 +2194,7 @@ while True:
             'traceback': traceback.format_exc(),
             'success': False
         }
-        sys.stderr.write(f'❌ [DAEMON] Command processing error: {str(e)}\\n')
+        sys.stderr.write(f' [DAEMON] Command processing error: {str(e)}\\n')
         sys.stderr.flush()
         # CRITICAL FIX: Write to _original_stdout
         _original_stdout.write(json.dumps(error_response) + '\\n')
@@ -2128,7 +2209,7 @@ def diagnose_worker_issue(package_spec: str):
     """
     Run this to diagnose why a worker might return the wrong version.
     """
-    safe_print(_('\n🔍 Diagnosing worker issue for: {}').format(package_spec))
+    safe_print(_('\n Diagnosing worker issue for: {}').format(package_spec))
     print("=" * 70)
 
     pkg_name, expected_version = package_spec.split("==")
@@ -2145,14 +2226,14 @@ def diagnose_worker_issue(package_spec: str):
         from importlib.metadata import version
 
         actual_version = version(pkg_name)
-        safe_print(_('   ✅ Found version: {}').format(actual_version))
+        safe_print(_('    Found version: {}').format(actual_version))
 
         if actual_version != expected_version:
-            safe_print("   ❌ VERSION MISMATCH!")
+            safe_print("    VERSION MISMATCH!")
             print(_('      Expected: {}').format(expected_version))
             print(_('      Got: {}').format(actual_version))
     except Exception as e:
-        safe_print(f"   ❌ Import failed: {e}")
+        safe_print(f"    Import failed: {e}")
 
     site_packages = (
         Path(sys.prefix)
@@ -2172,9 +2253,9 @@ def diagnose_worker_issue(package_spec: str):
     print("\n" + "=" * 70)
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 2. WORKER ORCHESTRATOR
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 class PersistentWorker:
@@ -2250,7 +2331,7 @@ class PersistentWorker:
             f.write(_DAEMON_SCRIPT)
             self.temp_file = f.name
 
-        # 🔥 CRITICAL: Sanitize environment for the worker
+        #  CRITICAL: Sanitize environment for the worker
         # We MUST NOT inherit PYTHONPATH from the daemon's environment (usually 3.11).
         env = os.environ.copy()
 
@@ -2260,7 +2341,7 @@ class PersistentWorker:
 
         # Tell the worker it's running inside the daemon so safe_input()
         # activates the NEEDS_INPUT relay instead of calling input() directly.
-        env["OMNIPKG_DAEMON_WORKER"] = "1"          # ← ADD THIS LINE
+        env["OMNIPKG_DAEMON_WORKER"] = "1"          #  ADD THIS LINE
         # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
         if self.multiversion_base:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
@@ -2269,7 +2350,7 @@ class PersistentWorker:
         if os.environ.get("UV_FFI_PROFILE"):
             env["UV_FFI_PROFILE"] = "1"
         env["OMNIPKG_DAEMON_TEMP_ID"] = _VENV_TEMP_DIR.split(os.sep)[-1]
-        # 🔑 ENSURE per-interpreter config file exists next to this interpreter.
+        #  ENSURE per-interpreter config file exists next to this interpreter.
         # Without this, the worker falls back to global config (wrong multiversion_base).
         # _ensure_worker_config writes a lightweight JSON that ConfigManager finds first.
         if self.site_packages and self.python_exe:
@@ -2361,7 +2442,7 @@ class PersistentWorker:
                 # as long as it's actually doing work (installing/compiling).
                 timeout = 600.0 
 
-                safe_print(f"   ⏳ [DAEMON] Configuring worker for '{self.package_spec}' (Timeout: {timeout}s)...", file=sys.stderr)
+                safe_print(f"    [DAEMON] Configuring worker for '{self.package_spec}' (Timeout: {timeout}s)...", file=sys.stderr)
 
                 ready_line = self.wait_for_ready_with_activity_monitoring(
                     self.process, 
@@ -2371,7 +2452,7 @@ class PersistentWorker:
                 if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
                     self.last_health_check = time.time()
                     self._is_ready = True
-                    safe_print(_('   ✅ [DAEMON] Worker ready: {}').format(self.package_spec), file=sys.stderr)
+                    safe_print(_('    [DAEMON] Worker ready: {}').format(self.package_spec), file=sys.stderr)
                     return
 
                 raise RuntimeError("Worker failed to send READY status.")
@@ -2414,7 +2495,7 @@ class PersistentWorker:
                 pass
 
             if ready_line:
-                safe_print(f"✅ [DAEMON] Got READY signal: {ready_line[:100]}", file=sys.stderr)
+                safe_print(f" [DAEMON] Got READY signal: {ready_line[:100]}", file=sys.stderr)
                 return ready_line
 
             # Activity Monitoring
@@ -2534,10 +2615,10 @@ class PersistentWorker:
             # permanently desyncing the request/response protocol.
             import queue as _queue
             try:
-                safe_print(f"⏱️  [DAEMON] Waiting for response from queue...", file=sys.stderr)
+                safe_print(f"  [DAEMON] Waiting for response from queue...", file=sys.stderr)
                 t = time.perf_counter()
                 response_line = self.stdout_queue.get(timeout=60.0)
-                safe_print(f"⏱️  [DAEMON] Got response in {(time.perf_counter()-t)*1000:.1f}ms", file=sys.stderr)
+                safe_print(f"  [DAEMON] Got response in {(time.perf_counter()-t)*1000:.1f}ms", file=sys.stderr)
             except _queue.Empty:
                 response_line = None
 
@@ -2630,10 +2711,10 @@ class PersistentWorker:
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
         safe_print(
-            _('\n🔍 DEBUG: _DAEMON_SCRIPT length: {} chars').format(len(_DAEMON_SCRIPT)),
+            _('\n DEBUG: _DAEMON_SCRIPT length: {} chars').format(len(_DAEMON_SCRIPT)),
             file=sys.stderr,
         )
-        safe_print("🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
+        safe_print(" DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
         print(_("   '{}'").format(_DAEMON_SCRIPT[-200:]), file=sys.stderr)
 
         # Create temp script file
@@ -2647,9 +2728,9 @@ class PersistentWorker:
             self.temp_file = f.name
 
         # CRITICAL DEBUG: Print the temp file path and validate syntax
-        safe_print(_('\n🔍 DEBUG: Worker script written to: {}').format(self.temp_file), file=sys.stderr)
+        safe_print(_('\n DEBUG: Worker script written to: {}').format(self.temp_file), file=sys.stderr)
         safe_print(
-            _('🔍 DEBUG: File size: {} bytes').format(os.path.getsize(self.temp_file)),
+            _(' DEBUG: File size: {} bytes').format(os.path.getsize(self.temp_file)),
             file=sys.stderr,
         )
 
@@ -2658,17 +2739,17 @@ class PersistentWorker:
             with open(self.temp_file, "r", encoding="utf-8") as f:
                 script_content = f.read()
             compile(script_content, self.temp_file, "exec")
-            safe_print("✅ DEBUG: Script syntax is valid", file=sys.stderr)
+            safe_print(" DEBUG: Script syntax is valid", file=sys.stderr)
         except SyntaxError as e:
-            safe_print("\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
+            safe_print("\n SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
             print(_('   File: {}').format(self.temp_file), file=sys.stderr)
             print(_('   Line {}: {}').format(e.lineno, e.msg), file=sys.stderr)
-            safe_print("\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
+            safe_print("\n SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
             with open(self.temp_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 start_line = max(0, len(lines) - 50)
                 for i, line in enumerate(lines[start_line:], start=start_line + 1):
-                    marker = " ⚠️ " if i == e.lineno else "    "
+                    marker = "  " if i == e.lineno else "    "
                     print(f"{marker}{i:3d}: {line.rstrip()}", file=sys.stderr)
             raise RuntimeError(f"Generated script has syntax error at line {e.lineno}: {e.msg}")
 
@@ -2676,12 +2757,12 @@ class PersistentWorker:
         current_pythonpath = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
 
-        # 🔥 FIX: Open daemon log for worker stderr (store as instance variable)
+        #  FIX: Open daemon log for worker stderr (store as instance variable)
         self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)  # Line buffering
 
-        # ═══════════════════════════════════════════════════════════
-        # 🔥 NEW: INJECT CUDA LIBRARY PATHS BEFORE SPAWN
-        # ═══════════════════════════════════════════════════════════
+        # 
+        #  NEW: INJECT CUDA LIBRARY PATHS BEFORE SPAWN
+        # 
         cuda_lib_paths = self._discover_cuda_paths()
         if cuda_lib_paths:
             current_ld = env.get("LD_LIBRARY_PATH", "")
@@ -2691,7 +2772,7 @@ class PersistentWorker:
             env["LD_LIBRARY_PATH"] = new_ld
 
             safe_print(
-                _('🔧 [WORKER] Injecting {} CUDA paths into environment').format(len(cuda_lib_paths)),
+                _(' [WORKER] Injecting {} CUDA paths into environment').format(len(cuda_lib_paths)),
                 file=sys.stderr,
             )
             for path in cuda_lib_paths:
@@ -2706,13 +2787,13 @@ class PersistentWorker:
             [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=self.log_file,  # ✅ Log to file instead of /dev/null
+            stderr=self.log_file,  #  Log to file instead of /dev/null
             text=True,
             encoding='utf-8',
             errors='replace',
             bufsize=0,
             env=env,
-            preexec_fn=os.setsid if not IS_WINDOWS else None,  # 🔥 Windows fix
+            preexec_fn=os.setsid if not IS_WINDOWS else None,  #  Windows fix
             creationflags=creationflags,
         )
 
@@ -2792,13 +2873,13 @@ class PersistentWorker:
                     "shm_out": shm_out,
                 }
 
-                safe_print(f"🔍 [DAEMON] Sending task {task_id} to worker (package_spec={self.package_spec})", file=sys.stderr)
-                safe_print(f"🔍 [DAEMON] Command: {json.dumps(command)[:200]}...", file=sys.stderr)
+                safe_print(f" [DAEMON] Sending task {task_id} to worker (package_spec={self.package_spec})", file=sys.stderr)
+                safe_print(f" [DAEMON] Command: {json.dumps(command)[:200]}...", file=sys.stderr)
 
                 self.process.stdin.write(json.dumps(command) + "\n")
                 self.process.stdin.flush()
 
-                safe_print(f"🔍 [DAEMON] Task sent, waiting for response (timeout={timeout}s)...", file=sys.stderr)
+                safe_print(f" [DAEMON] Task sent, waiting for response (timeout={timeout}s)...", file=sys.stderr)
 
                 # Read from Queue with timeout
                 import queue
@@ -2813,20 +2894,20 @@ class PersistentWorker:
                     response_line = None
 
                 if not response_line:
-                    safe_print(f"❌ [DAEMON] No response received within {timeout}s", file=sys.stderr)
-                    safe_print(f"❌ [DAEMON] Worker process poll status: {self.process.poll()}", file=sys.stderr)
+                    safe_print(f" [DAEMON] No response received within {timeout}s", file=sys.stderr)
+                    safe_print(f" [DAEMON] Worker process poll status: {self.process.poll()}", file=sys.stderr)
                     raise TimeoutError(f"Task timed out after {timeout}s")
 
-                safe_print(f"✅ [DAEMON] Got response: {response_line[:500]}...", file=sys.stderr)
+                safe_print(f" [DAEMON] Got response: {response_line[:500]}...", file=sys.stderr)
                 parsed = json.loads(response_line.strip())
-                safe_print(f"✅ [DAEMON] Parsed response status: {parsed.get('status')}", file=sys.stderr)
+                safe_print(f" [DAEMON] Parsed response status: {parsed.get('status')}", file=sys.stderr)
                 # On ERROR: dump full traceback + worker state so failures are debuggable
                 if parsed.get("status") == "ERROR":
                     tb = parsed.get("traceback", "")
                     err = parsed.get("error", "")
-                    safe_print(f"❌ [DAEMON] Task {task_id} FAILED: {err}", file=sys.stderr)
+                    safe_print(f" [DAEMON] Task {task_id} FAILED: {err}", file=sys.stderr)
                     if tb:
-                        safe_print(f"❌ [DAEMON] Traceback:\n{tb}", file=sys.stderr)
+                        safe_print(f" [DAEMON] Traceback:\n{tb}", file=sys.stderr)
                     # Dump comprehensive worker state for diagnosis
                     try:
                         diag_code = (
@@ -2873,22 +2954,22 @@ class PersistentWorker:
                             if _diag_out.strip():
                                 import json as _j2
                                 _state = _j2.loads(_diag_out.strip().splitlines()[-1])
-                                safe_print(f"🔍 [DAEMON] Worker sys.path (relevant): {_state.get('sys_path')}", file=sys.stderr)
-                                safe_print(f"🔍 [DAEMON] Worker cwd: {_state.get('cwd')}", file=sys.stderr)
-                                safe_print(f"🔍 [DAEMON] numpy dirs visible in sys.path: {_state.get('numpy_dirs_in_path')}", file=sys.stderr)
-                                safe_print(f"🔍 [DAEMON] numpy in sys.modules: {_state.get('numpy_in_sys_modules')}", file=sys.stderr)
-                                safe_print(f"🔍 [DAEMON] Worker visible bubbles: {_state.get('bubbles')}", file=sys.stderr)
+                                safe_print(f" [DAEMON] Worker sys.path (relevant): {_state.get('sys_path')}", file=sys.stderr)
+                                safe_print(f" [DAEMON] Worker cwd: {_state.get('cwd')}", file=sys.stderr)
+                                safe_print(f" [DAEMON] numpy dirs visible in sys.path: {_state.get('numpy_dirs_in_path')}", file=sys.stderr)
+                                safe_print(f" [DAEMON] numpy in sys.modules: {_state.get('numpy_in_sys_modules')}", file=sys.stderr)
+                                safe_print(f" [DAEMON] Worker visible bubbles: {_state.get('bubbles')}", file=sys.stderr)
                         except (_q.Empty, Exception) as _de:
-                            safe_print(f"🔍 [DAEMON] Diagnostic query failed: {_de}", file=sys.stderr)
+                            safe_print(f" [DAEMON] Diagnostic query failed: {_de}", file=sys.stderr)
                     except Exception as _diag_err:
-                        safe_print(f"🔍 [DAEMON] Could not query worker state: {_diag_err}", file=sys.stderr)
-                # ☢️ Store last result so _run_cli can read _worker_abi_contaminated
+                        safe_print(f" [DAEMON] Could not query worker state: {_diag_err}", file=sys.stderr)
+                #  Store last result so _run_cli can read _worker_abi_contaminated
                 # before deciding whether to recycle this worker into idle_pools.
                 self._last_result = parsed
                 return parsed
 
             except Exception as e:
-                safe_print(f"❌ [DAEMON] execute_shm_task exception: {e}", file=sys.stderr)
+                safe_print(f" [DAEMON] execute_shm_task exception: {e}", file=sys.stderr)
                 import traceback
                 safe_print(traceback.format_exc(), file=sys.stderr)
                 self.health_check_failures += 1
@@ -2918,7 +2999,7 @@ class PersistentWorker:
             return result.get("status") == "COMPLETED"
         except Exception:
             self.health_check_failures += 1
-            # ABI workers that fail the probe are immediately terminal — no retry
+            # ABI workers that fail the probe are immediately terminal - no retry
             if _pkg_name in _ABI_PROBE_PKGS:
                 self.health_check_failures = 999
             return False
@@ -2980,9 +3061,9 @@ class PersistentWorker:
                     pass
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 3. DAEMON MANAGER
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 import queue
@@ -3004,17 +3085,17 @@ class WorkerPoolDaemon:
         self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.pool_lock = threading.RLock()
 
-        # 🚀 IDLE WORKER POOL: Keep bare Python processes ready per executable
+        #  IDLE WORKER POOL: Keep bare Python processes ready per executable
         # Key: python_exe path (ALWAYS normalized via _normalize_exe), Value: Queue of idle workers
         self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
         # Default configuration: 3 idle workers for the daemon's own python.
-        # Use _venv_python_exe() not sys.executable — on macOS the daemon is forked
+        # Use _venv_python_exe() not sys.executable - on macOS the daemon is forked
         # via a venv symlink so sys.executable resolves to the framework Python,
         # causing workers to spawn without venv context and crash on omnipkg import.
         _own_exe = _normalize_exe(_venv_python_exe())
         self.idle_config: Dict[str, int] = {_own_exe: 1}
 
-        # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
+        #  AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
         if self.cm:
             try:
                 registry_path = self.cm.venv_path / ".omnipkg" / "interpreters" / "registry.json"
@@ -3035,7 +3116,7 @@ class WorkerPoolDaemon:
         self.running = True
         self.socket_path = DEFAULT_SOCKET
 
-        # ── ABI PACKAGE ACTIVATION LOCKS ────────────────────────────────────
+        #  ABI PACKAGE ACTIVATION LOCKS 
         # C-extension packages (TF, torch, etc.) do filesystem bubble/cloak
         # operations during omnipkgLoader.__enter__(). If two workers for
         # different versions of the same package (e.g. tf==2.12.0 and
@@ -3046,18 +3127,18 @@ class WorkerPoolDaemon:
         self.abi_activation_locks: Dict[str, threading.Lock] = {
             pkg: threading.Lock() for pkg in _ABI_PKG_NAMES
         }
-        # ────────────────────────────────────────────────────────────────────
+        # 
 
-        # ── DEDICATED UV WORKERS: one PersistentWorker per Python exe ──────
+        #  DEDICATED UV WORKERS: one PersistentWorker per Python exe 
         # These are NEVER shared with idle_pools (run_cli).
         # A per-python Lock serializes installs so site-packages is never
         # corrupted by concurrent writes, and the in-process site-pkg cache
         # inside the Tokio runtime is always coherent.
         self.uv_workers: Dict[str, "PersistentWorker"] = {}
         self.uv_worker_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
-        self._uv_last_install_ts: Dict[str, float] = {}  # py_exe → monotonic time of last completed install
-        self._UV_WORKER_IDLE_TIMEOUT = 86400.0  # 1 day — lazy respawn ~130ms, fine for infrequent use
-        # ────────────────────────────────────────────────────────────────────
+        self._uv_last_install_ts: Dict[str, float] = {}  # py_exe -> monotonic time of last completed install
+        self._UV_WORKER_IDLE_TIMEOUT = 86400.0  # 1 day - lazy respawn ~130ms, fine for infrequent use
+        # 
 
         self.running = True
         self.socket_path = DEFAULT_SOCKET
@@ -3073,7 +3154,7 @@ class WorkerPoolDaemon:
     def _cleanup_stale_temp_files(self):
         """Clean up old temporary files from previous runs."""
         import shutil
-        safe_print("   🧹 [DAEMON] Cleaning up stale temporary files...", file=sys.stderr)
+        safe_print("    [DAEMON] Cleaning up stale temporary files...", file=sys.stderr)
         # Nuke stale locks and claim markers
         import glob as _glob
         import platform as _pl
@@ -3105,7 +3186,7 @@ class WorkerPoolDaemon:
                     pass
 
             if script_count > 0:
-                safe_print(_('   🗑️  [DAEMON] Removed {} stale temp script(s).').format(script_count), file=sys.stderr)
+                safe_print(_('     [DAEMON] Removed {} stale temp script(s).').format(script_count), file=sys.stderr)
 
             # --- Pip Temporary Directory Cleanup (CRITICAL for disk space) ---
             temp_dir = tempfile.gettempdir()
@@ -3124,16 +3205,16 @@ class WorkerPoolDaemon:
                         pass
 
             if pip_dir_count > 0:
-                 safe_print(_('   🗑️  [DAEMON] Removed {} stale pip temporary directory/file(s).').format(pip_dir_count), file=sys.stderr)
+                 safe_print(_('     [DAEMON] Removed {} stale pip temporary directory/file(s).').format(pip_dir_count), file=sys.stderr)
 
         except Exception as e:
-            safe_print(_('   ⚠️  [DAEMON] Error during cleanup: {}').format(e), file=sys.stderr)
+            safe_print(_('     [DAEMON] Error during cleanup: {}').format(e), file=sys.stderr)
 
     def start(self, daemonize: bool = True, wait_for_ready: bool = False):
         """
         Starts the daemon, handling platform differences and waiting logic.
         """
-        # 🔥 DEBUG
+        #  DEBUG
         os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"[DEBUG] WorkerPoolDaemon.start() called - daemonize={daemonize}, wait_for_ready={wait_for_ready}\n")
@@ -3166,7 +3247,7 @@ class WorkerPoolDaemon:
                     self._daemonize() # Detaches from the terminal.
 
                 except OSError as e:
-                    safe_print(_('❌ Fork failed: {}').format(e), file=sys.stderr)
+                    safe_print(_(' Fork failed: {}').format(e), file=sys.stderr)
                     return False
 
         # This code is executed by:
@@ -3180,7 +3261,7 @@ class WorkerPoolDaemon:
     def _replenish_idle_pool(self, python_exe: str):
         python_exe = _normalize_exe(python_exe)
 
-        # Don't over-spawn — check target before spawning
+        # Don't over-spawn - check target before spawning
         _target = self.idle_config.get(python_exe, 0)
         if self.idle_pools[python_exe].qsize() >= _target:
             return
@@ -3202,7 +3283,7 @@ class WorkerPoolDaemon:
                 try:
                     pool.put_nowait(idle_worker)
                     safe_print(
-                        f"   💤 [DAEMON] Replenished idle worker for {python_exe} "
+                        f"    [DAEMON] Replenished idle worker for {python_exe} "
                         f"(Pool size: {pool.qsize()})",
                         file=sys.stderr,
                     )
@@ -3210,14 +3291,14 @@ class WorkerPoolDaemon:
                     idle_worker.force_shutdown()
             except Exception as e:
                 safe_print(
-                    f"   ⚠️ [DAEMON] Failed to replenish idle worker for {python_exe}: {e}",
+                    f"    [DAEMON] Failed to replenish idle worker for {python_exe}: {e}",
                     file=sys.stderr,
                 )
 
         threading.Thread(target=_do_spawn, daemon=True, name=f"replenish-{python_exe[-20:]}").start()
 
     def _maintain_idle_pool(self):
-        """🚀 Pre-spawns Python processes for specific executables so they are ready instantly."""
+        """ Pre-spawns Python processes for specific executables so they are ready instantly."""
         while self.running:
             try:
                 # Iterate over configured python executables and their target counts
@@ -3228,10 +3309,10 @@ class WorkerPoolDaemon:
                     pool = self.idle_pools[python_exe]
 
                     if pool.qsize() < target_count:
-                        # Brief pause — let recycled workers land before spawning fresh ones
+                        # Brief pause - let recycled workers land before spawning fresh ones
                         time.sleep(0.1)
                         if pool.qsize() >= target_count:
-                            continue  # A recycled worker filled the slot — no spawn needed
+                            continue  # A recycled worker filled the slot - no spawn needed
                         # Resolve authoritative paths for this specific python version.
                         # _resolve_target_paths handles cm lookup + filesystem fallback.
                         target_paths = _resolve_target_paths(self.cm, python_exe)
@@ -3248,12 +3329,12 @@ class WorkerPoolDaemon:
                         )
                         try:
                             pool.put_nowait(idle_worker)
-                            safe_print(f"   💤 [DAEMON] Spawned idle worker for {python_exe} (Pool size: {pool.qsize()})", file=sys.stderr)
+                            safe_print(f"    [DAEMON] Spawned idle worker for {python_exe} (Pool size: {pool.qsize()})", file=sys.stderr)
                         except queue.Full:
                             # If pool is full (e.g. config changed downward), kill the extra worker
                             idle_worker.force_shutdown()
                         except Exception as e:
-                            safe_print(f"   ⚠️ [DAEMON] Failed to spawn idle worker for {python_exe}: {e}", file=sys.stderr)
+                            safe_print(f"    [DAEMON] Failed to spawn idle worker for {python_exe}: {e}", file=sys.stderr)
                             # Avoid tight loop on failure
                             time.sleep(1.0)
             except Exception:
@@ -3327,7 +3408,7 @@ class WorkerPoolDaemon:
 
         os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
 
-        safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
+        safe_print(" Starting daemon in background (Windows mode)...", file=sys.stderr)
 
         try:
             DETACHED_PROCESS = 0x00000008
@@ -3337,7 +3418,7 @@ class WorkerPoolDaemon:
             # Keep log file handle open in parent process to prevent premature close
             log_file_handle = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
 
-            # 🔥 CRITICAL: Add OMNIPKG_DAEMON_CHILD to environment to prevent infinite spawning
+            #  CRITICAL: Add OMNIPKG_DAEMON_CHILD to environment to prevent infinite spawning
             env = dict(os.environ, 
                       PYTHONUNBUFFERED="1",
                       OMNIPKG_DAEMON_CHILD="1")
@@ -3368,21 +3449,21 @@ class WorkerPoolDaemon:
 
             if wait_for_ready:
                 if self._wait_for_daemon_ready(timeout=15):  # Increase timeout
-                    safe_print(f'✅ Daemon running (PID from file)', file=sys.stderr)
+                    safe_print(f' Daemon running (PID from file)', file=sys.stderr)
                     return True
                 else:
-                    safe_print(_('❌ Timeout (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
+                    safe_print(_(' Timeout (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
                     return False
             else:
                 time.sleep(5)  # Give Windows more time
                 if self.is_running():
-                    safe_print('✅ Daemon started', file=sys.stderr)
+                    safe_print(' Daemon started', file=sys.stderr)
                     return True
                 else:
-                    safe_print(_('❌ Failed (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
+                    safe_print(_(' Failed (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
                     return False
         except Exception as e:
-            safe_print(_('❌ Failed: {}').format(e), file=sys.stderr)
+            safe_print(_(' Failed: {}').format(e), file=sys.stderr)
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
@@ -3417,18 +3498,18 @@ class WorkerPoolDaemon:
         if wait_for_ready:
             if self._wait_for_daemon_ready(timeout=10):
                 safe_print(
-                    _('✅ Daemon confirmed running. Resuming original command...'),
+                    _(' Daemon confirmed running. Resuming original command...'),
                     file=sys.stderr
                 )
                 return True
             else:
                 safe_print(
-                    _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
+                    _(' Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
                     file=sys.stderr
                 )
                 return False
         else: # Fire-and-forget for standard daemon start
-            safe_print(_('✅ Daemon process forked (PID: {})').format(child_pid))
+            safe_print(_(' Daemon process forked (PID: {})').format(child_pid))
             sys.exit(0)
 
     def _initialize_daemon_process(self):
@@ -3745,7 +3826,7 @@ class WorkerPoolDaemon:
                         worker.force_shutdown()
                     except Exception:
                         pass
-                # No reply needed — C dispatcher sent fire-and-forget
+                # No reply needed - C dispatcher sent fire-and-forget
                 try:
                     conn.close()
                 except Exception:
@@ -3811,7 +3892,7 @@ class WorkerPoolDaemon:
             elif req["type"] == "end_omnipkg_op":
                 inst = req.get("installed", [])
                 rem = req.get("removed", [])
-                # 🔥 TRUTH-TRACKING: Log exactly what the daemon received
+                #  TRUTH-TRACKING: Log exactly what the daemon received
                 safe_print(f"[DAEMON-ROUTER] Received end_op: INST={inst}, REM={rem}", file=sys.stderr)
 
                 if hasattr(self, '_fs_watcher') and self._fs_watcher:
@@ -3858,7 +3939,7 @@ class WorkerPoolDaemon:
         except Exception as e:
             # 4. Handle Actual Logic Errors (Log these!)
             import traceback
-            safe_print(f"❌ [DAEMON] _handle_client exception: {e}\n{traceback.format_exc()}", file=sys.stderr)
+            safe_print(f" [DAEMON] _handle_client exception: {e}\n{traceback.format_exc()}", file=sys.stderr)
             try:
                 send_json(conn, {"success": False, "error": str(e)})
             except Exception:
@@ -3907,7 +3988,7 @@ class WorkerPoolDaemon:
             target_paths = {}
             if self.cm:
                 target_paths = _resolve_target_paths(self.cm, python_exe)
-            safe_print(f"[RUN-CLI] no idle worker — spawning fresh", file=sys.stderr)
+            safe_print(f"[RUN-CLI] no idle worker - spawning fresh", file=sys.stderr)
             worker = PersistentWorker(
                 package_spec=None,
                 python_exe=python_exe,
@@ -3927,7 +4008,7 @@ class WorkerPoolDaemon:
 
             # Drain any queued stream frames from a previous recycled job,
             # worker's previous pip/uv output) must be skipped, not treated as
-            # fatal — breaking on parse failure was causing "Worker failed to
+            # fatal - breaking on parse failure was causing "Worker failed to
             # send READY" and forcing a cold execv fallback on every call.
             ready_parsed = None
             ready_line = None
@@ -3944,13 +4025,13 @@ class WorkerPoolDaemon:
                 try:
                     _msg = json.loads(ready_line)
                 except Exception:
-                    # Stale non-JSON line from previous job — skip, keep draining
+                    # Stale non-JSON line from previous job - skip, keep draining
                     safe_print(f"[RUN-CLI] skipping stale line: {ready_line[:80]!r}", file=sys.stderr)
                     continue
                 if _msg.get("status") == "READY":
                     ready_parsed = _msg
                     break
-                # stream frame from previous job — forward to client and keep waiting
+                # stream frame from previous job - forward to client and keep waiting
                 try:
                     send_json(conn, _msg)
                 except Exception:
@@ -3960,7 +4041,7 @@ class WorkerPoolDaemon:
             safe_print(f"[RUN-CLI] ready_line={repr(ready_line)} ({(_t_ready-_t_got_worker)*1000:.2f}ms)", file=sys.stderr)
 
             if ready_parsed is None:
-                safe_print(f"[RUN-CLI] worker READY timeout — subprocess fallback", file=sys.stderr)
+                safe_print(f"[RUN-CLI] worker READY timeout - subprocess fallback", file=sys.stderr)
                 worker.force_shutdown()
                 try:
                     _fb_python = req.get("python_exe") or sys.executable
@@ -3990,7 +4071,7 @@ class WorkerPoolDaemon:
                 try:
                     # Use a short poll interval so we remain responsive.
                     # safe_input() in the worker blocks until it gets a
-                    # stdin_line reply, so there's no busy-spin here —
+                    # stdin_line reply, so there's no busy-spin here -
                     # the worker simply won't produce output until we
                     # send the reply.
                     line = worker.stdout_queue.get(timeout=86400.0)
@@ -4002,15 +4083,15 @@ class WorkerPoolDaemon:
 
                 msg = json.loads(line)
 
-                # ── stdout / stderr stream — forward to C dispatcher ──────
+                #  stdout / stderr stream - forward to C dispatcher 
                 if msg.get("stream"):
                     try:
                         send_json(conn, msg)
                     except Exception:
                         break
 
-                # ── NEEDS_INPUT — relay prompt to C dispatcher, wait for
-                #    the user's reply, then send it back to the worker ──────
+                #  NEEDS_INPUT - relay prompt to C dispatcher, wait for
+                #    the user's reply, then send it back to the worker 
                 elif msg.get("status") == "NEEDS_INPUT":
                     try:
                         # 1. Forward the NEEDS_INPUT frame to the C dispatcher.
@@ -4028,7 +4109,7 @@ class WorkerPoolDaemon:
                             worker.process.stdin.write(json.dumps(reply) + "\n")
                             worker.process.stdin.flush()
                         else:
-                            # Unexpected reply or closed conn — send empty line
+                            # Unexpected reply or closed conn - send empty line
                             # so the worker doesn't hang forever.
                             worker.process.stdin.write(
                                 json.dumps({"type": "stdin_line", "data": ""}) + "\n"
@@ -4036,7 +4117,7 @@ class WorkerPoolDaemon:
                             worker.process.stdin.flush()
                     except Exception as _ni_err:
                         safe_print(f"[RUN-CLI] NEEDS_INPUT relay failed: {_ni_err}", file=sys.stderr)
-                        # Send empty line — worker returns default and continues.
+                        # Send empty line - worker returns default and continues.
                         try:
                             worker.process.stdin.write(
                                 json.dumps({"type": "stdin_line", "data": ""}) + "\n"
@@ -4044,17 +4125,17 @@ class WorkerPoolDaemon:
                             worker.process.stdin.flush()
                         except Exception:
                             break
-                    # Continue the loop — worker resumes and will send more output.
+                    # Continue the loop - worker resumes and will send more output.
 
-                # ── COMPLETED / ERROR — forward and finish ────────────────
+                #  COMPLETED / ERROR - forward and finish 
                 elif msg.get("status") in ("COMPLETED", "ERROR"):
                     _t_completed = _rt.perf_counter()
                     safe_print(
                         f"[RUN-CLI] COMPLETED in {(_t_completed-_t0)*1000:.2f}ms total "
-                        f"(worker→daemon→client relay)",
+                        f"(worker->daemon->client relay)",
                         file=sys.stderr
                     )
-                    # ☢️ Store last result so the recycle gate can read
+                    #  Store last result so the recycle gate can read
                     # _worker_abi_contaminated before putting this worker
                     # back into idle_pools. _run_cli bypasses execute_shm_task
                     # so we must set it here directly.
@@ -4075,28 +4156,28 @@ class WorkerPoolDaemon:
             if worker is not None:
                 if _completed_cleanly and worker is not None:
                     try:
-                        # ── ABI CONTAMINATION CHECK ────────────────────────
+                        #  ABI CONTAMINATION CHECK 
                         # If the worker ran any code that loaded a C-extension
                         # with a version-specific ABI (TF, torch, numpy, etc.),
                         # the OS linker has permanently bound this process to
                         # that .so. Recycling it into idle_pools would hand it
-                        # to a different spec's assign_spec call → crash.
+                        # to a different spec's assign_spec call -> crash.
                         # The flag is set by the idle.py dirty detection block
                         # and stored on the worker by execute_shm_task.
                         _last_result = getattr(worker, '_last_result', {}) or {}
                         _abi_contaminated = _last_result.get('_worker_abi_contaminated', False)
                         if _abi_contaminated:
                             safe_print(
-                                f"[RUN-CLI] ☢️  ABI-contaminated worker — evicting "
+                                f"[RUN-CLI]   ABI-contaminated worker - evicting "
                                 f"pid={worker.process.pid} (cext loaded in sys.modules)",
                                 file=sys.stderr,
                             )
                             worker.force_shutdown()
                             worker = None
                             self._replenish_idle_pool(python_exe)
-                        # ── END ABI CHECK ──────────────────────────────────
+                        #  END ABI CHECK 
 
-                        # ── RAM CHECK before recycling into idle pool ──────
+                        #  RAM CHECK before recycling into idle pool 
                         _worker_ram_mb = 0
                         if worker is not None:
                             try:
@@ -4111,9 +4192,9 @@ class WorkerPoolDaemon:
                         _RAM_RECYCLE_LIMIT_MB = 150
                         if worker is not None and _worker_ram_mb > _RAM_RECYCLE_LIMIT_MB:
                             safe_print(
-                                f"[RUN-CLI] 🗑️  Worker too fat to recycle "
+                                f"[RUN-CLI]   Worker too fat to recycle "
                                 f"({_worker_ram_mb:.0f}MB > {_RAM_RECYCLE_LIMIT_MB}MB)"
-                                f" pid={worker.process.pid} — evicting",
+                                f" pid={worker.process.pid} - evicting",
                                 file=sys.stderr,
                             )
                             worker.force_shutdown()
@@ -4132,13 +4213,13 @@ class WorkerPoolDaemon:
                                 try: pool.put_nowait(item)
                                 except: pass
                             safe_print(
-                                f"[RUN-CLI] ♻️  Recycled worker pid={worker.process.pid}"
+                                f"[RUN-CLI]   Recycled worker pid={worker.process.pid}"
                                 f" ({_worker_ram_mb:.0f}MB)",
                                 file=sys.stderr,
                             )
                             self._uv_last_install_ts[python_exe] = time.monotonic()
                             worker = None
-                        # ── END RAM CHECK ──────────────────────────────────
+                        #  END RAM CHECK 
                     except Exception:
                         pass
                 if worker is not None:
@@ -4156,14 +4237,14 @@ class WorkerPoolDaemon:
         Run a uv install through the DEDICATED UV worker for this Python.
 
         Architecture:
-          - self.uv_workers[python_exe]      — one persistent worker per interpreter
-          - self.uv_worker_locks[python_exe] — serializes concurrent installs
+          - self.uv_workers[python_exe]      - one persistent worker per interpreter
+          - self.uv_worker_locks[python_exe] - serializes concurrent installs
 
         This guarantees:
           1. Site-packages cache inside the Tokio runtime is always coherent
              (same process = same cache, never stale across workers)
           2. No concurrent writes to the same site-packages directory
-          3. Changelog dict returned directly — no stderr parsing needed
+          3. Changelog dict returned directly - no stderr parsing needed
         """
         import time as _rt
         import shutil as _sh
@@ -4173,7 +4254,7 @@ class WorkerPoolDaemon:
         python_exe = _normalize_exe(_resolve_python_exe(req.get("python_exe")))
         safe_print(f"[RUN-UV] python_exe={python_exe}", file=sys.stderr)
 
-        # Acquire the per-python serialization lock — blocks concurrent installs
+        # Acquire the per-python serialization lock - blocks concurrent installs
         # for the same interpreter but allows parallel installs across pythons.
         uv_lock = self.uv_worker_locks[python_exe]
         acquired = uv_lock.acquire(timeout=300.0)
@@ -4192,7 +4273,7 @@ class WorkerPoolDaemon:
                 worker.process is None
                 or worker.process.poll() is not None
             ):
-                safe_print(f"[RUN-UV] dedicated worker for {python_exe} died — respawning", file=sys.stderr)
+                safe_print(f"[RUN-UV] dedicated worker for {python_exe} died - respawning", file=sys.stderr)
                 try:
                     worker.force_shutdown()
                 except Exception:
@@ -4231,7 +4312,7 @@ class WorkerPoolDaemon:
                 try:
                     msg = json.loads(line)
                 except Exception:
-                    # Non-JSON stale output — skip
+                    # Non-JSON stale output - skip
                     safe_print(f"[RUN-UV] skipping non-JSON: {line[:60]!r}", file=sys.stderr)
                     continue
 
@@ -4242,10 +4323,10 @@ class WorkerPoolDaemon:
                         break
                 elif msg.get("status") == "FFI_UNAVAILABLE":
                     safe_print(
-                        f"[RUN-UV] FFI unavailable on {python_exe} — subprocess fallback",
+                        f"[RUN-UV] FFI unavailable on {python_exe} - subprocess fallback",
                         file=sys.stderr,
                     )
-                    # Remove dead worker — will be respawned next call once FFI is installed
+                    # Remove dead worker - will be respawned next call once FFI is installed
                     try:
                         worker.force_shutdown()
                     except Exception:
@@ -4267,7 +4348,7 @@ class WorkerPoolDaemon:
                         _completed_cleanly = True
                     break
 
-            # ── Subprocess fallback when FFI unavailable on this interpreter ──
+            #  Subprocess fallback when FFI unavailable on this interpreter 
             if not _completed_cleanly and worker is None:
                 _uv_exe = req.get("uv_exe") or _sh.which("uv")
                 _uv_args = req.get("uv_args", [])
@@ -4294,15 +4375,15 @@ class WorkerPoolDaemon:
                     try:
                         send_json(conn, result)
                         _completed_cleanly = True
-                        # ── Auto-install uv_ffi so next worker spawn uses FFI not subprocess ──
+                        #  Auto-install uv_ffi so next worker spawn uses FFI not subprocess 
                         # Fire in a daemon thread so we don't hold the UV lock.
                         def _install_ffi_bg(py_exe=python_exe):
                             try:
-                                # Only install if genuinely missing — never reinstall a live .so
+                                # Only install if genuinely missing - never reinstall a live .so
                                 # Reinstalling mid-flight corrupts memory-mapped .so in other workers
                                 try:
                                     import omnipkg._vendor.uv_ffi as _chk
-                                    safe_print(f"[RUN-UV] uv_ffi already present — skipping auto-install",
+                                    safe_print(f"[RUN-UV] uv_ffi already present - skipping auto-install",
                                             file=sys.stderr)
                                     return  # already installed, nothing to do
                                 except ImportError:
@@ -4314,7 +4395,7 @@ class WorkerPoolDaemon:
                                     capture_output=True, timeout=120,
                                 )
                                 if _r.returncode == 0:
-                                    safe_print(f"[RUN-UV] uv_ffi auto-installed for {py_exe} — next call uses FFI",
+                                    safe_print(f"[RUN-UV] uv_ffi auto-installed for {py_exe} - next call uses FFI",
                                             file=sys.stderr)
                                     # Evict the stale worker so next call spawns a fresh one with FFI
                                     self.uv_workers.pop(py_exe, None)
@@ -4370,7 +4451,7 @@ class WorkerPoolDaemon:
         Execute Python code inside a persistent isolated worker process.
 
         The daemon keeps one worker process alive per (spec, python, tag) triplet
-        and routes subsequent calls to that same process — so model weights,
+        and routes subsequent calls to that same process - so model weights,
         loaded tokenizers, and any other globals stay warm across calls.
 
         Parameters
@@ -4389,13 +4470,13 @@ class WorkerPoolDaemon:
 
         shm_in / shm_out : dict
             Shared-memory metadata for zero-copy array handoff.  Pass ``{}``
-            for the JSON (small-data) path — execute_smart handles this for you.
+            for the JSON (small-data) path - execute_smart handles this for you.
 
         python_exe : str, optional
             Interpreter to use.  Accepts:
-              - ``None``         → current interpreter (sys.executable)
-              - Full path        → ``"/home/user/.omnipkg/.../python3.11"``
-              - Short version    → ``"3.11"``, ``"py311"``, ``"python3.11"``
+              - ``None``         -> current interpreter (sys.executable)
+              - Full path        -> ``"/home/user/.omnipkg/.../python3.11"``
+              - Short version    -> ``"3.11"``, ``"py311"``, ``"python3.11"``
             The short-version form is resolved via the omnipkg interpreter registry
             (same versions listed by ``8pkg info python``).
 
@@ -4405,7 +4486,7 @@ class WorkerPoolDaemon:
 
             Use this when you load large models and want process-level isolation::
 
-                # nllb and seedx each get their own process → no RAM sharing
+                # nllb and seedx each get their own process -> no RAM sharing
                 client.execute_smart(spec="torch==2.9.1", worker_tag="nllb-600m", ...)
                 client.execute_smart(spec="torch==2.9.1", worker_tag="seedx-7b",  ...)
 
@@ -4418,31 +4499,31 @@ class WorkerPoolDaemon:
             guarding against accumulation when running many large models.
             Example: ``max_memory_mb=18_000`` for an ~18 GB model cap.
         """
-        # ── Resolve interpreter (accepts short versions like "3.11") ──────────
+        #  Resolve interpreter (accepts short versions like "3.11") 
         python_exe = _normalize_exe(_resolve_python_exe(python_exe))
 
-        # ── Build worker key ───────────────────────────────────────────────────
+        #  Build worker key 
         # The tag (if any) is appended to the key so this call gets its own
         # worker bucket, but the raw spec is kept clean for pip installs.
         key_spec   = f"{spec}#{worker_tag}" if worker_tag else spec
         worker_key = f"{key_spec}::{python_exe}"
 
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # FAST PATH: Worker exists, execute immediately
-        # ═══════════════════════════════════════════════════════════════
+        # 
         with self.pool_lock:
             if worker_key in self.workers:
-                # ── DIRTY WORKER EVICTION (untagged only) ──────────────────
+                #  DIRTY WORKER EVICTION (untagged only) 
                 if self.workers[worker_key].get("dirty") and not worker_tag:
                     _old = self.workers.pop(worker_key)
                     threading.Thread(
                         target=_old["worker"].force_shutdown, daemon=True
                     ).start()
                     safe_print(
-                        f"   🔄 [DAEMON] Evicted dirty worker on reuse: {worker_key}",
+                        f"    [DAEMON] Evicted dirty worker on reuse: {worker_key}",
                         file=sys.stderr,
                     )
-                # ── END DIRTY EVICTION ──────────────────────────────────────
+                #  END DIRTY EVICTION 
                 else:
                     self.stats["cache_hits"] += 1
                     worker_info = self.workers[worker_key]
@@ -4459,7 +4540,7 @@ class WorkerPoolDaemon:
                     shm_out,
                     timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
                 )
-                # ── IMMEDIATE EVICTION IF NESTED SWITCHING OCCURRED ────────
+                #  IMMEDIATE EVICTION IF NESTED SWITCHING OCCURRED 
                 _has_tag = bool(worker_tag)
                 _did_nest = result.get("_worker_did_nesting")
                 _abi_dirty = result.get("_worker_abi_contaminated")
@@ -4474,27 +4555,27 @@ class WorkerPoolDaemon:
                         self._replenish_idle_pool(python_exe)
                         _reason = "nesting+ABI" if (_did_nest and _abi_dirty) else ("nesting" if _did_nest else "ABI contamination")
                         safe_print(
-                            f"   🔄 [DAEMON] Immediately evicted dirty worker ({_reason}): {spec}",
+                            f"    [DAEMON] Immediately evicted dirty worker ({_reason}): {spec}",
                             file=sys.stderr,
                         )
-                # ── END IMMEDIATE EVICTION ──────────────────────────────────
-                # ☢️ Tagged ABI workers must also die after use — they can't be reused for a different spec
+                #  END IMMEDIATE EVICTION 
+                #  Tagged ABI workers must also die after use - they can't be reused for a different spec
                 elif _has_tag and _abi_dirty:
                     with self.pool_lock:
                         _entry = self.workers.get(worker_key)
                         if _entry:
-                            _entry["dirty"] = True  # Mark dirty — evicted on next access (existing dirty-eviction path)
+                            _entry["dirty"] = True  # Mark dirty - evicted on next access (existing dirty-eviction path)
                     safe_print(
-                        f"   ☢️  [DAEMON] Tagged ABI worker marked dirty for next-access eviction: {worker_key}",
+                        f"     [DAEMON] Tagged ABI worker marked dirty for next-access eviction: {worker_key}",
                         file=sys.stderr,
                     )
                 return result
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # SLOW PATH: Create worker (loader handles all locking internally)
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # Only prevents duplicate worker creation
         with self.worker_locks[worker_key]:
             # Double-check after acquiring lock
@@ -4527,10 +4608,10 @@ class WorkerPoolDaemon:
             try:
                 _took_from_idle = False
 
-                # ── SERIALIZE ABI PACKAGE ACTIVATION ───────────────────────
+                #  SERIALIZE ABI PACKAGE ACTIVATION 
                 # Two concurrent workers for different versions of the same
                 # ABI package (e.g. tf==2.12 + tf==2.13) must not run
-                # assign_spec at the same time — omnipkgLoader.__enter__()
+                # assign_spec at the same time - omnipkgLoader.__enter__()
                 # does filesystem bubble/cloak ops that race across versions.
                 # Grab the per-pkg-name lock for the duration of assign_spec.
                 _pkg_name = spec.split("==")[0].split("[")[0].strip()
@@ -4544,19 +4625,31 @@ class WorkerPoolDaemon:
                     if pool:
                         worker = pool.get_nowait()
                         # Double-check: worker must use the exact normalized python we need.
-                        # This guards against any race where a wrong-python idle sneaked in.
                         if _normalize_exe(worker.python_exe) != python_exe:
                             safe_print(
-                                f"   ⚠️ [DAEMON] Idle worker python mismatch! "
+                                f"    [DAEMON] Idle worker python mismatch! "
                                 f"Got {worker.python_exe}, wanted {python_exe}. Discarding.",
                                 file=sys.stderr,
                             )
                             worker.force_shutdown()
                             raise queue.Empty  # fall through to fresh spawn
-                        # Acquire ABI lock BEFORE assign_spec — holds through READY signal
+
+                        #  FIX: Prevent numpy ABI contamination 
+                        # A recycled idle worker (used by run_cli) might have loaded
+                        # an incompatible numpy version into sys.modules.
+                        if _spec_is_dirty(spec) and getattr(worker, '_last_result', None) is not None:
+                            safe_print(
+                                f"    [DAEMON] Discarding recycled idle worker for ABI package '{spec}' to prevent C++ contamination.",
+                                file=sys.stderr,
+                            )
+                            worker.force_shutdown()
+                            raise queue.Empty  # fall through to fresh spawn
+                        # 
+
+                        # Acquire ABI lock BEFORE assign_spec - holds through READY signal
                         with (_abi_activation_lock if _abi_activation_lock else _null_ctx()):
                             safe_print(
-                                f"   🔒 [DAEMON] ABI activation lock acquired for '{_pkg_name}' (from idle pool)",
+                                f"    [DAEMON] ABI activation lock acquired for '{_pkg_name}' (from idle pool)",
                                 file=sys.stderr,
                             ) if _abi_activation_lock else None
                             worker.assign_spec(spec)
@@ -4573,15 +4666,42 @@ class WorkerPoolDaemon:
                     # Note: PersistentWorker constructor calls assign_spec if spec is provided
                     with (_abi_activation_lock if _abi_activation_lock else _null_ctx()):
                         safe_print(
-                            f"   🔒 [DAEMON] ABI activation lock acquired for '{_pkg_name}' (fresh spawn)",
+                            f"    [DAEMON] ABI activation lock acquired for '{_pkg_name}' (fresh spawn)",
                             file=sys.stderr,
                         ) if _abi_activation_lock else None
-                        worker = PersistentWorker(
-                            spec,
-                            python_exe=python_exe,
-                            site_packages=target_paths.get("site_packages_path"),
-                            multiversion_base=target_paths.get("multiversion_base")
-                        )
+                        _spawn_attempts = 0
+                        while True:
+                            _spawn_attempts += 1
+                            try:
+                                worker = PersistentWorker(
+                                    spec,
+                                    python_exe=python_exe,
+                                    site_packages=target_paths.get("site_packages_path"),
+                                    multiversion_base=target_paths.get("multiversion_base")
+                                )
+                                break  # success
+                            except RuntimeError as _spawn_err:
+                                _exit_code = None
+                                try:
+                                    _exit_code = worker.process.poll() if hasattr(worker, 'process') and worker.process else None
+                                except Exception:
+                                    pass
+                                # exit 43 = broken bubble (numpy C-ext .so missing).
+                                # No amount of retrying fixes a corrupt bubble.
+                                if _exit_code == 43:
+                                    raise RuntimeError(
+                                        f"Bubble for '{spec}' is corrupt (numpy C extension .so missing). "
+                                        f"Fix: 8pkg install {spec} --force"
+                                    )
+                                # exit 42 = TF C++ mmap poisoned from a recycled worker.
+                                # A genuinely fresh spawn has a clean address space - retry.
+                                if _spawn_attempts < 3 and ('crashed during startup' in str(_spawn_err) or _exit_code == 42):
+                                    safe_print(
+                                        f"    [DAEMON] Worker preload poisoned (attempt {_spawn_attempts}), retrying fresh spawn for '{spec}'...",
+                                        file=sys.stderr,
+                                    )
+                                    continue
+                                raise
 
                 # Once an idle worker is taken and assigned a spec, spawn a replacement
                 if _took_from_idle:
@@ -4596,8 +4716,8 @@ class WorkerPoolDaemon:
                         "memory_mb": 0.0,
                         "max_memory_mb": max_memory_mb,
                         "pip_spec": spec,
-                        "dirty": False,           # ← ADD THIS
-                        "worker_tag": worker_tag, # ← ADD THIS
+                        "dirty": False,           #  ADD THIS
+                        "worker_tag": worker_tag, #  ADD THIS
                     }
                     self.stats["workers_created"] += 1
                     worker_info = self.workers[worker_key]
@@ -4627,7 +4747,7 @@ class WorkerPoolDaemon:
                 shm_out,
                 timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 864000))),
             )
-            # ── SLOW-PATH EVICTION: ABI contamination or nesting ──────────
+            #  SLOW-PATH EVICTION: ABI contamination or nesting 
             _sp_did_nest = result.get("_worker_did_nesting")
             _sp_abi_dirty = result.get("_worker_abi_contaminated")
             if _sp_did_nest or _sp_abi_dirty:
@@ -4640,10 +4760,10 @@ class WorkerPoolDaemon:
                     self._replenish_idle_pool(python_exe)
                     _sp_reason = "nesting+ABI" if (_sp_did_nest and _sp_abi_dirty) else ("nesting" if _sp_did_nest else "ABI contamination")
                     safe_print(
-                        f"   🔄 [DAEMON] Slow-path evicted dirty worker ({_sp_reason}): {spec}",
+                        f"    [DAEMON] Slow-path evicted dirty worker ({_sp_reason}): {spec}",
                         file=sys.stderr,
                     )
-            # ── END SLOW-PATH EVICTION ────────────────────────────────────
+            #  END SLOW-PATH EVICTION 
             return result
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -4689,7 +4809,7 @@ class WorkerPoolDaemon:
                     core.config["install_strategy"] = original_strategy
 
         except Exception as e:
-            safe_print(_('   ❌ [DAEMON] Installation failed: {}').format(e), file=sys.stderr)
+            safe_print(_('    [DAEMON] Installation failed: {}').format(e), file=sys.stderr)
             return False
 
     def _execute_cuda_code(
@@ -4704,10 +4824,10 @@ class WorkerPoolDaemon:
         max_memory_mb: float = None,
     ) -> dict:
         """Execute code with CUDA IPC tensors."""
-        # ── Resolve interpreter (accepts short versions like "3.11") ──────────
+        #  Resolve interpreter (accepts short versions like "3.11") 
         python_exe = _normalize_exe(_resolve_python_exe(python_exe))
 
-        # ── Build worker key ───────────────────────────────────────────────────
+        #  Build worker key 
         key_spec   = f"{spec}#{worker_tag}" if worker_tag else spec
         worker_key = f"{key_spec}::{python_exe}"
         worker_info = None
@@ -4735,7 +4855,7 @@ class WorkerPoolDaemon:
                         if len(self.workers) >= self.max_workers:
                             self._evict_oldest_worker_async()
 
-                    # 🚀 ACQUIRE WORKER (IDLE POOL OR NEW)
+                    #  ACQUIRE WORKER (IDLE POOL OR NEW)
                     try:
                         _took_from_idle = False
                         try:
@@ -4747,12 +4867,22 @@ class WorkerPoolDaemon:
                                 # Hard safety check: reject any worker that slipped through for wrong python
                                 if _normalize_exe(worker.python_exe) != python_exe:
                                     safe_print(
-                                        f"   ⚠️ [DAEMON] CUDA idle worker python mismatch! "
+                                        f"    [DAEMON] CUDA idle worker python mismatch! "
                                         f"Got {worker.python_exe}, wanted {python_exe}. Discarding.",
                                         file=sys.stderr,
                                     )
                                     worker.force_shutdown()
                                     raise queue.Empty
+
+                                #  FIX: Prevent numpy ABI contamination 
+                                if _spec_is_dirty(spec) and getattr(worker, '_last_result', None) is not None:
+                                    safe_print(
+                                        f"    [DAEMON] Discarding recycled idle worker for ABI package '{spec}' to prevent C++ contamination.",
+                                        file=sys.stderr,
+                                    )
+                                    worker.force_shutdown()
+                                    raise queue.Empty
+                                # 
                                 worker.assign_spec(spec)
                                 _took_from_idle = True
                             else:
@@ -4869,18 +4999,18 @@ class WorkerPoolDaemon:
                                 del self.workers[spec]
                         continue
 
-                    # ── EVICT DIRTY UNTAGGED WORKERS ───────────────────────
+                    #  EVICT DIRTY UNTAGGED WORKERS 
                     if worker_info.get("dirty") and not worker_info.get("worker_tag"):
                         with self.pool_lock:
                             if spec in self.workers:
                                 del self.workers[spec]
                         worker_info["worker"].force_shutdown()
                         safe_print(
-                            f"   🧹 [DAEMON] Health monitor evicted dirty worker: {spec}",
+                            f"    [DAEMON] Health monitor evicted dirty worker: {spec}",
                             file=sys.stderr,
                         )
                         continue
-                    # ── END DIRTY EVICTION ──────────────────────────────────
+                    #  END DIRTY EVICTION 
 
                     # Perform health check
                     if not worker_info["worker"].health_check():
@@ -4899,7 +5029,7 @@ class WorkerPoolDaemon:
            A specific worker is evicted the moment its RSS crosses the cap.
            The next call for that spec will start a fresh worker.  This is
            how you prevent a 7B-param model from accumulating 60 GB after
-           many iterations — set ``max_memory_mb=20_000`` and the worker is
+           many iterations - set ``max_memory_mb=20_000`` and the worker is
            recycled before it can balloon.
 
         2. System-wide emergency eviction (85% RAM used):
@@ -4915,7 +5045,7 @@ class WorkerPoolDaemon:
             try:
                 import psutil
 
-                # ── Level 1: per-worker RSS cap ───────────────────────────
+                #  Level 1: per-worker RSS cap 
                 with self.pool_lock:
                     keys_to_check = list(self.workers.keys())
 
@@ -4935,8 +5065,8 @@ class WorkerPoolDaemon:
                                     self.workers[wkey]["memory_mb"] = rss_mb
                             if rss_mb > cap:
                                 safe_print(
-                                    f"   🧹[DAEMON] Worker '{wkey}' RSS {rss_mb:.0f} MB "
-                                    f"> cap {cap:.0f} MB — evicting for next call",
+                                    f"   [DAEMON] Worker '{wkey}' RSS {rss_mb:.0f} MB "
+                                    f"> cap {cap:.0f} MB - evicting for next call",
                                     file=sys.stderr,
                                 )
                                 with self.pool_lock:
@@ -4949,7 +5079,7 @@ class WorkerPoolDaemon:
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
 
-                # ── Level 2: system-wide emergency eviction ───────────────
+                #  Level 2: system-wide emergency eviction 
                 mem = psutil.virtual_memory()
 
                 if mem.percent > 85:
@@ -4988,7 +5118,7 @@ class WorkerPoolDaemon:
             worker_details = {}
             for k, v in self.workers.items():
                 pid = v["worker"].process.pid if v["worker"].process else None
-                # k is "spec::python_exe" — split it back out
+                # k is "spec::python_exe" - split it back out
                 parts = k.split("::", 1)
                 pkg_spec = parts[0] if parts else k
                 python_exe = parts[1] if len(parts) > 1 else ""
@@ -5002,12 +5132,12 @@ class WorkerPoolDaemon:
                     "pinned":          v.get("pinned", False),   # NEW
                 }
 
-            # 🔥 FIX: Also report idle pool sizes
+            #  FIX: Also report idle pool sizes
             idle_pool_info = {}
             for py_exe, pool in self.idle_pools.items():
                 idle_pool_info[py_exe] = pool.qsize()
 
-            # 🔥 FIX: Safe psutil memory check
+            #  FIX: Safe psutil memory check
             memory_percent = -1  # Sentinel value
             try:
                 import psutil
@@ -5034,7 +5164,7 @@ class WorkerPoolDaemon:
         try:
             self.executor.shutdown(wait=False)
         except Exception as e:
-            self.log(f"[SHUTDOWN] ⚠️ Executor shutdown failed: {e}")
+            self.log(f"[SHUTDOWN]  Executor shutdown failed: {e}")
 
         # Collect all PIDs before we start killing
         all_pids = []
@@ -5045,7 +5175,7 @@ class WorkerPoolDaemon:
                 if worker.process and worker.process.pid:
                     all_pids.append(worker.process.pid)
             except Exception as e:
-                self.log(f"  ⚠️ Could not retrieve PID for UV worker {py_exe}: {e}")
+                self.log(f"   Could not retrieve PID for UV worker {py_exe}: {e}")
 
         # Idle CLI workers
         for py_exe, pool in list(getattr(self, "idle_pools", {}).items()):
@@ -5055,7 +5185,7 @@ class WorkerPoolDaemon:
                     if w.process and w.process.pid:
                         all_pids.append(w.process.pid)
                 except Exception as e:
-                    self.log(f"  ⚠️ Could not retrieve PID from idle pool {py_exe}: {e}")
+                    self.log(f"   Could not retrieve PID from idle pool {py_exe}: {e}")
 
         # Spec workers
         with self.pool_lock:
@@ -5068,7 +5198,7 @@ class WorkerPoolDaemon:
                     all_pids.append(w.process.pid)
                 info["worker"].force_shutdown()
             except Exception as e:
-                self.log(f"  🚨 Critical failure during worker force_shutdown: {e}")
+                self.log(f"   Critical failure during worker force_shutdown: {e}")
 
         # Wait up to 2s for graceful termination
         import time as _st
@@ -5118,8 +5248,8 @@ class WorkerPoolDaemon:
                 
                 self.log(f"  Force-killed tree for straggler PID {pid}")
             except Exception as e:
-                # 🔥 LOG THE ERROR: Now we know if it was AccessDenied or ProcessNotFound
-                self.log(f"  🚨 Failed to kill PID {pid}: {e}")
+                #  LOG THE ERROR: Now we know if it was AccessDenied or ProcessNotFound
+                self.log(f"   Failed to kill PID {pid}: {e}")
         # Stop fs_watcher BEFORE cleaning up socket/pid files
         # The watchdog Observer thread is non-daemon and will block sys.exit forever
         # if we don't explicitly stop it here.
@@ -5141,15 +5271,15 @@ class WorkerPoolDaemon:
             except FileNotFoundError:
                 pass # Already gone, no need to log
             except Exception as e:
-                # 🔥 LOG THE ERROR: This tells us if a process is still locking the PID file
-                self.log(f"  ⚠️  Failed to unlink {path}: {e}")
+                #  LOG THE ERROR: This tells us if a process is still locking the PID file
+                self.log(f"    Failed to unlink {path}: {e}")
         # Also clean connection announcement file
         try:
             conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
             os.unlink(conn_file)
         except Exception as e:
-            # 🔥 LOG THE ERROR: Now we can see if the temp folder has permission issues
-            self.log(f"  ⚠️  Failed to unlink connection file {conn_file}: {e}")
+            #  LOG THE ERROR: Now we can see if the temp folder has permission issues
+            self.log(f"    Failed to unlink connection file {conn_file}: {e}")
 
     @classmethod
     def is_running(cls) -> bool:
@@ -5187,15 +5317,15 @@ class WorkerPoolDaemon:
             return False
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # GPU IPC MULTI-FALLBACK STRATEGY
 # Handles PyTorch 1.x, 2.x, and custom CUDA IPC
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 1. CAPABILITY DETECTION
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 def detect_torch_cuda_ipc_mode():
@@ -5234,9 +5364,9 @@ def detect_torch_cuda_ipc_mode():
     return "hybrid"
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 2. NATIVE PYTORCH 1.x IPC (TRUE ZERO-COPY)
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 def share_tensor_native_1x(tensor: "torch.Tensor") -> dict:
@@ -5279,9 +5409,9 @@ def receive_tensor_native_1x(meta: dict) -> "torch.Tensor":
 
     return tensor
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 3. CUSTOM CUDA IPC (CTYPES - WORKS WITH ANY PYTORCH)
-# ═══════════════════════════════════════════════════════════════
+# 
 
 class CUDAIPCHandle(ctypes.Structure):
     """CUDA IPC memory handle structure."""
@@ -5358,9 +5488,9 @@ def receive_tensor_custom_cuda(meta: dict) -> "torch.Tensor":
     return tensor
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 4. HYBRID MODE (CPU SHM FALLBACK)
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 def share_tensor_hybrid(tensor: "torch.Tensor") -> dict:
@@ -5400,9 +5530,9 @@ def receive_tensor_hybrid(meta: dict) -> "torch.Tensor":
     return tensor
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 5. UNIFIED API
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 class SmartGPUIPC:
@@ -5413,7 +5543,7 @@ class SmartGPUIPC:
 
     def __init__(self):
         self.mode = detect_torch_cuda_ipc_mode()
-        safe_print(_('🔥 GPU IPC Mode: {}').format(self.mode))
+        safe_print(_(' GPU IPC Mode: {}').format(self.mode))
 
         if self.mode == "native_1x":
             self.share = share_tensor_native_1x
@@ -5554,17 +5684,17 @@ class IPCCapabilities:
         return fallback, _('Unknown mode, using {}').format(fallback.value)
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 4. CLIENT & PROXY (With Auto-Resurrection)
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # DIRTY PACKAGE REGISTRY
 # Packages that permanently contaminate sys.modules on import.
 # A worker that has loaded one of these can NEVER be reassigned
-# to a different version — it must be pinned to its exact spec.
-# ═══════════════════════════════════════════════════════════════
+# to a different version - it must be pinned to its exact spec.
+# 
 _DIRTY_PACKAGE_ROOTS = frozenset({
     "torch",
     "tensorflow",
@@ -5580,17 +5710,17 @@ def _spec_is_dirty(spec: str) -> bool:
     return any(name == root or name.startswith(root) for root in _DIRTY_PACKAGE_ROOTS)
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # WORKER POOL  (in-process fallback when daemon is unavailable)
 #
 # Mirrors WorkerPoolDaemon behaviour but lives in the calling
 # process.  Simpler, higher startup latency, same isolation.
 #
 # Worker lifecycle:
-#   idle >5 min  → reaped automatically
-#   dirty spec   → pinned, never reassigned
-#   clean spec   → reused across requests (assign_spec guards re-init)
-# ═══════════════════════════════════════════════════════════════
+#   idle >5 min  -> reaped automatically
+#   dirty spec   -> pinned, never reassigned
+#   clean spec   -> reused across requests (assign_spec guards re-init)
+# 
 class WorkerPool:
     """
     Singleton in-process pool of PersistentWorkers.
@@ -5613,7 +5743,7 @@ class WorkerPool:
         self._lock = threading.RLock()
         self._start_reaper()
 
-    # ── singleton ────────────────────────────────────────────────
+    #  singleton 
     @classmethod
     def get_instance(cls) -> "WorkerPool":
         if cls._instance is None:
@@ -5622,14 +5752,14 @@ class WorkerPool:
                     cls._instance = cls()
         return cls._instance
 
-    # ── public API ───────────────────────────────────────────────
+    #  public API 
     def execute(self, spec: str, code: str, python_exe: str = None) -> dict:
         """
         Run *code* inside an isolated worker that has *spec* installed.
         Worker is created on first call and reused on subsequent calls.
 
         For dirty packages (torch/tf/jax) the worker is pinned to the
-        exact spec and python_exe — it will never be reassigned.
+        exact spec and python_exe - it will never be reassigned.
         """
         python_exe = str(Path(python_exe or sys.executable).resolve())
         worker_key = f"{spec}::{python_exe}"
@@ -5648,12 +5778,12 @@ class WorkerPool:
                 worker["last_used"] = time.time()
             return result
         except Exception as e:
-            # Worker probably crashed — remove it so next call gets a fresh one
+            # Worker probably crashed - remove it so next call gets a fresh one
             with self._lock:
                 self._workers.pop(worker_key, None)
             return {"success": False, "error": str(e), "status": "ERROR"}
 
-    # ── internals ────────────────────────────────────────────────
+    #  internals 
     def _get_or_create(self, key: str, spec: str, python_exe: str, dirty: bool) -> dict:
         with self._lock:
             if key in self._workers:
@@ -5661,12 +5791,12 @@ class WorkerPool:
                 entry["last_used"] = time.time()
                 return entry
 
-            # Enforce cap — evict the stalest non-dirty worker
+            # Enforce cap - evict the stalest non-dirty worker
             if len(self._workers) >= self.MAX_WORKERS:
                 self._evict_one()
 
             sys.stderr.write(
-                f"   🔧 [WorkerPool] Creating {'pinned' if dirty else 'reusable'} "
+                f"    [WorkerPool] Creating {'pinned' if dirty else 'reusable'} "
                 f"worker for {spec} ({Path(python_exe).name})\n"
             )
             pw = PersistentWorker(
@@ -5691,7 +5821,7 @@ class WorkerPool:
             (k, v) for k, v in self._workers.items() if not v["dirty"]
         ]
         if not candidates:
-            # All workers are dirty — evict the oldest dirty one (last resort)
+            # All workers are dirty - evict the oldest dirty one (last resort)
             candidates = list(self._workers.items())
         if candidates:
             oldest_key = min(candidates, key=lambda kv: kv[1]["last_used"])[0]
@@ -5701,7 +5831,7 @@ class WorkerPool:
             except Exception:
                 pass
             sys.stderr.write(
-                f"   🗑️  [WorkerPool] Evicted idle worker: {entry['spec']}\n"
+                f"     [WorkerPool] Evicted idle worker: {entry['spec']}\n"
             )
 
     def _reap_stale(self):
@@ -5719,7 +5849,7 @@ class WorkerPool:
                 except Exception:
                     pass
                 sys.stderr.write(
-                    f"   💤 [WorkerPool] TTL-reaped idle worker: {entry['spec']}\n"
+                    f"    [WorkerPool] TTL-reaped idle worker: {entry['spec']}\n"
                 )
 
     def _start_reaper(self):
@@ -5777,10 +5907,10 @@ class DaemonClient:
             shm_out={},
             python_exe=python_exe or sys.executable,
         )
-        # Daemon returned a connection-level failure → fall back to WorkerPool
+        # Daemon returned a connection-level failure -> fall back to WorkerPool
         if not result.get("success") and "Daemon not running" in result.get("error", ""):
             sys.stderr.write(
-                f"⚠️  [DaemonClient] Daemon unavailable, falling back to WorkerPool for {spec}\n"
+                f"  [DaemonClient] Daemon unavailable, falling back to WorkerPool for {spec}\n"
             )
             return WorkerPool.get_instance().execute(spec, code, python_exe)
         return result
@@ -5793,7 +5923,7 @@ class DaemonClient:
         worker_tag: str = None,
     ) -> dict:
         """
-        Ephemeral execution mode — for ABI-heavy packages (numpy, torch, scipy).
+        Ephemeral execution mode - for ABI-heavy packages (numpy, torch, scipy).
 
         Spawns a fresh worker process with *spec* activated, runs *code* inside
         it, returns the result, then immediately evicts the worker from the pool
@@ -5839,7 +5969,7 @@ class DaemonClient:
             }
         finally:
             # Evict the tagged worker immediately so RAM is freed.
-            # We do this in a best-effort way — if the daemon has already
+            # We do this in a best-effort way - if the daemon has already
             # cleaned it up, the eviction is a no-op.
             try:
                 self._send({
@@ -5864,8 +5994,8 @@ class DaemonClient:
     ):
         """
         Low-level execute with explicit SHM metadata.
-        Prefer execute_smart() for all normal use — it picks the right transport
-        automatically (CUDA IPC → CPU SHM → JSON).
+        Prefer execute_smart() for all normal use - it picks the right transport
+        automatically (CUDA IPC -> CPU SHM -> JSON).
 
         worker_tag and max_memory_mb are forwarded to the daemon unchanged;
         see _execute_code docstring for full semantics.
@@ -5879,7 +6009,7 @@ class DaemonClient:
             "shm_out":    shm_out,
             "python_exe": python_exe,
         }
-        # Only include optional fields when set — keeps wire format backward-compat
+        # Only include optional fields when set - keeps wire format backward-compat
         if worker_tag is not None:
             payload["worker_tag"] = worker_tag
         if max_memory_mb is not None:
@@ -5918,7 +6048,7 @@ class DaemonClient:
 
         # Optional: Set minimal CUDA paths for daemon itself
         env = os.environ.copy()
-        # 🔥 CRITICAL: Mark as daemon child to prevent infinite re-spawning
+        #  CRITICAL: Mark as daemon child to prevent infinite re-spawning
         env["OMNIPKG_DAEMON_CHILD"] = "1"
         env["PYTHONUNBUFFERED"] = "1"
 
@@ -6124,7 +6254,7 @@ class DaemonClient:
     def run_uv(self, uv_args: list, uv_exe: str = None, python_exe: str = None, env: dict = None) -> dict:
         """
         Send a run_uv request to the daemon's dedicated UV worker pool.
-        The worker keeps Tokio warm across calls — subsequent calls are ~5ms.
+        The worker keeps Tokio warm across calls - subsequent calls are ~5ms.
         Returns dict with keys: exit_code, installed, removed, stdout, stderr, elapsed_ms, via.
         Falls back to direct subprocess if daemon is unreachable.
         """
@@ -6148,7 +6278,7 @@ class DaemonClient:
                 if msg.get("status") in ("COMPLETED", "ERROR", "FFI_UNAVAILABLE"):
                     sock.close()
                     return msg
-                # stream frames — ignore (caller gets structured result)
+                # stream frames - ignore (caller gets structured result)
         except (ConnectionRefusedError, FileNotFoundError):
             pass
         except Exception as _e:
@@ -6259,7 +6389,7 @@ class DaemonClient:
         # Call C extension
 # Atomically: if version == expected, set version = expected + 1
         # We skip the "Lock" state entirely because CAS *is* the lock.
-        success = omnipkg_atomic.cas64(addr, expected_version, expected_version + 1)  # ← FIXED!
+        success = omnipkg_atomic.cas64(addr, expected_version, expected_version + 1)  #  FIXED!
         
         return success
 
@@ -6274,7 +6404,7 @@ class DaemonClient:
     ):
         monitor = SharedStateMonitor(control_block_name)
         
-        # 🟢 FAST PATH: Hardware Atomics
+        #  FAST PATH: Hardware Atomics
         if _HAS_ATOMICS:
             try:
                 locked_ver = monitor.acquire_atomic_spinlock(timeout_seconds=5.0)
@@ -6288,7 +6418,7 @@ class DaemonClient:
                 # If spinlock fails, fall back to retry loop or raise
                 raise e
 
-        # 🟡 SLOW PATH: Legacy File Lock (Existing Logic)
+        #  SLOW PATH: Legacy File Lock (Existing Logic)
         retries = 0
         while retries < max_retries:
             start_version = monitor.get_version()
@@ -6339,44 +6469,44 @@ class DaemonClient:
         try:
             mode_enum = IPCMode(ipc_mode.lower())
         except ValueError:
-            safe_print(_("⚠️  Invalid IPC mode '{}', using auto").format(ipc_mode))
+            safe_print(_("  Invalid IPC mode '{}', using auto").format(ipc_mode))
             mode_enum = IPCMode.AUTO
 
         # Validate and get actual mode
         actual_mode, mode_msg = IPCCapabilities.validate_mode(mode_enum)
 
-        safe_print(_('   🎯 IPC Mode: {}').format(mode_msg))
+        safe_print(_('    IPC Mode: {}').format(mode_msg))
 
-        # ═══════════════════════════════════════════════════════════
+        # 
         # ROUTE 1: UNIVERSAL CUDA IPC (DEFAULT - FASTEST)
-        # ═══════════════════════════════════════════════════════════
+        # 
         if actual_mode == IPCMode.UNIVERSAL:
             return self._execute_universal_ipc(
                 spec, code, input_tensor, output_shape, output_dtype, python_exe,
                 worker_tag=worker_tag, max_memory_mb=max_memory_mb
             )
 
-        # ═══════════════════════════════════════════════════════════
+        # 
         # ROUTE 2: PYTORCH 1.x NATIVE IPC
-        # ═══════════════════════════════════════════════════════════
+        # 
         if actual_mode == IPCMode.PYTORCH_NATIVE:
             return self._execute_pytorch_native_ipc(
                 spec, code, input_tensor, output_shape, output_dtype, python_exe,
                 worker_tag=worker_tag, max_memory_mb=max_memory_mb
             )
 
-        # ═══════════════════════════════════════════════════════════
+        # 
         # ROUTE 3: CPU SHM (ZERO-COPY, NO GPU - MEDIUM SPEED)
-        # ═══════════════════════════════════════════════════════════
+        # 
         if actual_mode == IPCMode.CPU_SHM:
             return self._execute_cpu_shm(
                 spec, code, input_tensor, output_shape, output_dtype, python_exe,
                 worker_tag=worker_tag, max_memory_mb=max_memory_mb
             )
 
-        # ═══════════════════════════════════════════════════════════
+        # 
         # ROUTE 4: HYBRID (CPU SHM + GPU COPIES - SLOWEST)
-        # ═══════════════════════════════════════════════════════════
+        # 
         return self._execute_hybrid_ipc(
             spec, code, input_tensor, output_shape, output_dtype, python_exe,
             worker_tag=worker_tag, max_memory_mb=max_memory_mb
@@ -6388,8 +6518,8 @@ class DaemonClient:
         Uses zero-copy SHM like Test 17.
 
         This is faster than Hybrid mode (10ms vs 14ms) because:
-        - No GPU→CPU copy
-        - No CPU→GPU copy
+        - No GPU->CPU copy
+        - No CPU->GPU copy
         - Just pure CPU compute on shared memory
 
         Benchmarks show this is 6.29x slower than Universal IPC,
@@ -6398,7 +6528,7 @@ class DaemonClient:
         import numpy as np
         import torch
 
-        safe_print("   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
+        safe_print("    Using CPU SHM mode (zero-copy, no GPU transfers)")
 
         # Convert tensor to CPU numpy
         input_cpu = input_tensor.cpu().numpy()
@@ -6429,7 +6559,7 @@ class DaemonClient:
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
-            safe_print("   ✅ CPU SHM mode completed")
+            safe_print("    CPU SHM mode completed")
 
             # Convert result back to GPU tensor
             output_tensor = torch.from_numpy(result_cpu).to(input_tensor.device)
@@ -6440,7 +6570,7 @@ class DaemonClient:
             return output_tensor, response
 
         except Exception as e:
-            safe_print(_('   ⚠️  CPU SHM failed: {}').format(e))
+            safe_print(_('     CPU SHM failed: {}').format(e))
             raise
 
     def _execute_universal_ipc(
@@ -6485,12 +6615,12 @@ class DaemonClient:
 
             actual_method = response.get("cuda_method", "unknown")
             if actual_method != "universal_ipc":
-                safe_print(_('   ⚠️  Worker fell back to {}').format(actual_method))
+                safe_print(_('     Worker fell back to {}').format(actual_method))
 
             return output_tensor, response
 
         except Exception as e:
-            safe_print(f"   ❌ [UNIVERSAL IPC] Failed: {e}", file=sys.stderr)
+            safe_print(f"    [UNIVERSAL IPC] Failed: {e}", file=sys.stderr)
             raise
 
     def _execute_pytorch_native_ipc(
@@ -6499,7 +6629,7 @@ class DaemonClient:
         """PyTorch 1.x native IPC (framework-managed)."""
         import torch
 
-        safe_print("   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
+        safe_print("    Using PYTORCH NATIVE IPC (PyTorch 1.x)")
 
         try:
             # Share input tensor via native CUDA IPC
@@ -6517,7 +6647,7 @@ class DaemonClient:
                 ) = input_storage._share_cuda_()
             except RuntimeError as e:
                 # Same issue: Cannot export memory that was imported from another process.
-                safe_print(f"   ⚠️ [NATIVE IPC] Cannot re-export imported IPC memory. Cloning tensor...", file=sys.stderr)
+                safe_print(f"    [NATIVE IPC] Cannot re-export imported IPC memory. Cloning tensor...", file=sys.stderr)
                 input_tensor = input_tensor.clone()
                 input_storage = input_tensor.storage()
                 (
@@ -6613,14 +6743,14 @@ class DaemonClient:
 
             actual_method = response.get("cuda_method", "unknown")
             if actual_method == "native_ipc":
-                safe_print("   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
+                safe_print("    Worker confirmed NATIVE IPC (PyTorch managed)!")
             else:
-                safe_print(_('   ⚠️  Worker fell back to {}').format(actual_method))
+                safe_print(_('     Worker fell back to {}').format(actual_method))
 
             return output_tensor, response
 
         except Exception as e:
-            safe_print(_('   ⚠️  PyTorch native IPC failed: {}').format(e))
+            safe_print(_('     PyTorch native IPC failed: {}').format(e))
             raise
 
     def _execute_hybrid_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None):
@@ -6637,8 +6767,8 @@ class DaemonClient:
         import numpy as np
         import torch
 
-        safe_print("   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
-        safe_print("   💡 Consider using cpu_shm mode instead (1.34x faster)")
+        safe_print("    Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
+        safe_print("    Consider using cpu_shm mode instead (1.34x faster)")
 
         # Copy tensor to CPU, share via SHM
         input_cpu = input_tensor.cpu().numpy()
@@ -6683,7 +6813,7 @@ class DaemonClient:
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
-            safe_print("   ✅ Hybrid mode completed")
+            safe_print("    Hybrid mode completed")
 
             # Copy result back to GPU
             shm_out_array = np.ndarray(output_shape, dtype=output_cpu.dtype, buffer=shm_out.buf)
@@ -6716,7 +6846,7 @@ class DaemonClient:
         max_memory_mb: float = None,
     ):
         """
-        🚀 HFT MODE: Zero-Copy Tensor Handoff via Shared Memory.
+         HFT MODE: Zero-Copy Tensor Handoff via Shared Memory.
         """
         from multiprocessing import shared_memory
 
@@ -6783,7 +6913,7 @@ class DaemonClient:
     pin: bool = False,          # NEW: worker survives idle timeout indefinitely
 ):
         """
-        ✨ THE ONE METHOD YOU NORMALLY CALL.
+         THE ONE METHOD YOU NORMALLY CALL.
 
         Runs ``code`` inside a persistent worker that has ``spec`` installed,
         automatically choosing the fastest transport for ``data``.
@@ -6802,24 +6932,24 @@ class DaemonClient:
         arr = np.random.rand(1_000_000).astype(np.float32)
         res = client.execute_smart("scipy==1.13", "arr_out = arr_in * 2", data=arr)
 
-        # Pass a CUDA tensor (CUDA IPC, <5µs — near-zero overhead)
+        # Pass a CUDA tensor (CUDA IPC, <5s - near-zero overhead)
         import torch
         gpu_t = torch.randn(1024, device="cuda")
         res = client.execute_smart("torch==2.9.1", "arr_out = arr_in * 2", data=gpu_t)
 
         # Isolate heavy models in separate workers (prevents RAM accumulation)
-        # Each tag → its own dedicated process; models never share memory.
+        # Each tag -> its own dedicated process; models never share memory.
         client.execute_smart("torch==2.9.1", nllb_code,  worker_tag="nllb-600m")
         client.execute_smart("torch==2.9.1", seedx_code, worker_tag="seedx-7b",
                              max_memory_mb=20_000)   # auto-evict if RSS > 20 GB
 
-        # Use a different Python version — short form accepted
+        # Use a different Python version - short form accepted
         client.execute_smart("torch==2.9.1", code, python_exe="3.11")
 
         Parameters
         ----------
         spec : str
-            pip-style package requirement.  Must NOT include the worker_tag —
+            pip-style package requirement.  Must NOT include the worker_tag -
             that is handled separately so pip only sees the clean spec.
         code : str
             Python source to execute.  Globals persist across calls to the same
@@ -6828,15 +6958,15 @@ class DaemonClient:
                 if "_model" not in globals():
                     globals()["_model"] = AutoModel.from_pretrained(...)
                 result = globals()["_model"](arr_in)
-                print(json.dumps(result))    # ← worker captures stdout as result
+                print(json.dumps(result))    #  worker captures stdout as result
 
         data : optional
             Input data for the code.  Available inside the worker as ``arr_in``.
             Accepted types and the transport chosen:
-              - ``None``              → JSON path, no arr_in set
-              - ``list`` / ``dict``   → JSON path  (~10ms)
-              - ``np.ndarray`` ≥ 64KB → CPU shared memory (~5ms)
-              - CUDA ``torch.Tensor`` → CUDA IPC (<5µs)
+              - ``None``              -> JSON path, no arr_in set
+              - ``list`` / ``dict``   -> JSON path  (~10ms)
+              - ``np.ndarray``  64KB -> CPU shared memory (~5ms)
+              - CUDA ``torch.Tensor`` -> CUDA IPC (<5s)
 
         python_exe : str, optional
             Which Python to use.  Accepts short forms (``"3.11"``) in addition
@@ -6845,7 +6975,7 @@ class DaemonClient:
         worker_tag : str, optional
             Route this call to a private worker bucket.  Two calls with the
             same (spec, python) but different tags get separate processes.
-            Use this for model isolation — see example above.
+            Use this for model isolation - see example above.
 
         max_memory_mb : float, optional
             RSS ceiling in megabytes for this worker's process.  When the
@@ -6862,7 +6992,7 @@ class DaemonClient:
         """
         import numpy as np
 
-        # ── CUDA IPC path ──────────────────────────────────────────────────
+        #  CUDA IPC path 
         if data is not None and hasattr(data, "is_cuda") and data.is_cuda:
             output_shape = data.shape
             output_dtype = str(data.dtype).split(".")[-1]
@@ -6873,7 +7003,7 @@ class DaemonClient:
             return {"success": True, "result": result_tensor, "meta": meta,
                     "transport": "CUDA_IPC"}
 
-        # ── CPU SHM path (large arrays) ────────────────────────────────────
+        #  CPU SHM path (large arrays) 
         SMART_THRESHOLD = 1024 * 64   # 64 KB
         if data is not None and isinstance(data, np.ndarray) and data.nbytes >= SMART_THRESHOLD:
             output_shape = data.shape
@@ -6884,7 +7014,7 @@ class DaemonClient:
             )
             return {"success": True, "result": result, "meta": meta, "transport": "SHM"}
 
-        # ── JSON path (small / no data) ────────────────────────────────────
+        #  JSON path (small / no data) 
         prefix = ""
         if data is not None:
             if isinstance(data, np.ndarray):
@@ -7015,20 +7145,20 @@ class DaemonProxy:
         })
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # 5. CLI FUNCTIONS
-# ═══════════════════════════════════════════════════════════════
+# 
 
 
 def cli_start():
     """Start the daemon with status checks."""
     if WorkerPoolDaemon.is_running():
-        safe_print("⚠️  Daemon is already running.")
+        safe_print("  Daemon is already running.")
         # Optional: Print info about the running instance
         cli_status()
         return
 
-    safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
+    safe_print(" Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
     import os
     try:
         import ctypes
@@ -7045,7 +7175,7 @@ def cli_start():
     try:
         daemon.start(daemonize=True, wait_for_ready=True)
     except Exception as e:
-        safe_print(_('\n❌ Failed to start: {}').format(e))
+        safe_print(_('\n Failed to start: {}').format(e))
 
 
 def cli_stop():
@@ -7063,11 +7193,11 @@ def cli_stop():
     client = DaemonClient()
     result = client.shutdown()
     if result.get("success"):
-        safe_print("✅ Daemon stopped")
+        safe_print(" Daemon stopped")
     else:
-        # Not running or unresponsive — that's OK, continue to cleanup
+        # Not running or unresponsive - that's OK, continue to cleanup
         if WorkerPoolDaemon.is_running() or daemon_pid:
-            safe_print(_('⚠️  Daemon did not respond cleanly: {}').format(
+            safe_print(_('  Daemon did not respond cleanly: {}').format(
                 result.get('error', 'Unknown error')))
 
     # Step 2: wait briefly for graceful death
@@ -7098,7 +7228,7 @@ def cli_stop():
         except OSError:
             pass  # already dead
 
-    # Step 4: orphan sweep — kill surviving worker processes
+    # Step 4: orphan sweep - kill surviving worker processes
     _sweep_killed = 0
     _omnipkg_markers = ["worker_daemon", "_idle.py", "omnipkg.isolation"]
     try:
@@ -7145,10 +7275,10 @@ def cli_stop():
                         pass
                 except Exception:
                     continue
-            safe_print(f"🧹 Orphan sweep: killed {_sweep_killed} surviving worker(s)")
+            safe_print(f" Orphan sweep: killed {_sweep_killed} surviving worker(s)")
 
     except ImportError:
-        # psutil not available — platform fallback
+        # psutil not available - platform fallback
         if IS_WINDOWS:
             for marker in _omnipkg_markers:
                 try:
@@ -7158,7 +7288,7 @@ def cli_stop():
                     )
                 except Exception:
                     pass
-            safe_print("🧹 Orphan sweep complete (taskkill fallback)")
+            safe_print(" Orphan sweep complete (taskkill fallback)")
         else:
             try:
                 subprocess.run(
@@ -7170,7 +7300,7 @@ def cli_stop():
                     ["pkill", "-KILL", "-f", "|".join(_omnipkg_markers)],
                     capture_output=True, check=False
                 )
-                safe_print("🧹 Orphan sweep complete (pkill fallback)")
+                safe_print(" Orphan sweep complete (pkill fallback)")
             except Exception:
                 pass
 
@@ -7190,22 +7320,22 @@ def cli_stop():
 def cli_status():
     """Get daemon status."""
     if not WorkerPoolDaemon.is_running():
-        safe_print("❌ Daemon not running")
+        safe_print(" Daemon not running")
         return
 
     client = DaemonClient()
     result = client.status()
 
     if not result.get("success"):
-        safe_print(_('❌ Error: {}').format(result.get('error', 'Unknown error')))
+        safe_print(_(' Error: {}').format(result.get('error', 'Unknown error')))
         return
 
     print("\n" + "=" * 60)
-    safe_print("🔥 OMNIPKG WORKER DAEMON STATUS")
+    safe_print(" OMNIPKG WORKER DAEMON STATUS")
     print("=" * 60)
     print(_('  Workers: {}').format(result.get('workers', 0)))
 
-    # 🔥 FIX: Handle missing psutil gracefully
+    #  FIX: Handle missing psutil gracefully
     memory_percent = result.get("memory_percent", -1)
     if memory_percent >= 0:
         print(f"  Memory Usage: {memory_percent:.1f}%")
@@ -7217,7 +7347,7 @@ def cli_status():
     print(_('  Errors: {}').format(result['stats']['errors']))
 
     if result.get("worker_details"):
-        safe_print("\n  📦 Active Workers:")
+        safe_print("\n   Active Workers:")
         for spec, info in result["worker_details"].items():
             idle = time.time() - info["last_used"]
             pkg_spec = info.get("pkg_spec", spec.split("::")[0])
@@ -7240,7 +7370,7 @@ def cli_status():
 
     idle_pool_info = result.get("idle_pool_info", {})
     if idle_pool_info:
-        safe_print("\n  💤 Idle Worker Pool:")
+        safe_print("\n   Idle Worker Pool:")
         for py_exe, count in idle_pool_info.items():
             import re
             py_ver = "?"
@@ -7260,11 +7390,11 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
     """View or follow the daemon logs."""
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
-        safe_print(_('❌ Log file not found at: {}').format(log_path))
+        safe_print(_(' Log file not found at: {}').format(log_path))
         print(_('   (The daemon might not have started yet)'))
         return
 
-    safe_print(_('📄 Tailing {} (last {} lines)...').format(log_path, tail_lines))
+    safe_print(_(' Tailing {} (last {} lines)...').format(log_path, tail_lines))
     print("-" * 60)
 
     try:
@@ -7290,7 +7420,7 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
             # 2. Follow mode (tail -f)
             if follow:
                 print("-" * 60)
-                safe_print("📡 Following logs... (Ctrl+C to stop)")
+                safe_print(" Following logs... (Ctrl+C to stop)")
 
                 f.seek(0, 2)  # Seek to end
 
@@ -7302,9 +7432,9 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
                         time.sleep(0.1)
 
     except KeyboardInterrupt:
-        safe_print("\n🛑 Stopped following logs.")
+        safe_print("\n Stopped following logs.")
     except Exception as e:
-        safe_print(_('\n❌ Error reading logs: {}').format(e))
+        safe_print(_('\n Error reading logs: {}').format(e))
 
 def cli_idle_config(python_version: str = None, count: int = None):
     """Configure idle worker pools."""
@@ -7316,12 +7446,12 @@ def cli_idle_config(python_version: str = None, count: int = None):
 # Show current config
         result = client.get_idle_config()
         if result.get("success"):
-            safe_print("\n📊 Current Idle Worker Configuration:")
+            safe_print("\n Current Idle Worker Configuration:")
             safe_print("=" * 60)
             config = result.get("config", {})
             if not config:
                 safe_print("   No idle workers configured.")
-                safe_print("\n💡 Example: 8pkg daemon idle --python 3.11 --count 5")
+                safe_print("\n Example: 8pkg daemon idle --python 3.11 --count 5")
             else:
                 for py_exe, target_count in sorted(config.items()):
                     # Extract version from path for display
@@ -7336,10 +7466,10 @@ def cli_idle_config(python_version: str = None, count: int = None):
                             version = py_exe.split("python3.")[1].split("/")[0]
                             version = f"3.{version}"
                     safe_print(f"   Python {version}: {target_count} worker(s)")
-                    safe_print(f"     └─ {py_exe}")
+                    safe_print(f"      {py_exe}")
             safe_print("=" * 60 + "\n")
         else:
-            safe_print(_('❌ Error: {}').format(result.get('error')))
+            safe_print(_(' Error: {}').format(result.get('error')))
         return
     
     if python_version and count is not None:
@@ -7348,34 +7478,34 @@ def cli_idle_config(python_version: str = None, count: int = None):
             python_path = resolve_python_path(python_version)
             python_exe = str(python_path)
         except Exception as e:
-            safe_print(f"❌ Could not find Python {python_version}: {e}")
-            safe_print("💡 Use '8pkg list python' to see available versions")
+            safe_print(f" Could not find Python {python_version}: {e}")
+            safe_print(" Use '8pkg list python' to see available versions")
             return
         
         # Set config
         result = client.set_idle_config(python_exe, count)
         if result.get("success"):
             if count == 0:
-                safe_print(f"✅ Disabled idle workers for Python {python_version}")
+                safe_print(f" Disabled idle workers for Python {python_version}")
             else:
-                safe_print(f"✅ Set {count} idle worker(s) for Python {python_version}")
-                safe_print(f"   └─ Using: {python_exe}")
+                safe_print(f" Set {count} idle worker(s) for Python {python_version}")
+                safe_print(f"    Using: {python_exe}")
         else:
-            safe_print(_('❌ Error: {}').format(result.get('error')))
+            safe_print(_(' Error: {}').format(result.get('error')))
     else:
-        safe_print("❌ Both --python and --count are required")
-        safe_print("💡 Examples:")
+        safe_print(" Both --python and --count are required")
+        safe_print(" Examples:")
         safe_print("   8pkg daemon idle                    # View current config")
         safe_print("   8pkg daemon idle --python 3.11 --count 5")
         safe_print("   8pkg daemon idle --python 3.12 --count 0  # Disable")
 
 
-# ═══════════════════════════════════════════════════════════════
+# 
 # CLI ENTRY
-# ═══════════════════════════════════════════════════════════════
+# 
 
 if __name__ == "__main__":
-    # 🔥 CRITICAL: Check if we're a daemon child on Windows FIRST
+    #  CRITICAL: Check if we're a daemon child on Windows FIRST
     if IS_WINDOWS and os.environ.get("OMNIPKG_DAEMON_CHILD") == "1":
         try:
             with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
@@ -7404,7 +7534,7 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
 
     if cmd == "start":
-        # 🔥 FIX: Check for --no-fork flag (Windows internal use)
+        #  FIX: Check for --no-fork flag (Windows internal use)
         no_fork = "--no-fork" in sys.argv
 
         if no_fork:
@@ -7434,7 +7564,7 @@ if __name__ == "__main__":
 
                 start_monitor(watch_mode=watch)
             except ImportError:
-                safe_print(_('❌ resource_monitor module not found.'))
+                safe_print(_(' resource_monitor module not found.'))
                 sys.exit(1)
     else:
         print(_('Unknown command: {}').format(cmd))

@@ -2204,41 +2204,43 @@ class omnipkgLoader:
                 # Import succeeded AND gave us the right version — no daemon needed.
                 return
             # Import succeeded but the mapped .so locked us into the wrong version.
-            # Treat this as an ABI conflict — fall through to delegation logic.
+            # Treat this as an ABI conflict — same delegation path as a hard failure.
             _probe_err = ImportError(
                 f"version drift: requested {requested_version!r} but got {_actual!r} "
                 f"(mapped .so constraint from {_mapped_ver!r})"
             )
+            # Fall through to shared delegation check below.
+
+        except Exception as _probe_err:
+            # In-process import raised — fall through to shared delegation check.
+            pass
+
+        # ── Shared delegation logic (version drift OR hard import failure) ───────
+        # Both cases land here with _probe_err set.  Raise ProcessCorruptedException
+        # when a daemon is available so __enter__ can route to a worker that has no
+        # pre-mapped .so conflicts.  Otherwise log and continue in-process.
+        _can_delegate = (
+            getattr(self, "_worker_fallback_enabled", False)
+            and DAEMON_AVAILABLE
+            and not os.environ.get("OMNIPKG_IS_DAEMON_WORKER")
+        )
+        if _can_delegate:
             if not self.quiet:
                 safe_print(
-                    f"   ↕️  Version drift: requested {requested_version} "
-                    f"got {_actual} (mapped .so constraint)"
+                    f"   ⚠️  ABI conflict: mapped={_mapped_ver!r} → "
+                    f"requested={requested_version!r} — delegating to daemon "
+                    f"({type(_probe_err).__name__}: {_probe_err})"
                 )
-        except Exception as _probe_err:
-            # In-process import failed — the mapped .so is genuinely incompatible.
-            # Now check whether we can delegate to a daemon worker.
-            _can_delegate = (
-                getattr(self, "_worker_fallback_enabled", False)
-                and DAEMON_AVAILABLE
-                and not os.environ.get("OMNIPKG_IS_DAEMON_WORKER")
+            raise ProcessCorruptedException(
+                f"numpy ABI conflict: mapped={_mapped_ver!r}, requested={requested_version!r}"
             )
-            if _can_delegate:
-                if not self.quiet:
-                    safe_print(
-                        f"   ⚠️  ABI conflict: mapped={_mapped_ver!r} → "
-                        f"requested={requested_version!r} — in-process failed "
-                        f"({type(_probe_err).__name__}: {_probe_err}), delegating to daemon"
-                    )
-                raise ProcessCorruptedException(
-                    f"numpy ABI conflict: mapped={_mapped_ver!r}, requested={requested_version!r}"
+        else:
+            if not self.quiet:
+                safe_print(
+                    f"   ↕️  ABI conflict: mapped={_mapped_ver!r} → "
+                    f"requested={requested_version!r} — no daemon available, "
+                    f"continuing in-process (may be unstable)"
                 )
-            else:
-                if not self.quiet:
-                    safe_print(
-                        f"   ↕️  ABI conflict: mapped={_mapped_ver!r} → "
-                        f"requested={requested_version!r} — no daemon available, "
-                        f"continuing in-process (may be unstable)"
-                    )
 
     def _enter_single(self):
         self._profile_start("TOTAL_ACTIVATION")
@@ -3705,75 +3707,82 @@ class omnipkgLoader:
 
     def _install_bubble_inline(self, spec):
         """
-        Install a missing bubble directly, inline.
-        Returns True if successful, False otherwise.
+        Install a missing bubble directly.
+
+        If any ABI package (.so already dlopen'd) is resident in sys.modules,
+        running the installer in-process will ABI-conflict during its own
+        import verification step (e.g. numpy dtype-size mismatch inside a
+        worker that has a different numpy CE mapped).  In that case we shell
+        out to `8pkg install <spec>` in a clean subprocess and just wait for
+        rc=0.  We lose live output but we don't corrupt the caller's process.
         """
         start_time = time.perf_counter()
 
-        try:
-            from omnipkg.core import ConfigManager
-            from omnipkg.core import omnipkg as OmnipkgCore
+        # Always use subprocess install — in-process install ABI-conflicts
+        # with mapped C extensions (numpy, tf, torch) during verification.
+        return self._install_bubble_subprocess(spec, start_time)
 
-            # Create a fresh ConfigManager
-            cm = ConfigManager(suppress_init_messages=True)
+    def _install_bubble_subprocess(self, spec: str, start_time: float) -> bool:
+        """
+        Install a bubble by shelling out to `8pkg install <spec>` in a fresh
+        interpreter.  Used when ABI packages are already mapped in this process
+        so in-process installation would corrupt verification.  We sacrifice
+        live output for correctness — just wait for rc=0.
+        """
+        if not self.quiet:
+            safe_print(
+                _('      📦 [subprocess] Installing {} in clean process '
+                  '(ABI-safe)...').format(spec)
+            )
 
-            if hasattr(self, "config") and isinstance(self.config, dict):
-                cm.config.update(self.config)
+        cmd = ["8pkg", "install", spec]
 
-            core = OmnipkgCore(cm)
-
-            original_strategy = core.config.get("install_strategy")
-            core.config["install_strategy"] = "stable-main"
-
+        # Propagate PyTorch index automatically
+        if 'torch' in spec.lower() and '+cu' in spec:
             try:
-                if not self.quiet:
-                    safe_print(f"      📦 Installing {spec} with dependencies...")
+                cu_ver = spec.split('+cu')[1].split('==')[0] if '==' in spec else spec.split('+cu')[1]
+                cmd += ["--extra-index-url", f"https://download.pytorch.org/whl/cu{cu_ver}"]
+            except Exception:
+                pass
 
-                # 🔧 FIX: Extract and pass index URLs
-                index_url = None
-                extra_index_url = None
-                
-                # Auto-detect PyTorch index
-                if 'torch' in spec.lower() and '+cu' in spec:
-                    cu_version = spec.split('+cu')[1].split('==')[0] if '==' in spec else spec.split('+cu')[1]
-                    extra_index_url = f"https://download.pytorch.org/whl/cu{cu_version}"
-                    if not self.quiet:
-                        safe_print(_('      🔍 Auto-detected PyTorch index: {}').format(extra_index_url))
-
-                # Pass index URLs to smart_install
-                result = core.smart_install(
-                    [spec],
-                    index_url=index_url,
-                    extra_index_url=extra_index_url
+        try:
+            rc = subprocess.call(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            # 8pkg not on PATH — fall back to `python -m omnipkg install`
+            cmd = [sys.executable, "-m", "omnipkg", "install", spec]
+            try:
+                rc = subprocess.call(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
-
-                if result != 0:
-                    if not self.quiet:
-                        safe_print(f"      ❌ Installation failed with exit code {result}")
-                    return False
-
-                elapsed = time.perf_counter() - start_time
-
+            except Exception as e:
                 if not self.quiet:
-                    safe_print(f"      ✅ Bubble created in {elapsed:.1f}s (tested & deps bundled)")
-                    safe_print("      💡 Future loads will be instant (~100μs)")
-
-                # CRITICAL FIX: Force a clean import state after installation
-                # The installer may have imported modules that conflict with our context
-                importlib.invalidate_caches()
-                gc.collect()
-
-                return True
-
-            finally:
-                if original_strategy:
-                    core.config["install_strategy"] = original_strategy
-
+                    safe_print(_('      ❌ Subprocess install failed: {}').format(e))
+                return False
         except Exception as e:
             if not self.quiet:
-                safe_print(_('      ❌ Auto-install exception: {}').format(e))
-                import traceback
-                safe_print(traceback.format_exc())
+                safe_print(_('      ❌ Subprocess install failed: {}').format(e))
+            return False
+
+        elapsed = time.perf_counter() - start_time
+        if rc == 0:
+            importlib.invalidate_caches()
+            gc.collect()
+            if not self.quiet:
+                safe_print(
+                    f"      ✅ Bubble created in {elapsed:.1f}s (subprocess, ABI-safe)"
+                )
+            return True
+        else:
+            if not self.quiet:
+                safe_print(
+                    _('      ❌ Subprocess install exited rc={} for {}').format(rc, spec)
+                )
             return False
 
     def __enter__(self):
@@ -4918,7 +4927,7 @@ class omnipkgLoader:
                     if not cloak_path.exists():
                         continue
 
-                    original_name = re.sub(r"\\.\d+_\d+_omnipkg_cloaked.*$", "", cloak_path.name)
+                    original_name = re.sub(r"\.\d+_\d+_omnipkg_cloaked.*$", "", cloak_path.name)
                     if original_name == cloak_path.name:
                         match = re.search(r"^(.+?)(?:\.\d+)?_\d+_omnipkg_cloaked", cloak_path.name)
                         if match:

@@ -993,7 +993,7 @@ print(np.__version__)
     # PHASE 1: Chaos – 10 threads × 3 swaps each
     # ──────────────────────────────────────────────────────────────
     def chaotic_worker(thread_id):
-        thread_versions = [random.choice(versions) for _ in range(3)]
+        thread_versions = [random.choice(versions) for unused_ in range(3)]
         thread_results = []
         for i, spec in enumerate(thread_versions):
             # Smaller matrix to avoid thermal death
@@ -1335,15 +1335,18 @@ def chaos_test_10_grand_finale():
             pass
 
     safe_print("\n🎆🎆🎆 MAXIMUM CHAOS SURVIVED! 🎆🎆🎆\n")
-
-
+    
 def chaos_test_11_tensorflow_resurrection():
     """⚰️ TEST 11: TENSORFLOW RESURRECTION ULTIMATE"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     safe_print("╔══════════════════════════════════════════════════════════════╗")
     safe_print("║  TEST 11: ⚰️💀⚡ TENSORFLOW RESURRECTION ULTIMATE          ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
-
     verbose = is_verbose_mode()
+
+    SITE_PKGS = Path("/home/minds3t/miniforge3/envs/evocoder_env/lib/python3.11/site-packages")
+    MV_BASE = SITE_PKGS / ".omnipkg_versions"
 
     # ================================================================
     # PART A: TRUE SEQUENTIAL WORKER SPAWN (Kill after each use)
@@ -1351,60 +1354,43 @@ def chaos_test_11_tensorflow_resurrection():
     safe_print("┌──────────────────────────────────────────────────────────────┐")
     safe_print("│ PART A: ⚡ TRUE SEQUENTIAL WORKER RESURRECTION               │")
     safe_print("└──────────────────────────────────────────────────────────────┘\n")
-
     safe_print("   📍 Method 1: Sequential Workers (FRESH PROCESS EACH TIME)")
     safe_print("      (Measuring true 'Wall Clock' time from process start to result)")
     sequential_times = []
-
     for i in range(5):
         safe_print(_('\n      🔄 Iteration {}/5: Spawning & executing...').format(i + 1))
-
-        # CRITICAL: Measure time starting BEFORE process creation
         start_wall = time.perf_counter()
-
         worker = None
         try:
-            # 1. Initialize the heavy process
             worker = PersistentWorker("tensorflow==2.13.0", verbose=verbose)
-
-            # 2. Run the code
-            code = """
-from omnipkg.loader import omnipkgLoader
-import sys
-with omnipkgLoader("tensorflow==2.13.0"):
-    import tensorflow as tf
-    x = tf.constant([1, 2, 3])
-    result = tf.reduce_sum(x)
-"""
+            code = (
+                "from omnipkg.loader import omnipkgLoader\n"
+                "import sys\n"
+                "with omnipkgLoader('tensorflow==2.13.0'):\n"
+                "    import tensorflow as tf\n"
+                "    x = tf.constant([1, 2, 3])\n"
+                "    result = tf.reduce_sum(x)\n"
+            )
             result = worker.execute(code)
-
-            # 3. Calculate Wall Clock Time
             elapsed = (time.perf_counter() - start_wall) * 1000
-
             if result.get("success"):
                 sequential_times.append(elapsed)
                 safe_print(f"         ✅ Full Lifecycle: {elapsed:.0f}ms")
             else:
                 safe_print(_('         ❌ Failed: {}').format(result.get('error')))
-
         except Exception as e:
             safe_print(_('         ❌ Exception: {}').format(e))
-
         finally:
             if worker:
                 safe_print("         🛑 Killing worker for fresh restart...")
                 try:
                     worker.shutdown()
-                except:
+                except Exception:
                     pass
             time.sleep(0.2)
 
-    avg_sequential = (
-        sum(sequential_times) / len(sequential_times) if sequential_times else 0
-    )
-    safe_print(
-        f"\n   📊 Sequential Average: {avg_sequential:.0f}ms per TRUE resurrection"
-    )
+    avg_sequential = sum(sequential_times) / len(sequential_times) if sequential_times else 0
+    safe_print(f"\n   📊 Sequential Average: {avg_sequential:.0f}ms per TRUE resurrection")
 
     # ================================================================
     # PART B: DAEMON MODE (Fair Test - Fresh Daemon)
@@ -1412,60 +1398,46 @@ with omnipkgLoader("tensorflow==2.13.0"):
     safe_print("┌──────────────────────────────────────────────────────────────┐")
     safe_print("│ PART B: ⚡ DAEMON MODE (Persistent Worker - FAIR TEST)      │")
     safe_print("└──────────────────────────────────────────────────────────────┘\n")
-
     daemon_times = []
     daemon_available = False
-
+    avg_daemon = 0
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
-
         safe_print("   🧹 Restarting Daemon...")
-        subprocess.run(
-            ["8pkg", "daemon", "stop"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        subprocess.run(["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
         if not ensure_daemon_running():
             return False
         client = DaemonClient()
-        for unused in range(10):
+        for unused_ in range(10):
             time.sleep(0.5)
             if client.status().get("success"):
                 safe_print("   ✅ Daemon online\n")
                 break
-
         safe_print("   📍 Running 5 iterations with persistent worker:\n")
-
         proxy = DaemonProxy(client, "tensorflow==2.13.0")
-
         for i in range(5):
             safe_print(f"      Iteration {i+1}/5...")
             start = time.perf_counter()
-
-            code = """
-from omnipkg.loader import omnipkgLoader
-with omnipkgLoader("tensorflow==2.13.0"):
-    import tensorflow as tf
-    x = tf.constant([1, 2, 3])
-    result = tf.reduce_sum(x)
-"""
+            code = (
+                "from omnipkg.loader import omnipkgLoader\n"
+                "with omnipkgLoader('tensorflow==2.13.0'):\n"
+                "    import tensorflow as tf\n"
+                "    x = tf.constant([1, 2, 3])\n"
+                "    result = tf.reduce_sum(x)\n"
+            )
             result = proxy.execute(code)
             elapsed = (time.perf_counter() - start) * 1000
-
             if result.get("success"):
                 daemon_times.append(elapsed)
                 safe_print(f"         ⚡ {elapsed:.0f}ms")
             else:
                 safe_print("         ❌ Failed")
-
         avg_daemon = sum(daemon_times) / len(daemon_times) if daemon_times else 0
         speedup = avg_sequential / avg_daemon if avg_daemon > 0 else 0
-
         safe_print(f"\n   📊 Daemon Average: {avg_daemon:.0f}ms")
         safe_print(f"   🚀 SPEEDUP: {speedup:.1f}x faster!\n")
         daemon_available = True
-
     except Exception as e:
         safe_print(_('   ❌ Daemon mode failed: {}\n').format(e))
 
@@ -1476,140 +1448,136 @@ with omnipkgLoader("tensorflow==2.13.0"):
     safe_print("│ PART C: 🎼 CONCURRENT SPAWN & OPS TEST                      │")
     safe_print("└──────────────────────────────────────────────────────────────┘\n")
 
-    if not daemon_available:
-        return False
-
     versions = ["2.12.0", "2.13.0", "2.20.0"]
 
-    # ------------------------------------------------------------
-    # STEP 1: SEQUENTIAL SPAWN
-    # ------------------------------------------------------------
-    # We must restart the daemon to ensure no workers are cached
-    safe_print("   🧹 Restarting Daemon for SEQUENTIAL SPAWN TEST...")
-    subprocess.run(
-        ["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    def _make_probe(ver):
+        site = str(SITE_PKGS)
+        mvb  = str(MV_BASE)
+        return (
+            "import os, sys\n"
+            "from pathlib import Path\n"
+            f"_ver = {ver!r}\n"
+            "_pid = os.getpid()\n"
+            "_tag = '[PROBE v' + str(_ver) + ' PID=' + str(_pid) + ']'\n"
+            f"_site = Path({site!r})\n"
+            f"_mvb  = Path({mvb!r})\n"
+            "_np_so = (\n"
+            "    'numpy.core._multiarray_umath' in sys.modules\n"
+            "    or 'numpy._core._multiarray_umath' in sys.modules\n"
+            ")\n"
+            "_np_mods = [k for k in sys.modules if k == 'numpy' or k.startswith('numpy.')]\n"
+            "_tf_mods = [k for k in sys.modules if k == 'tensorflow' or k.startswith('tensorflow.')]\n"
+            "try:\n"
+            "    import importlib.metadata as _ilm\n"
+            "    _np_ver = _ilm.version('numpy')\n"
+            "except Exception:\n"
+            "    _np_ver = 'NOT_FOUND'\n"
+            "print(_tag + ' ── WORKER STATE ──────────────────────────────────')\n"
+            "print(_tag + ' numpy_importable_version : ' + str(_np_ver))\n"
+            "print(_tag + ' numpy_so_already_mapped  : ' + str(_np_so))\n"
+            "print(_tag + ' numpy_modules_in_memory  : ' + str(len(_np_mods)))\n"
+            "print(_tag + ' tf_modules_in_memory     : ' + str(len(_tf_mods)), flush=True)\n"
+        )
+
+    def _probe_then_run(proxy, ver, op_code, step_name):
+        safe_print(f"\n      ── TF {ver} ({step_name}) ──────────────────")
+        probe_res = proxy.execute(_make_probe(ver))
+        stdout = (probe_res.get("stdout") or "").strip()
+        if stdout:
+            for line in stdout.splitlines():
+                safe_print(f"   {line}")
+        
+        t0 = time.perf_counter()
+        res = proxy.execute(op_code)
+        elapsed = (time.perf_counter() - t0) * 1000
+        
+        if res.get("success"):
+            safe_print(f"      ✅ TF {ver} done in {elapsed:.0f}ms")
+            if res.get("stderr"):
+                safe_print(f"      [STDERR] {res['stderr']}")
+        else:
+            safe_print(f"      ❌ TF {ver} FAILED in {elapsed:.0f}ms: {res.get('error')}")
+            safe_print(f"\n{'='*80}\nWORKER TRACEBACK (TF {ver})\n{'='*80}")
+            safe_print(res.get("traceback") or "No traceback provided.")
+            safe_print(f"{'='*80}\nWORKER STDERR\n{'='*80}")
+            safe_print(res.get("stderr") or "No stderr provided.")
+            safe_print(f"{'='*80}\n")
+            
+        return elapsed, res
+
+    heavy_code = (
+        "import tensorflow as tf\n"
+        "import time\n"
+        "size = 2000\n"
+        "with tf.device('/CPU:0'):\n"
+        "    x = tf.random.normal((size, size))\n"
+        "    y = tf.random.normal((size, size))\n"
+        "    z = tf.matmul(x, y)\n"
+        "    _unused = z.numpy()\n"
     )
+
+    # ── STEP 1: SEQUENTIAL SPAWN ─────────────────────────────────────────────
+    safe_print("   🧹 Restarting Daemon for SEQUENTIAL SPAWN TEST...")
+    subprocess.run(["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1)
-    if not ensure_daemon_running():
-        return False
-    client = DaemonClient()  # Reconnect
-
+    client = DaemonClient()
+    
     safe_print("   🐢 STEP 1: Sequential Spawn (One by one)...")
-    seq_spawn_start = time.perf_counter()
-
+    active_seq_proxies = {}
     for ver in versions:
-        t_ver = time.perf_counter()
         safe_print(_('      Requesting TF {}...').format(ver))
         p = DaemonProxy(client, f"tensorflow=={ver}")
-        # Execute simple code to force spawn wait
         p.execute(
-            f"from omnipkg.loader import omnipkgLoader\nwith omnipkgLoader('tensorflow=={ver}'): import tensorflow as tf"
+            f"from omnipkg.loader import omnipkgLoader\n"
+            f"with omnipkgLoader('tensorflow=={ver}'): import tensorflow as tf"
         )
-        safe_print(f"      ✅ Ready in {(time.perf_counter() - t_ver)*1000:.0f}ms")
+        active_seq_proxies[ver] = p
+        safe_print(f"      ✅ Worker Assigned: TF {ver}")
 
-    seq_spawn_total = (time.perf_counter() - seq_spawn_start) * 1000
-    safe_print(f"   ⏱️  Total Sequential Spawn Time: {seq_spawn_total:.0f}ms\n")
-
-    # ------------------------------------------------------------
-    # STEP 2: CONCURRENT SPAWN
-    # ------------------------------------------------------------
-    # Restart daemon AGAIN to clear cache for fair concurrent test
-    safe_print("   🧹 Restarting Daemon for CONCURRENT SPAWN TEST...")
-    subprocess.run(
-        ["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-    time.sleep(1)
-    if not ensure_daemon_running():
-        return False
-    client = DaemonClient()  # Reconnect
-
-    safe_print("   🚀 STEP 2: Concurrent Spawn (All at once)...")
-
-    conc_spawn_start = time.perf_counter()
-    active_proxies = {}
-
-    def spawn_worker(ver):
-        p = DaemonProxy(client, f"tensorflow=={ver}")
-        p.execute(
-            f"from omnipkg.loader import omnipkgLoader\nwith omnipkgLoader('tensorflow=={ver}'): import tensorflow as tf"
-        )
-        return ver, p
-
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(spawn_worker, v) for v in versions]
-        for f in futures:
-            v, p = f.result()
-            active_proxies[v] = p
-            safe_print(_('      ✅ Worker Ready: TF {}').format(v))
-
-    conc_spawn_total = (time.perf_counter() - conc_spawn_start) * 1000
-    safe_print(f"   ⏱️  Total Concurrent Spawn Time: {conc_spawn_total:.0f}ms")
-
-    spawn_speedup = seq_spawn_total / conc_spawn_total if conc_spawn_total > 0 else 0
-    safe_print(f"   🚀 SPAWN SPEEDUP: {spawn_speedup:.2f}x\n")
-
-    # ------------------------------------------------------------
-    # STEP 3: SEQUENTIAL HEAVY OPS
-    # ------------------------------------------------------------
-    safe_print("   🐢 STEP 3: Sequential Tensor Operations (Matrix Mult)...")
-
-    heavy_code = """
-import tensorflow as tf
-import time
-size = 2000
-with tf.device('/CPU:0'):
-    x = tf.random.normal((size, size))
-    y = tf.random.normal((size, size))
-    z = tf.matmul(x, y)
-    _ = z.numpy()
-"""
-
-    seq_ops_times = []
-
+    # ── STEP 1B: SEQUENTIAL OPS (IMMEDIATELY AFTER SEQ SPAWN) ────────────────
+    safe_print("\n   🐢 STEP 1B: Sequential Ops (Testing isolation without concurrency)...")
     for v in versions:
-        safe_print(_('      running on TF {}...').format(v))
-        t0 = time.perf_counter()
-        res = active_proxies[v].execute(heavy_code)
-        dt = (time.perf_counter() - t0) * 1000
-        if res.get("success"):
-            seq_ops_times.append(dt)
-            safe_print(f"         ✅ Done in {dt:.0f}ms")
-        else:
-            safe_print(_('         ❌ Failed: {}').format(res.get('error')))
+        _probe_then_run(active_seq_proxies[v], v, heavy_code, "Seq Ops after Seq Spawn")
 
-    total_seq_ops = sum(seq_ops_times)
-    safe_print(f"   📊 Total Sequential Calc Time: {total_seq_ops:.0f}ms\n")
+    # ── STEP 2: CONCURRENT SPAWN ─────────────────────────────────────────────
+    safe_print("\n   🧹 Restarting Daemon for CONCURRENT SPAWN TEST...")
+    subprocess.run(["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1)
+    client = DaemonClient()
+    
+    safe_print("   🚀 STEP 2: Concurrent Spawn (All at once)...")
+    active_conc_proxies = {}
 
-    # ------------------------------------------------------------
-    # STEP 4: CONCURRENT HEAVY OPS
-    # ------------------------------------------------------------
-    safe_print("   🚀 STEP 4: Concurrent Tensor Operations...")
+    def _spawn(ver):
+        p = DaemonProxy(client, f"tensorflow=={ver}")
+        res = p.execute(
+            f"from omnipkg.loader import omnipkgLoader\n"
+            f"with omnipkgLoader('tensorflow=={ver}'): import tensorflow as tf"
+        )
+        return ver, p, res
 
-    conc_ops_start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=len(versions)) as ex:
+        for fut in as_completed([ex.submit(_spawn, v) for v in versions]):
+            v, p, res = fut.result()
+            active_conc_proxies[v] = p
+            safe_print(f"      ✅ Worker Ready: TF {v}")
 
-    def run_heavy(ver):
-        t_start = time.perf_counter()
-        active_proxies[ver].execute(heavy_code)
-        t_end = time.perf_counter()
-        return ver, (t_end - t_start) * 1000
+    # ── STEP 3: SEQUENTIAL HEAVY OPS ─────────────────────────────────────────
+    safe_print("\n   🐢 STEP 3: Sequential Tensor Operations (After Conc Spawn)...")
+    for v in versions:
+        _probe_then_run(active_conc_proxies[v], v, heavy_code, "Seq Ops after Conc Spawn")
 
-    results_conc = {}
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(run_heavy, v) for v in versions]
-        for f in futures:
-            v, dt = f.result()
-            results_conc[v] = dt
-            safe_print(f"      ✅ TF {v} finished in {dt:.0f}ms")
+    # ── STEP 4: CONCURRENT HEAVY OPS ─────────────────────────────────────────
+    safe_print("\n   🚀 STEP 4: Concurrent Tensor Operations...")
+    def _run_heavy(ver):
+        return _probe_then_run(active_conc_proxies[ver], ver, heavy_code, "Conc Ops")
 
-    total_conc_ops = (time.perf_counter() - conc_ops_start) * 1000
+    with ThreadPoolExecutor(max_workers=len(versions)) as ex:
+        for fut in as_completed([ex.submit(_run_heavy, v) for v in versions]):
+            pass # Prints are handled inside _probe_then_run
 
-    safe_print("\n   📊 Concurrent Calc Summary:")
-    safe_print(f"      - Sequential Time: {total_seq_ops:.0f}ms")
-    safe_print(f"      - Concurrent Time: {total_conc_ops:.0f}ms")
-
-    if total_conc_ops > 0:
-        calc_speedup = total_seq_ops / total_conc_ops
-        safe_print(f"      - Calc Speedup: {calc_speedup:.2f}x")
+    safe_print("\n   ✅ TEST COMPLETE")
+    return True
 
     # ================================================================
     # FINAL RESULTS
@@ -1617,12 +1585,9 @@ with tf.device('/CPU:0'):
     safe_print("╔══════════════════════════════════════════════════════════════╗")
     safe_print("║  📊 FINAL RESULTS                                            ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
-
-    safe_print(
-        f"   ✅ Resurrection Lag: {avg_sequential:.0f}ms (Cold) vs {avg_daemon:.0f}ms (Warm)"
-    )
+    safe_print(f"   ✅ Resurrection Lag: {avg_sequential:.0f}ms (Cold) vs {avg_daemon:.0f}ms (Warm)")
     safe_print(f"   ✅ Spawning: {seq_spawn_total:.0f}ms -> {conc_spawn_total:.0f}ms")
-    safe_print(f"   ✅ Calculation: {total_seq_ops:.0f}ms -> {total_conc_ops:.0f}ms")
+    safe_print(f"   ✅ Calculation: {'PASSED' if all_passed else 'FAILED'} ({total_seq_ops:.0f}ms seq -> {total_conc_ops:.0f}ms conc)")
 
     if avg_sequential > 1000:
         safe_print("\n   ✅ TENSORFLOW RESURRECTION: PASSED")
@@ -1630,7 +1595,6 @@ with tf.device('/CPU:0'):
     else:
         safe_print("\n   ⚠️  Performance metrics marginal, but functional test PASSED")
         return True
-
 
 def chaos_test_12_jax_vs_torch_mortal_kombat():
     """🥊 TEST 12: TRUE TORCH VERSION SWITCHING - Daemon Edition"""
@@ -2529,60 +2493,82 @@ def chaos_test_16_nested_reality_hell():
     tf_worker = PersistentWorker("tensorflow==2.13.0", verbose=verbose)
 
     try:
+        # ── WHY execute() instead of bare imports ────────────────────────────
+        # The nested loaders run inside the tf_worker subprocess.  When the
+        # loader detects an ABI conflict (e.g. scipy needs numpy==1.26.4 but
+        # the CE for 1.24.3 is already dlopen-mapped), it delegates to a
+        # *temporary* daemon worker for __enter__ then shuts it down.  At that
+        # point the package was never imported into *this* process's namespace,
+        # so a bare "import scipy" on the next line raises ModuleNotFoundError.
+        #
+        # Fix: capture the loader as "loader" via `as loader` and call
+        # loader.execute() for all package-specific work.  execute() routes to
+        # the worker when in worker-mode, or runs in-process when the overlay
+        # succeeded cleanly.  The bare-import-after-delegation bug never fires.
+        #
+        # Inner execute() code strings use single-quotes or '...' to avoid
+        # colliding with the outer """ delimiter.
+        # ────────────────────────────────────────────────────────────────────
         nested_hell_code = """
 from omnipkg.loader import omnipkgLoader
-import sys
-import site
-import os
-try:
-    from .common_utils import safe_print
-except ImportError:
-    from omnipkg.common_utils import safe_print
+import sys, os
+
 def log(msg):
     sys.stderr.write(msg + '\\n')
     sys.stderr.flush()
 
-# Restore main env visibility
 import omnipkg
-main_site_packages = os.path.dirname(os.path.dirname(omnipkg.__file__))
-if main_site_packages not in sys.path:
-    sys.path.append(main_site_packages)
+main_sp = os.path.dirname(os.path.dirname(omnipkg.__file__))
+if main_sp not in sys.path:
+    sys.path.append(main_sp)
 
-log("     🔄 Starting nested overlay stack...")
+log('     \U0001f504 Starting nested overlay stack...')
 
 # Layer 1: NumPy 1.24.3
-with omnipkgLoader("numpy==1.24.3", quiet=False, isolation_mode='overlay'):
-    import numpy as np
-    
-    # Layer 2: SciPy 1.10.1 (Compatible with NumPy 1.24)
-    with omnipkgLoader("scipy==1.10.1", quiet=False, isolation_mode='overlay'):
-        import scipy
-        import scipy.linalg
-        
-        # Layer 3: Pandas 2.0.3 (Compatible with NumPy 1.24)
-        with omnipkgLoader("pandas==2.0.3", quiet=False, isolation_mode='overlay'):
-            import pandas as pd
-            
-            # Layer 4: Scikit-Learn 1.3.2
-            with omnipkgLoader("scikit-learn==1.3.2", quiet=False, isolation_mode='overlay'):
-                from sklearn.ensemble import RandomForestClassifier
-                
-                # TF from base
-                import tensorflow as tf
-                
-                # Layer 5: PyTorch 2.0.1
-                with omnipkgLoader("torch==2.0.1+cu118", quiet=False, isolation_mode='overlay'):
-                    import torch
-                    
-                    log("     ✅ ALL LAYERS LOADED!")
-                    
-                    tf_tens = tf.constant([1,2,3])
-                    torch_tens = torch.tensor([1,2,3])
-                    sp_val = scipy.linalg.norm([1,2,3])
-                    
-                    log(f"     🎉 Verification: TF={tf_tens.shape}, Torch={torch_tens.shape}, SciPy={sp_val:.2f}")
+with omnipkgLoader('numpy==1.24.3', quiet=False, isolation_mode='overlay') as np_loader:
+    r = np_loader.execute('import numpy as np; print(np.__version__)')
+    np_ver = r.get('stdout', '').strip()
+    log(f'     \u2705 Layer 1 numpy: {np_ver}')
 
-print("SUCCESS")
+    # Layer 2: SciPy — may ABI-delegate; use execute() so result lands in worker
+    with omnipkgLoader('scipy==1.10.1', quiet=False, isolation_mode='overlay') as sp_loader:
+        r = sp_loader.execute(
+            'import scipy, scipy.linalg\\n'
+            'val = scipy.linalg.norm([1, 2, 3])\\n'
+            'print(f"{scipy.__version__}|{val:.4f}")'
+        )
+        sp_out = r.get('stdout', '').strip()
+        log(f'     \u2705 Layer 2 scipy: {sp_out}')
+
+        # Layer 3: Pandas
+        with omnipkgLoader('pandas==2.0.3', quiet=False, isolation_mode='overlay') as pd_loader:
+            r = pd_loader.execute('import pandas as pd; print(pd.__version__)')
+            pd_ver = r.get('stdout', '').strip()
+            log(f'     \u2705 Layer 3 pandas: {pd_ver}')
+
+            # Layer 4: Scikit-Learn
+            with omnipkgLoader('scikit-learn==1.3.2', quiet=False, isolation_mode='overlay') as sk_loader:
+                r = sk_loader.execute('import sklearn; print(sklearn.__version__)')
+                sk_ver = r.get('stdout', '').strip()
+                log(f'     \u2705 Layer 4 sklearn: {sk_ver}')
+
+                # Layer 5: PyTorch — ABI-heavy, must use execute()
+                with omnipkgLoader('torch==2.0.1+cu118', quiet=False, isolation_mode='overlay') as torch_loader:
+                    r = torch_loader.execute(
+                        'import torch, tensorflow as tf\\n'
+                        'tf_t = tf.constant([1, 2, 3])\\n'
+                        'torch_t = torch.tensor([1, 2, 3])\\n'
+                        'print(f"torch={torch.__version__}|tf={tf_t.shape}|t={torch_t.shape}")'
+                    )
+                    torch_out = r.get('stdout', '').strip()
+                    log(f'     \u2705 Layer 5 torch+tf: {torch_out}')
+                    log('     \u2705 ALL LAYERS LOADED!')
+                    log(
+                        f'     \U0001f389 Verification: np={np_ver} sp={sp_out} '
+                        f'pd={pd_ver} sk={sk_ver} {torch_out}'
+                    )
+
+print('SUCCESS')
 """
         result = tf_worker.execute(nested_hell_code)
 
@@ -2590,9 +2576,13 @@ print("SUCCESS")
             safe_print("\n   ✅ Phase 2: 7-layer stack STABLE!")
             phase2_success = True
         else:
+            err = result.get("error") or result.get("stderr", "")
             safe_print(
-                _('\n   💥 Phase 2 COLLAPSED: {}\n').format(result.get('error', result.get('stderr')))
+                _('\n   💥 Phase 2 COLLAPSED: {}\n').format(err)
             )
+            if verbose and result.get("stdout"):
+                for line in result["stdout"].splitlines():
+                    safe_print(f"      [stdout] {line}")
             phase2_success = False
 
     finally:

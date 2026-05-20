@@ -367,6 +367,29 @@ def smart_tf_patcher():
                             bp.rstrip('/').rsplit('/', 1)[-1].startswith('numpy-')
                             for bp in _bubble_paths
                         )
+                        # ── CRITICAL: Never redirect when bubble numpy is already live ──
+                        # Once numpy's C extension (.so) is dlopened, the process is
+                        # permanently committed to that ABI. If bubble numpy is fully
+                        # initialized (has __version__), its .so is already mapped.
+                        # Any redirect to main-env numpy at this point gives TF a DIFFERENT
+                        # numpy C ABI than its .so was compiled against → dtype size mismatch.
+                        # This fires when TF's own C extension imports numpy during its init:
+                        # the caller has no __file__ so _in_bubble is False, but we must
+                        # NOT redirect — TF needs the exact numpy it was built against.
+                        _cached_np = sys.modules.get("numpy")
+                        _bubble_np_is_live = (
+                            _cached_np is not None
+                            and hasattr(_cached_np, "__version__")
+                            and any(
+                                (getattr(_cached_np, "__file__", "") or "").startswith(bp)
+                                for bp in _bubble_paths
+                            )
+                        )
+                        if _bubble_np_is_live:
+                            # Bubble numpy C-ext is already mmap'd. Return it directly —
+                            # redirecting now would hand TF a mismatched ABI.
+                            return _original_import_func(name, globals, locals, fromlist, level)
+                        # ── END CRITICAL GUARD ───────────────────────────────────────────
                         if not _in_bubble or not _active_bubble_is_numpy:
                             return _import_numpy_from_main_env(
                                 name, globals, locals, fromlist, level
@@ -428,6 +451,7 @@ def smart_tf_patcher():
 
             # Only check for reload if THIS WORKER previously loaded TF successfully
             if current_pid in _tf_loaded_pids and "tensorflow" not in sys.modules:
+                safe_print("☢️  [OMNIPKG] FATAL TENSORFLOW RELOAD DETECTED!")
                 raise ProcessCorruptedException(
                     "Attempted to reload TensorFlow in a process where its C++ libraries were already initialized."
                 )
