@@ -1949,6 +1949,14 @@ def main():
             if args.tests:
                 safe_print(_("   Running tests: {}").format(", ".join(args.tests)))
 
+            if os.environ.get("OMNIPKG_DAEMON_WORKER") == "1":
+                # Running inside daemon worker - stdout is JSON pipe.
+                # Relaunch as independent process with real console.
+                import ctypes
+                env = os.environ.copy()
+                env.pop("OMNIPKG_DAEMON_WORKER", None)
+                subprocess.Popen(cmd, env=env, creationflags=0)
+                return 0
             return subprocess.call(cmd)
 
         elif args.command == "install":
