@@ -76,12 +76,12 @@ except ImportError:
 from omnipkg.loader import omnipkgLoader
 
 try:
-    log(f"🐚 Worker initializing environment: {package_spec}...")
+    log(f"[WORKER] Initializing environment: {package_spec}...")
     loader = omnipkgLoader("{package_spec}", quiet=False, worker_fallback=False)
     loader.__enter__()
     
     send_ipc({{"status": "ready"}})
-    log(f"✅ Worker ready: {package_spec}")
+    log(f"[WORKER] Ready: {package_spec}")
     
 except Exception as e:
     send_ipc({{"status": "error", "message": str(e)}})
@@ -159,8 +159,10 @@ except:
         env = os.environ.copy()
         # Prevent infinite worker recursion
         env["OMNIPKG_IS_WORKER_PROCESS"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
 
-        # 🔥 CRITICAL: Sanitize environment to prevent contamination from the parent.
+        # CRITICAL: Sanitize environment to prevent contamination from the parent.
         # This is the fix for the rapid switching failure. We must not inherit
         # library paths from the parent's active torch environment.
         for var in [
@@ -175,7 +177,7 @@ except:
         # CRITICAL: Disable buffering in subprocess
         # NOW worker_code is defined, so we can use it!
 
-        # 🔥 WINDOWS FIX: Prevent visible console windows
+        # WINDOWS FIX: Prevent visible console windows
         import platform
         creationflags = 0
         if platform.system() == "Windows":
