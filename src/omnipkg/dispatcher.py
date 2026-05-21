@@ -239,6 +239,19 @@ def main():
     )
     is_interactive_command = is_info_command or is_config_command or is_logs_follow
 
+    # Commands that need a real TTY (streaming output, interactive, long-running).
+    # Bypass the daemon entirely and run directly as a subprocess.
+    _DIRECT_COMMANDS = {"stress-test", "demo", "monitor", "logs"}
+    is_direct_command = bool(argv_commands) and argv_commands[0] in _DIRECT_COMMANDS
+
+    if is_direct_command:
+        import subprocess
+        exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
+        if debug_mode:
+            print(f'[DEBUG-DISPATCH] Direct (no-daemon) command: {argv_commands[0]}', file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
+        sys.exit(subprocess.call(exec_args))
+
     if not is_swap_command and not is_daemon_lifecycle and not is_interactive_command:
         try:
             import socket
