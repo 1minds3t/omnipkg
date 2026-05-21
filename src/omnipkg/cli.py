@@ -1950,15 +1950,17 @@ def main():
                 safe_print(_("   Running tests: {}").format(", ".join(args.tests)))
 
             if os.environ.get("OMNIPKG_DAEMON_WORKER") == "1":
-                # Running inside daemon worker - stdout is JSON pipe.
-                # Relaunch with a real console and wait for it to finish.
+                # Running inside daemon worker - stdout is the JSON pipe.
+                # exec() replaces this worker process with the stress test,
+                # giving it a real stdin/stdout. The daemon sees the worker
+                # exit and handles it the same as any other worker death.
                 env = os.environ.copy()
                 env.pop("OMNIPKG_DAEMON_WORKER", None)
-                CREATE_NEW_CONSOLE = 0x00000010
-                p = subprocess.Popen(cmd, env=env,
-                    creationflags=CREATE_NEW_CONSOLE if sys.platform == "win32" else 0)
-                p.wait()
-                return p.returncode
+                os.environ.update(env)
+                if sys.platform == "win32":
+                    os.execv(cmd[0], cmd)
+                else:
+                    os.execv(cmd[0], cmd)
             return subprocess.call(cmd)
 
         elif args.command == "install":
