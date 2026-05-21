@@ -75,7 +75,15 @@ def safe_print(*args, **kwargs):
                     safe_args.append(arg.encode(encoding, "replace").decode(encoding))
                 else:
                     safe_args.append(arg)
-            _builtin_print(*safe_args, **kwargs)
+            try:
+                _builtin_print(*safe_args, **kwargs)
+            except (OSError, Exception):
+                try:
+                    sys.stderr.write(str(safe_args) + "\n")
+                    sys.stderr.flush()
+                except Exception:
+                    pass
+                return
             
             # CRITICAL: Force flush after fallback print too
             if sys.platform == "win32":
@@ -85,12 +93,11 @@ def safe_print(*args, **kwargs):
                     pass
                     
         except Exception:
-            _builtin_print("[omnipkg: Encoding Error - Shell might not support UTF-8]", flush=True)
-            if sys.platform == "win32":
-                try:
-                    sys.stdout.flush()
-                except:
-                    pass
+            try:
+                sys.stderr.write("[omnipkg: Encoding Error - Shell might not support UTF-8]\n")
+                sys.stderr.flush()
+            except Exception:
+                pass
 
 def safe_unlink(path: Path) -> None:
     """Python 3.7 compatible unlink that ignores missing files."""
