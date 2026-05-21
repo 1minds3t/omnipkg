@@ -2342,6 +2342,8 @@ class PersistentWorker:
         # Tell the worker it's running inside the daemon so safe_input()
         # activates the NEEDS_INPUT relay instead of calling input() directly.
         env["OMNIPKG_DAEMON_WORKER"] = "1"          #  ADD THIS LINE
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
         # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
         if self.multiversion_base:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base

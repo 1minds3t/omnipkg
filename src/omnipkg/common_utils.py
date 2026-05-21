@@ -54,7 +54,7 @@ def safe_print(*args, **kwargs):
             except:
                 pass
                 
-    except UnicodeEncodeError:
+    except (UnicodeEncodeError, OSError):
         try:
             safe_args = []
             # Get shell encoding (often cp1252 on legacy Windows)
