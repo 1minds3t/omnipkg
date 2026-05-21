@@ -1951,12 +1951,14 @@ def main():
 
             if os.environ.get("OMNIPKG_DAEMON_WORKER") == "1":
                 # Running inside daemon worker - stdout is JSON pipe.
-                # Relaunch as independent process with real console.
-                import ctypes
+                # Relaunch with a real console and wait for it to finish.
                 env = os.environ.copy()
                 env.pop("OMNIPKG_DAEMON_WORKER", None)
-                subprocess.Popen(cmd, env=env, creationflags=0)
-                return 0
+                CREATE_NEW_CONSOLE = 0x00000010
+                p = subprocess.Popen(cmd, env=env,
+                    creationflags=CREATE_NEW_CONSOLE if sys.platform == "win32" else 0)
+                p.wait()
+                return p.returncode
             return subprocess.call(cmd)
 
         elif args.command == "install":
