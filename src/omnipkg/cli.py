@@ -273,22 +273,20 @@ def handle_python_requirement(
         )
         safe_print(_("      Run: {} swap python {}").format(parser_prog, required_version_str))
         return False
-        
-    # Propagate to environment so subprocesses inherit the correct context
-    os.environ["OMNIPKG_PYTHON"] = version
-    os.environ["OMNIPKG_ACTIVE_PYTHON"] = version
-    os.environ["OMNIPKG_PYTHON_EXECUTABLE"] = str(target_path)
 
+    managed_interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
+    target_path = managed_interpreters[required_version_str]
+
+    os.environ["OMNIPKG_PYTHON"] = required_version_str
+    os.environ["OMNIPKG_ACTIVE_PYTHON"] = required_version_str
+    os.environ["OMNIPKG_PYTHON_EXECUTABLE"] = str(target_path)
     safe_print(
         _("   - ✅ Environment successfully configured for Python {}.").format(required_version_str)
     )
     safe_print(_("🚀 Proceeding..."))
     safe_print("=" * 60)
-    
+
     return True
-
-
-
 
 def get_version():
     """Get version from package metadata."""
@@ -311,9 +309,7 @@ def get_version():
         pass
     return "unknown"
 
-
 VERSION = get_version()
-
 
 def stress_test_command(force=False):
     """Handle stress test command - BLOCK if not Python 3.11."""
