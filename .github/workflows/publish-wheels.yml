@@ -51,16 +51,17 @@ jobs:
 
       - name: Build + auditwheel
         run: |
+          # manylinux2014_aarch64:latest dropped cp37 after CentOS7 EOL (Jun 2024).
+          # Pin to last dated tag confirmed to include cp37-cp37m.
           podman run --rm --platform linux/arm64 \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_aarch64:latest \
+            quay.io/pypa/manylinux2014_aarch64:2022-07-17-51324db \
             /bin/bash -c "
-              # python-build-standalone has no py3.7 aarch64 build.
-              # manylinux2014_aarch64 ships a native aarch64 cp37 at a known path.
+              set -e
               PY=/opt/python/cp37-cp37m/bin/python3
-              \$PY -m pip install build --quiet &&
-              cd /io &&
-              \$PY -m build --wheel --outdir /io/dist-raw/ &&
+              \$PY -m pip install build --quiet
+              cd /io
+              \$PY -m build --wheel --outdir /io/dist-raw/
               auditwheel repair /io/dist-raw/*.whl -w /io/dist/
             "
 
@@ -96,7 +97,7 @@ jobs:
           name: wheel-linux-x86_64-musl
           path: dist/*.whl
 
-  # ── Linux aarch64 musllinux (cp37-abi3) ─────────────────────────────────
+  # ── Linux aarch64 musllinux (cp38+ only — musllinux never shipped cp37) ───
   build-linux-aarch64-musl:
     name: "linux aarch64 musl"
     runs-on: [self-hosted, Linux, X64]
@@ -107,16 +108,19 @@ jobs:
 
       - name: Build + auditwheel
         run: |
+          # musllinux images never included cp37 — earliest is cp38.
+          # Use cp38 here; the wheel will still install fine on py37 if your
+          # package declares python_requires correctly and has no C extensions,
+          # or ship this as a py38+ musllinux wheel alongside the glibc cp37 one.
           podman run --rm --platform linux/arm64 \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/musllinux_1_2_aarch64:latest \
             /bin/bash -c "
-              # python-build-standalone has no py3.7 aarch64 build.
-              # musllinux_1_2_aarch64 ships a native aarch64 cp37 at a known path.
-              PY=/opt/python/cp37-cp37m/bin/python3
-              \$PY -m pip install build --quiet &&
-              cd /io &&
-              \$PY -m build --wheel --outdir /io/dist-raw/ &&
+              set -e
+              PY=/opt/python/cp38-cp38/bin/python3
+              \$PY -m pip install build --quiet
+              cd /io
+              \$PY -m build --wheel --outdir /io/dist-raw/
               auditwheel repair /io/dist-raw/*.whl -w /io/dist/
             "
 
