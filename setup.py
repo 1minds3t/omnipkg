@@ -299,24 +299,19 @@ class DevelopWithDispatcher(develop):
         _install_dispatcher_binary(Path(sys.executable).parent)
         _build_uv_ffi(Path(sys.executable).parent)
 
-# 4. FIX: Force the wheel to be tagged as cp37-abi3
-try:
-    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
-    class BdistWheelCommand(_bdist_wheel):
-        def get_tag(self):
-            python, abi, plat = super().get_tag()
-            # If it's a CPython wheel, force it to cp37-abi3
-            if python.startswith("cp"):
-                return "cp37", "abi3", plat
-            return python, abi, plat
-except ImportError:
-    BdistWheelCommand = None
-
-ext_modules = [atomic_extension]
-cmdclass = {'build_ext': OptionalBuildExt}
-
-if BdistWheelCommand:
-    cmdclass['bdist_wheel'] = BdistWheelCommand
+# 4. FIX: Force the wheel to be tagged as cp37-abi3 (only when building C ext)
+if not SKIP_C_EXTENSIONS:
+    try:
+        from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
+        class BdistWheelCommand(_bdist_wheel):
+            def get_tag(self):
+                python, abi, plat = super().get_tag()
+                if python.startswith("cp"):
+                    return "cp37", "abi3", plat
+                return python, abi, plat
+        cmdclass['bdist_wheel'] = BdistWheelCommand
+    except ImportError:
+        pass
 
 
 cmdclass['install'] = InstallWithDispatcher

@@ -273,13 +273,21 @@ def handle_python_requirement(
         )
         safe_print(_("      Run: {} swap python {}").format(parser_prog, required_version_str))
         return False
+        
+    # Propagate to environment so subprocesses inherit the correct context
+    os.environ["OMNIPKG_PYTHON"] = version
+    os.environ["OMNIPKG_ACTIVE_PYTHON"] = version
+    os.environ["OMNIPKG_PYTHON_EXECUTABLE"] = str(target_path)
 
     safe_print(
         _("   - ✅ Environment successfully configured for Python {}.").format(required_version_str)
     )
     safe_print(_("🚀 Proceeding..."))
     safe_print("=" * 60)
+    
     return True
+
+
 
 
 def get_version():
