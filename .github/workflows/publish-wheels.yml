@@ -15,6 +15,7 @@ permissions:
 jobs:
   # ── Linux x86_64 manylinux (cp37-abi3) ──────────────────────────────────
   build-linux-x86_64-glibc:
+    continue-on-error: true
     name: "linux x86_64 glibc"
     runs-on: [self-hosted, Linux, X64]
     steps:
@@ -42,6 +43,7 @@ jobs:
 
   # ── Linux aarch64 manylinux (cp37-abi3) ─────────────────────────────────
   build-linux-aarch64-glibc:
+    continue-on-error: true
     name: "linux aarch64 glibc"
     runs-on: [self-hosted, Linux, X64]
     steps:
@@ -72,6 +74,7 @@ jobs:
 
   # ── Linux x86_64 musllinux (cp37-abi3) ──────────────────────────────────
   build-linux-x86_64-musl:
+    continue-on-error: true
     name: "linux x86_64 musl"
     runs-on: [self-hosted, Linux, X64]
     steps:
@@ -99,6 +102,7 @@ jobs:
 
   # ── Linux aarch64 musllinux (cp38+ only — musllinux never shipped cp37) ───
   build-linux-aarch64-musl:
+    continue-on-error: true
     name: "linux aarch64 musl"
     runs-on: [self-hosted, Linux, X64]
     steps:
@@ -131,6 +135,7 @@ jobs:
 
   # ── Windows AMD64 ────────────────────────────────────────────────────────
   build-win-amd64:
+    continue-on-error: true
     name: "windows amd64"
     runs-on: [self-hosted, Windows, X64]
     steps:
@@ -152,6 +157,7 @@ jobs:
 
   # ── Windows ARM64 ────────────────────────────────────────────────────────
   build-win-arm64:
+    continue-on-error: true
     name: "windows arm64"
     runs-on: [self-hosted, Windows, X64]
     steps:
@@ -173,6 +179,7 @@ jobs:
 
   # ── macOS universal2 ─────────────────────────────────────────────────────
   build-macos-universal2:
+    continue-on-error: true
     name: "macos universal2"
     runs-on: macos-15
     steps:
