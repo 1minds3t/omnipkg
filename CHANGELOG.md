@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.3] — 2026-05-21
+
+fix pure-python builds and stabilize wheel publishing pipeline
+
+## 🚀 What's New in v3.3.3
+
+This release introduces critical hotfixes to the packaging build system and CI pipeline, ensuring that source distributions, pure-Python fallback environments, and cross-platform wheel builds compile and publish reliably.
+
+* **Source Distribution (sdist) Build Fix:** Resolved a fatal `NameError: name 'atomic_extension' is not defined` when executing `python -m build` with `OMNIPKG_SKIP_C_EXT=1` or when generating pure-Python fallback packages.
+* **Manylinux & Musllinux Compilation Paths:**
+  * Pinned `manylinux2014_aarch64` to a confirmed dated tag (`2022-07-17-51324db`) to prevent losing local Python 3.7 dependencies during arm64 compilation.
+  * Corrected the oldest available interpreter path for musllinux x86_64/aarch64 to Python 3.9 (musllinux drops cp37 support on newer images).
+* **Windows CI Executable Discovery:** Updated Python executable resolution in Windows wheel workflows to point to a reliable, standard `C:\python37\python.exe` environment.
+* **Rocky Linux / RHEL Verification:** Refactored Rocky Linux verification logic inside the docker jobs to streamline how native system paths and pip dependencies are verified in isolated RHEL environments.
+
+* **Idempotent PyPI Publishes:** Enabled the `skip-existing` flag on PyPI publication steps to prevent pipeline termination if some wheels are already uploaded.
+* **Resilience Guardrails:** Added a `continue-on-error` configuration to secondary platform matrix steps to ensure temporary runner latency doesn't block the overall release verification loop.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: setup.py (31 lines changed)
+- UPDATE: src/omnipkg/cli.py (8 lines changed)
+
+**Updates:**
+- Update publish-wheels.yml for Python version changes
+- Update Python version in publish-wheels workflow
+- Update Python executable path in publish-wheels.yml
+- Update manylinux and musllinux images for builds
+- Update publish-wheels.yml to use native aarch64 Python
+
+_4 files changed, 78 insertions(+), 45 deletions(-)_
+
 ## [3.3.2] — 2026-05-21
 
 Daemon Isolation & Windows Deadlock Fixes
