@@ -141,7 +141,7 @@ jobs:
       - name: Build wheel
         shell: powershell
         run: |
-          $py37 = "C:\omnipkg\interpreters\cpython-3.7.9\python.exe"
+          $py37 = "C:\python37\python.exe"
           & $py37 -m pip install build --quiet
           & $py37 -m build --wheel --outdir dist\
 
@@ -162,7 +162,7 @@ jobs:
       - name: Build wheel
         shell: powershell
         run: |
-          $py37 = "C:\omnipkg\interpreters\cpython-3.7.9\python.exe"
+          $py37 = "C:\python37\python.exe"
           & $py37 -m pip install build --quiet
           & $py37 -m build --wheel --outdir dist\
 
