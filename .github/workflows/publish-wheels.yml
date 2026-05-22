@@ -117,7 +117,7 @@ jobs:
             quay.io/pypa/musllinux_1_2_aarch64:latest \
             /bin/bash -c "
               set -e
-              PY=/opt/python/cp38-cp38/bin/python3
+              PY=/opt/python/cp39-cp39/bin/python3
               \$PY -m pip install build --quiet
               cd /io
               \$PY -m build --wheel --outdir /io/dist-raw/
