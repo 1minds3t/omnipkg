@@ -253,6 +253,18 @@ def _get_core_dependencies(target_python_version: str = None) -> set:
                         }[op]
                         if not include:
                             continue
+                    platform_match = re.search(
+                        r"platform_system\s*(==|!=)\s*['\"]([^'\"]+)['\"]",
+                        marker_str
+                    )
+                    if platform_match:
+                        op = platform_match.group(1)
+                        val = platform_match.group(2)
+                        import platform as _platform
+                        current = _platform.system()
+                        include = (current == val) if op == "==" else (current != val)
+                        if not include:
+                            continue
 
                 # SPECIAL HANDLING: filelock — only one variant per Python version
                 if "filelock" in dep_lower:
@@ -782,7 +794,7 @@ class ConfigManager:
 
     def _register_and_link_existing_interpreter(self, interpreter_path: Path, version: str):
         """
-        Legacy registration logic. 
+        Legacy registration logic.
         Forwarding to simple registration for backward compatibility during migration.
         """
         return self._ensure_interpreter_registered(interpreter_path, version)
@@ -1261,21 +1273,26 @@ class ConfigManager:
                             len(filtered_deps)
                         )
                     )
-                    deps_install_cmd = [
-                        str(python_exe),
-                        "-m",
-                        "pip",
-                        "install",
-                        "--no-cache-dir",
-                        "--extra-index-url", "https://exotic-wheels.github.io",
-                    ] + sorted(list(filtered_deps))
-                    try:
-                        run_verbose(deps_install_cmd, "Failed to install omnipkg dependencies.")
+                    failed_deps = []
+                    for dep in sorted(filtered_deps):
+                        dep_cmd = [
+                            str(python_exe),
+                            "-m",
+                            "pip",
+                            "install",
+                            "--no-cache-dir",
+                            "--extra-index-url", "https://exotic-wheels.github.io",
+                            dep,
+                        ]
+                        try:
+                            run_verbose(dep_cmd, f"Failed to install {dep}.")
+                        except subprocess.CalledProcessError:
+                            safe_print(_("   ⚠️  Skipping {}: not available for this platform/version").format(dep))
+                            failed_deps.append(dep)
+                    if failed_deps:
+                        safe_print(_("   ⚠️  {} dep(s) skipped: {}").format(len(failed_deps), ", ".join(failed_deps)))
+                    else:
                         safe_print(_("   ✅ Core dependencies installed."))
-                    except subprocess.CalledProcessError:
-                        safe_print(
-                            _("   ⚠️  Some dependencies failed to install. Continuing anyway...")
-                        )
 
             safe_print(_("   - Installing omnipkg application layer..."))
             project_root = self._find_project_root()
@@ -1361,23 +1378,23 @@ class ConfigManager:
                                 len(filtered_deps)
                             )
                         )
-                        deps_install_cmd = [
-                            str(python_exe),
-                            "-m",
-                            "pip",
-                            "install",
-                            "--no-cache-dir",
-                        ] + sorted(list(filtered_deps))
-                        try:
-                            run_verbose(
-                                deps_install_cmd,
-                                "Failed to install omnipkg dependencies.",
-                            )
+                        failed_deps = []
+                        for dep in sorted(filtered_deps):
+                            dep_cmd = [
+                                str(python_exe), "-m", "pip", "install",
+                                "--no-cache-dir",
+                                "--extra-index-url", "https://exotic-wheels.github.io",
+                                dep,
+                            ]
+                            try:
+                                run_verbose(dep_cmd, f"Failed to install {dep}.")
+                            except subprocess.CalledProcessError:
+                                safe_print(_("   ⚠️  Skipping {}: not available for this platform/version").format(dep))
+                                failed_deps.append(dep)
+                        if failed_deps:
+                            safe_print(_("   ⚠️  {} dep(s) skipped: {}").format(len(failed_deps), ", ".join(failed_deps)))
+                        else:
                             safe_print(_("   ✅ Core dependencies installed."))
-                        except subprocess.CalledProcessError:
-                            safe_print(
-                                _("   ⚠️  Some dependencies failed to install. Continuing anyway...")
-                            )
 
                 safe_print(_("   - Installing omnipkg application layer..."))
                 project_root = self._find_project_root()
@@ -3006,7 +3023,7 @@ class ConfigManager:
 
     def _ensure_shims_installed(self):
         """
-        Creates a shim directory where 'python', 'python3', and 'pip' 
+        Creates a shim directory where 'python', 'python3', and 'pip'
         point back to the omnipkg dispatcher.
         """
         shims_dir = self.venv_path / ".omnipkg" / "shims"
@@ -3033,7 +3050,7 @@ class ConfigManager:
                     # On Windows, we might need to copy the entry point executable
                     # or create a .bat wrapper. Copying the dispatcher exe is safest.
                     # (Simplified for this example)
-                    pass 
+                    pass
                 else:
                     # Symlink 'python' -> '.../bin/8pkg'
                     # We use relpath to keep it portable if the venv moves
@@ -3942,10 +3959,10 @@ class BubbleIsolationManager:
                     existing_bubble_paths = self._find_dependency_bubbles(package_name, destination_path.parent)
 
                 verification_passed = verify_bubble_with_smart_strategy(
-                    self.parent_omnipkg, 
-                    package_name, 
-                    version, 
-                    staging_path, 
+                    self.parent_omnipkg,
+                    package_name,
+                    version,
+                    staging_path,
                     gatherer,
                     existing_bubble_paths=existing_bubble_paths
                 )
@@ -4291,7 +4308,7 @@ class BubbleIsolationManager:
         python_context_version: str,
     ) -> bool:
         # --- ADD THIS LINE HERE ---
-        import site as site_module 
+        import site as site_module
 
         """
         Creates a bubble from an editable install by copying files from the live source.
@@ -5770,7 +5787,7 @@ class BubbleIsolationManager:
         stats: dict,
         python_context_version: str,
         observed_dependencies: Optional[Dict[str, str]] = None,
-        enriched_meta: Optional[Dict] = None, 
+        enriched_meta: Optional[Dict] = None,
     ):
         """
         Creates a robust, dynamic manifest file and registers the bubble in Redis.
@@ -5796,7 +5813,7 @@ class BubbleIsolationManager:
         size_mb = round(total_size / (1024 * 1024), 2)
 
         manifest_data = {
-            "manifest_schema_version": "2.0", 
+            "manifest_schema_version": "2.0",
             "created_at": datetime.now().isoformat(),
             "python_version": python_context_version,
             "omnipkg_version": omnipkg_version,
@@ -7004,8 +7021,8 @@ class omnipkg:
     try:
         from .common_utils import safe_print
     except ImportError:
-        from omnipkg.common_utils import safe_print                                  
-                                          
+        from omnipkg.common_utils import safe_print
+
 
     install_spec = {json.dumps(install_spec)}
     cmd = [
@@ -11169,8 +11186,8 @@ class omnipkg:
                                     actual_install_dir = python_exe.parent
 
                                 # Verify it looks like a version directory (starts with cpython-)
-                                if (actual_install_dir.exists() 
-                                    and actual_install_dir != dest_path 
+                                if (actual_install_dir.exists()
+                                    and actual_install_dir != dest_path
                                     and actual_install_dir.name.startswith("cpython-")):
                                     safe_print(_('   - 🔄 Version upgraded: {} -> {}').format(dest_path.name, actual_install_dir.name))
                                     dest_path = actual_install_dir
@@ -11525,7 +11542,7 @@ class omnipkg:
                 safe_print(_("   ✅ Symlink removed."))
             elif interpreter_root_dir.is_dir():
                 shutil.rmtree(interpreter_root_dir)
-                safe_print(_("   ✅ Directory removed."))  
+                safe_print(_("   ✅ Directory removed."))
 
             else:
                 interpreter_root_dir.unlink()
@@ -11942,7 +11959,7 @@ class omnipkg:
             raise
 
     def _extract_version_from_filename(self, filename: str, package_spec: str) -> Optional[str]:
-        """enclave 
+        """enclave
         Extract version from various pip download filename formats across pip eras.
         Handles package name normalization (dashes become underscores in filenames).
         """
@@ -13245,7 +13262,7 @@ class omnipkg:
             safe_print(_('    ⚡ Updating {} priority package(s) immediately...').format(len(priority_specs)))
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
-                
+
                 from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(
                     config=self.config,
@@ -13255,13 +13272,13 @@ class omnipkg:
                     omnipkg_instance=self,
                 )
                 gatherer.cache_client = self.cache_client
-                
+
                 # PRIORITY UPDATE: Only the main packages, skip nested discovery
                 gatherer.run(
                     targeted_packages=list(priority_specs),
                     skip_nested_discovery=True  # NEW FLAG
                 )
-                
+
                 safe_print("    ✅ Priority packages indexed")
 
                 # Schedule background scan for nested packages
@@ -13292,7 +13309,7 @@ class omnipkg:
         Launches a non-blocking background process to scan nested packages inside bubbles.
         """
         bubble_list = [f"{name}:{path}" for name, path in bubble_paths.items()]
-        
+
         # Create a background scan script
         scan_cmd = [
             sys.executable,
@@ -13301,7 +13318,7 @@ class omnipkg:
             "--python-version", python_version,
             "--env-id", self.env_id
         ]
-        
+
         # Launch detached process
         subprocess.Popen(
             scan_cmd,
@@ -13309,7 +13326,7 @@ class omnipkg:
             stderr=subprocess.DEVNULL,
             start_new_session=True  # Detach from parent
         )
-        
+
         safe_print(f"    💫 Background scan started: Deep-scanning .dist-info inside {len(bubble_paths)} bubbles (non-blocking)...")
 
     def smart_upgrade(
@@ -14517,7 +14534,7 @@ class omnipkg:
                 inst_data = self.cache_client.hgetall(inst_key) or {}
                 owner = inst_data.get("owner_package", "")
                 owner_canonical = canonicalize_name(owner.split("-")[0]) if owner else ""
-                
+
                 if owner_canonical and owner_canonical != c_name:
                     # Truly owned by a different package — it's nested
                     actual_itype = "nested"
@@ -14526,7 +14543,7 @@ class omnipkg:
                     actual_itype = inst_data.get("install_type", "bubble")
                     if actual_itype == "nested":
                         actual_itype = "bubble"  # correct the stale KB label too
-                
+
                 keys_to_fetch.append(inst_key)
                 version_map[inst_key] = ("unknown", actual_itype)
 
@@ -14713,12 +14730,12 @@ class omnipkg:
             final_to_uninstall = []
             for item in to_uninstall:
                 item_name = item.get("Name")
-                
+
                 # Skip items with invalid/missing names
                 if not item_name or not isinstance(item_name, str):
                     safe_print(f"⚠️  Skipping item with invalid Name: {item}")
                     continue
-                
+
                 c_item_name = canonicalize_name(item_name)
 
                 # Skip protected packages
@@ -14726,7 +14743,7 @@ class omnipkg:
                     c_item_name in core_deps or c_item_name == "omnipkg"
                 ):
                     continue
-                
+
                 final_to_uninstall.append(item)
 
             if len(final_to_uninstall) != len(to_uninstall):
@@ -14827,7 +14844,7 @@ class omnipkg:
             # 4. Update package-level info based on the final ground truth.
             final_versions_on_disk = {inst.get("Version") for inst in post_deletion_installations}
             versions_to_check = {item.get("Version") for item in final_to_uninstall}
-            
+
             for version in versions_to_check:
                 if version not in final_versions_on_disk:
                     safe_print(_('   -> Last instance of v{} removed.').format(version))
@@ -15053,46 +15070,46 @@ class omnipkg:
         For interactive swaps, users should use: 8pkg swap python <version>
         """
         safe_print(_("🐍 Switching active Python context to version {}...").format(version))
-        
+
         # Verify the target Python exists first
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         if version not in managed_interpreters:
             safe_print(_('   ❌ Python {} not found in the registry.').format(version))
             safe_print(_('   - Available versions: {}').format(', '.join(managed_interpreters.keys())))
             return 1
-        
+
         target_path = managed_interpreters[version]
         safe_print(_("   ✅ Managed interpreter: {}").format(target_path))
-        
+
         # Update config (in-memory only for this omnipkg instance)
         safe_print(_("   🔧 Updating configuration..."))
         new_paths = self.config_manager._get_paths_for_interpreter(str(target_path))
-        
+
         if not new_paths:
             safe_print(f"❌ Could not determine paths for Python {version}.")
             return 1
-        
+
         # ONLY update in-memory config - no file writes, no symlinks!
         self.config_manager.set("python_executable", new_paths["python_executable"])
         self.config_manager.set("site_packages_path", new_paths["site_packages_path"])
         self.config_manager.set("multiversion_base", new_paths["multiversion_base"])
-        
+
         # Bootstrap check (non-critical)
         try:
             self.config_manager._ensure_omnipkg_bootstrapped(
-                Path(target_path), 
+                Path(target_path),
                 version
             )
         except Exception as e:
             safe_print("   ⚠️  Bootstrap verification warning: {}".format(e))
-        
+
         # That's it! No symlinks, no global mutations!
         safe_print(_("   - ✅ Environment successfully configured for Python {}.").format(version))
-        
+
         # Remind users about the proper way to swap interactively
         if os.environ.get("_OMNIPKG_QUANTUM_HEALING") != "1":
             safe_print(_("   💡 For interactive shells, use: 8pkg swap python {}").format(version))
-        
+
         return 0
 
     def _clear_windows_module_cache(self):
@@ -15925,7 +15942,7 @@ print(json.dumps(results))
                     [str(temp_file)],
                     force_reinstall=True,
                     target_directory=target_directory_override,
-                    # CRITICAL FIX: --ignore-installed prevents uv/pip from uninstalling 
+                    # CRITICAL FIX: --ignore-installed prevents uv/pip from uninstalling
                     # the modern versions from the main environment during a --target install.
                     extra_flags=["--no-build-isolation", "--no-deps", "--no-reinstall"],
                 )
@@ -16515,7 +16532,7 @@ print(json.dumps(results))
                                         site_packages_path=self.config.get("site_packages_path"),
                                         installed=_ffi_installed, removed=_ffi_removed)
                                 except Exception: pass
-                            
+
                             return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True, "is_target": bool(target_directory)}
 
                         # NOW WE HAVE THE REAL REASON:
@@ -16526,7 +16543,7 @@ print(json.dumps(results))
                     except BaseException as _ffi_ex:
                         _ffi_ms = (time.perf_counter() - _t0) * 1000
                         safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
-                
+
                 finally:
 # 🔥 BUBBLE FIX: Only tell the daemon if we actually touched the MAIN env.
                     #    If _is_target_call, this was a bubble — daemon knows nothing about it,
@@ -16598,7 +16615,7 @@ print(json.dumps(results))
                 except Exception:
                     import contextlib
                     _watcher_guard = contextlib.nullcontext()
-                    
+
                 with _watcher_guard:  # 🔥 SIGNAL THE WATCHER "THIS IS US"
                     uv_proc = subprocess.Popen(
                         uv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -16649,7 +16666,7 @@ print(json.dumps(results))
             except Exception:
                 import contextlib
                 _watcher_guard = contextlib.nullcontext()
-                
+
             with _watcher_guard:  # 🔥 SIGNAL THE WATCHER "THIS IS US"
                 process = subprocess.Popen(
                     cmd,
@@ -16662,7 +16679,7 @@ print(json.dumps(results))
                     universal_newlines=True,
                     env=env,
                 )
-    
+
                 stdout_lines, stderr_lines = [], []
 
                 # Stream output live while capturing
@@ -16672,7 +16689,7 @@ print(json.dumps(results))
                 for line in process.stderr:
                     safe_print(line, end="", file=sys.stderr)
                     stderr_lines.append(line)
-    
+
                 return_code = process.wait()
 
             full_stdout = "".join(stdout_lines)
@@ -16687,15 +16704,15 @@ print(json.dumps(results))
                     from .installation.dependency_constraints import get_numpy_constraint
                 except ImportError:
                     from omnipkg.installation.dependency_constraints import get_numpy_constraint
-                
+
                 pkg_name = packages[0].split("==")[0].split(">=")[0].split("<=")[0].strip()
 
                 if "==" in packages[0]:
                     pkg_ver = packages[0].split("==")[1]
-                    
+
                     # Check if this package needs a specific numpy version
                     numpy_constraint = get_numpy_constraint(pkg_name, pkg_ver)
-                    
+
                     if numpy_constraint:
                     # Check what numpy was installed
                         numpy_check = subprocess.run(
@@ -16705,10 +16722,10 @@ print(json.dumps(results))
                             text=True,
                             timeout=10
                         )
-                        
+
                         if numpy_check.returncode == 0:
                             installed_numpy = numpy_check.stdout.strip()
-                            
+
                             # Parse constraint to check compatibility
                             needs_fix = False
                             if '<2' in numpy_constraint and installed_numpy.startswith('2.'):
@@ -16716,11 +16733,11 @@ print(json.dumps(results))
                             elif '<1.28' in numpy_constraint:
                                 if parse_version(installed_numpy) >= parse_version('1.28'):
                                     needs_fix = True
-                            
+
                             if needs_fix:
                                 safe_print(f"\n⚠️  Detected numpy {installed_numpy} incompatible with {pkg_name} {pkg_ver}")
                                 safe_print(_('🔧 Fixing: Installing numpy{}...').format(numpy_constraint))
-                                
+
                                 # Remove bad numpy
                                 import shutil
                                 numpy_paths = list(target_directory.glob("numpy*"))
@@ -16729,7 +16746,7 @@ print(json.dumps(results))
                                         shutil.rmtree(np_path)
                                     else:
                                         np_path.unlink()
-                                
+
                                 # Install correct numpy
                                 fix_cmd = [
                                     self.config["python_executable"], "-m", "pip", "install",
@@ -16741,7 +16758,7 @@ print(json.dumps(results))
                                     fix_cmd.extend(["--index-url", index_url])
                                 if extra_index_url:
                                     fix_cmd.extend(["--extra-index-url", extra_index_url])
-                                
+
                                 fix_result = subprocess.run(fix_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
                                 if fix_result.returncode == 0:
                                     safe_print("✅ Successfully installed correct numpy version")
@@ -16866,7 +16883,7 @@ print(json.dumps(results))
             except Exception:
                 import contextlib
                 _watcher_guard = contextlib.nullcontext()
-                
+
             cmd = [
                 self.config["python_executable"],
                 "-u",
@@ -16875,7 +16892,7 @@ print(json.dumps(results))
                 "uninstall",
                 "-y",
             ] + packages
-            
+
             with _watcher_guard:  # 🔥 SIGNAL THE WATCHER "THIS IS US"
                 process = subprocess.Popen(
                     cmd,
@@ -16892,7 +16909,7 @@ print(json.dumps(results))
                     safe_print(line, end="")
                 process.stdout.close()
                 return_code = process.wait()
-                
+
             return return_code
         except Exception as e:
             safe_print(_("    ❌ An unexpected error occurred during pip uninstall: {}").format(e))
@@ -17377,7 +17394,7 @@ print(json.dumps(results))
             if self.pypi_cache.is_cache_entry_stale(package_name, py_context, max_age_seconds=3600):
                 self._start_background_cache_refresh(package_name, py_context)
             return cached_version
-                    
+
         # USE THE ROBUST TEST INSTALLATION APPROACH FIRST
         safe_print(f"    🧪 Using pip to find latest compatible version for Python {py_context}...")
         try:
