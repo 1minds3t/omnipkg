@@ -161,18 +161,22 @@ jobs:
   build-win-arm64:
     continue-on-error: true
     name: "windows arm64"
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: arm64
+
       - name: Build wheel
         shell: powershell
         run: |
-          $py37 = "C:\python37\python.exe"
-          & $py37 -m pip install build --quiet
-          & $py37 -m build --wheel --outdir dist\
+          python -m pip install build --quiet
+          python -m build --wheel --outdir dist\
 
       - uses: actions/upload-artifact@v4
         with:
@@ -207,6 +211,7 @@ jobs:
 
   # ── noarch + sdist ───────────────────────────────────────────────────────
   build-noarch:
+    continue-on-error: true
     name: "noarch + sdist"
     runs-on: ubuntu-latest
     steps:
@@ -252,14 +257,13 @@ jobs:
       (
         needs.build-linux-x86_64-glibc.result == 'success' ||
         needs.build-linux-aarch64-glibc.result == 'success' ||
-        needs.build-linux-x86_64-musl.result == 'success' ||  
+        needs.build-linux-x86_64-musl.result == 'success' ||
         needs.build-linux-aarch64-musl.result == 'success' ||
-        needs.build-win-amd64.result == 'success' || 
+        needs.build-win-amd64.result == 'success' ||
         needs.build-win-arm64.result == 'success' ||
         needs.build-macos-universal2.result == 'success' ||
         needs.build-noarch.result == 'success'
       )
-
     permissions:
       id-token: write
       contents: write
