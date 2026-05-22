@@ -249,7 +249,17 @@ jobs:
     environment: pypi
     if: |
       !cancelled() &&
-      needs.build-noarch.result == 'success'
+      (
+        needs.build-linux-x86_64-glibc.result == 'success' ||
+        needs.build-linux-aarch64-glibc.result == 'success' ||
+        needs.build-linux-x86_64-musl.result == 'success' ||  
+        needs.build-linux-aarch64-musl.result == 'success' ||
+        needs.build-win-amd64.result == 'success' || 
+        needs.build-win-arm64.result == 'success' ||
+        needs.build-macos-universal2.result == 'success' ||
+        needs.build-noarch.result == 'success'
+      )
+
     permissions:
       id-token: write
       contents: write
