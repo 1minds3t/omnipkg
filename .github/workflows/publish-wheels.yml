@@ -52,13 +52,15 @@ jobs:
       - name: Build + auditwheel
         run: |
           podman run --rm --platform linux/arm64 \
-            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/manylinux2014_aarch64:latest \
             /bin/bash -c "
-              /python37/bin/python3 -m pip install build --quiet &&
+              # python-build-standalone has no py3.7 aarch64 build.
+              # manylinux2014_aarch64 ships a native aarch64 cp37 at a known path.
+              PY=/opt/python/cp37-cp37m/bin/python3
+              \$PY -m pip install build --quiet &&
               cd /io &&
-              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              \$PY -m build --wheel --outdir /io/dist-raw/ &&
               auditwheel repair /io/dist-raw/*.whl -w /io/dist/
             "
 
@@ -106,13 +108,15 @@ jobs:
       - name: Build + auditwheel
         run: |
           podman run --rm --platform linux/arm64 \
-            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/musllinux_1_2_aarch64:latest \
             /bin/bash -c "
-              /python37/bin/python3 -m pip install build --quiet &&
+              # python-build-standalone has no py3.7 aarch64 build.
+              # musllinux_1_2_aarch64 ships a native aarch64 cp37 at a known path.
+              PY=/opt/python/cp37-cp37m/bin/python3
+              \$PY -m pip install build --quiet &&
               cd /io &&
-              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              \$PY -m build --wheel --outdir /io/dist-raw/ &&
               auditwheel repair /io/dist-raw/*.whl -w /io/dist/
             "
 
