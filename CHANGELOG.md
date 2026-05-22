@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.2] — 2026-05-21
+
+Daemon Isolation & Windows Deadlock Fixes
+
+## 🚀 What's New in v3.3.2
+
+This is a critical hotfix release that completely resolves environment leakage issues in the daemon worker (especially for complex packages like TensorFlow) and patches severe deadlocks during heavy I/O streaming on Windows. It also introduces bulletproof safety rails for bootstrapping new interpreters!
+
+* **Strict Daemon Environment Isolation:** Enforced strict numpy ABI isolation by stripping the main environment's `site-packages` from the daemon worker's `sys.path`. This completely resolves silent leakage and import crashes for heavy frameworks like TensorFlow 2.20.
+* **Windows Streaming Deadlocks:** Bypassed the daemon entirely for certain interactive and streaming commands on Windows (such as the stress test). This prevents nasty edge-case deadlocks where the Windows daemon would hang during heavy stdout streaming.
+* **Interpreter Bootstrap Safety (Platform Markers):** Fixed a fatal `ModuleNotFoundError` during interpreter adoption. Dependencies are now installed sequentially, and `platform_system` markers are dynamically evaluated to prevent OS-specific packages (like `cryptography-wasm`) from crashing the entire bootstrap sequence on Linux/Windows.
+
+* **Windows Native Dispatcher POC (Ghost-Spawn):** Merged a working Proof-of-Concept for a native C dispatcher on Windows! While it successfully compiles, safely overwriting the locked `8pkg.exe` entrypoint is still actively being ironed out. For now, Windows will safely fall back to the Python dispatcher.
+
+* **Stable ABI3 Wheels (`cp37-abi3`):** Consolidated CPython wheel builds to enforce the `cp37-abi3` tag. This drastically reduces wheel bloat, bundles the compiled C dispatcher (for Unix) directly into the wheel, and guarantees forward compatibility with Python 3.14+.
+* **Nuclear Worker Shutdown (Windows):** Upgraded the daemon pool's shutdown sequence on Windows. It now utilizes a recursive tree kill (`taskkill /F /T`) to ensure zero orphaned child processes are left behind when the daemon exits.
+* **WebAssembly (WASM) Support:** Added safety rails and Emscripten exclusion markers to cleanly skip C-extension compilation and use `cryptography-wasm` when running in browser environments.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/cli.py (13 lines changed)
+- UPDATE: src/omnipkg/common_utils.py (39 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (387 lines changed)
+- UPDATE: src/omnipkg/ghost.c (198 lines changed)
+- UPDATE: src/omnipkg/isolation/patchers.py (24 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (1104 lines changed)
+- UPDATE: src/omnipkg/isolation/workers.py (10 lines changed)
+- UPDATE: src/omnipkg/loader.py (191 lines changed)
+
+**🧪 Tests:**
+- UPDATE: src/omnipkg/tests/test_loader_stress_test.py (428 lines)
+
+**Additional Changes:**
+- Update 1 code files
+- Update 2 code files
+- fix: encoding fix on windows in workers.py
+- fix(isolation): enforce strict numpy ABI isolation and force subprocess installs
+- fix: Update 2 code files
+- fix(dispatch): fix Windows script path discovery and path
+- fix(dispatch): move Windows marker writing to ghost process and add size-check
+- ci: adding debugging for tests dir
+- fix: resolve TESTS_DIR path absolutely for CI compatibility
+
+**New Features:**
+- feat: sync worker_daemon, loader, readme from development
+- feat: sync core.py improvements from development
+- feat: add windows_bootstrap from development
+
+**Updates:**
+- Update manylinux images to use manylinux2014
+- Update publish-wheels.yml
+- Update test path in old_rich_test.yml
+- Update publish conditions in workflow
+
+_30 files changed, 2241 insertions(+), 2266 deletions(-)_
+
 ## [3.3.1] — 2026-05-08
 
 prevent interpreter corruption on second TF load in same process
