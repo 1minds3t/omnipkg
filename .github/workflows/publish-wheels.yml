@@ -84,14 +84,16 @@ jobs:
 
       - name: Build + auditwheel
         run: |
+          # musllinux has no cp37 — oldest available is cp39
           podman run --rm \
-            -v /home/minds3t/miniforge3/envs/evocoder_env/.omnipkg/interpreters/cpython-3.7.9:/python37:ro \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/musllinux_1_2_x86_64:latest \
             /bin/bash -c "
-              /python37/bin/python3 -m pip install build --quiet &&
-              cd /io &&
-              /python37/bin/python3 -m build --wheel --outdir /io/dist-raw/ &&
+              set -e
+              PY=/opt/python/cp39-cp39/bin/python3
+              \$PY -m pip install build --quiet
+              cd /io
+              \$PY -m build --wheel --outdir /io/dist-raw/
               auditwheel repair /io/dist-raw/*.whl -w /io/dist/
             "
 
@@ -216,10 +218,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build noarch wheel + sdist
+      - name: Build sdist
         run: |
           pip install build
-          OMNIPKG_SKIP_C_EXT=1 python -m build --outdir dist/
+          OMNIPKG_SKIP_C_EXT=1 python -m build --sdist --outdir dist/
+
+      - name: Build noarch wheel
+        continue-on-error: true
+        run: |
+          OMNIPKG_SKIP_C_EXT=1 python -m build --wheel --outdir dist/
 
       - uses: actions/upload-artifact@v4
         with:
