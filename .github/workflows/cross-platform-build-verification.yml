@@ -241,7 +241,9 @@ jobs:
             
             # Special handling for Rocky 8
             if grep -q 'release 8' /etc/redhat-release; then
-              dnf install -y python39 python39-pip gcc python3-devel && ln -sf /usr/bin/python3.9 /usr/bin/python3 && ln -sf /usr/bin/pip3.9 /usr/bin/pip3
+              dnf install -y python39 python39-pip gcc python3-devel
+              ln -sf /usr/bin/python3.9 /usr/bin/python3
+              ln -sf /usr/bin/pip3.9 /usr/bin/pip3
             else 
               # ROCKY 9 FIX: Reinstall Python first
               if grep -q 'Rocky Linux release 9' /etc/redhat-release; then
@@ -252,22 +254,28 @@ jobs:
             
             python3 -m pip install --upgrade pip build
             
-            # Clean build for Rocky
+            # Clean build for Rocky (avoids caching weirdness)
             if grep -q 'Rocky Linux' /etc/redhat-release; then
               rm -rf dist/ build/ *.egg-info
             fi
             
             python3 -m build
             
-            # ROCKY 9 FIX: Install correct wheel version
-            if grep -q 'Rocky Linux release 9' /etc/redhat-release; then
-              python3 -m pip install dist/*-cp39-*.whl
-            else
-              python3 -m pip install --extra-index-url https://1minds3t.github.io/uv-ffi/ dist/*.whl
-            fi
+            # Install the wheel (no more cp39 glob hack!)
+            python3 -m pip install --extra-index-url https://1minds3t.github.io/uv-ffi/ dist/*.whl
             
-            omnipkg --version
-            omnipkg list
+            # Ensure PATH includes where pip installs binaries on RHEL systems
+            export PATH=\"\$PATH:/usr/local/bin:\$(python3 -m site --user-base)/bin\"
+            
+            # Test it! (Fallback to python -m if PATH is still fighting us)
+            if command -v omnipkg &> /dev/null; then
+              omnipkg --version
+              omnipkg list
+            else
+              echo '⚠️ omnipkg not in PATH, falling back to python3 -m'
+              python3 -m omnipkg.cli --version
+              python3 -m omnipkg.cli list
+            fi
           "
 
   linux-distros-docker-other:
