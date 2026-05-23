@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.4] — 2026-05-22
+
+fix editable installs and Windows ARM64 wheel builds
+
+## 🚀 What's New in v3.3.4
+
+This is a build-infrastructure and CI/CD patch release. It unblocks local developers using editable installs, slims down the source distribution, and fixes the Windows ARM64 build pipeline.
+
+* **Fixed Editable Installs (`pip install -e .`):** Resolved an issue where setuptools' isolated build environment poisoned the `PYTHONHOME`/`PYTHONPATH` variables. The setup script now safely sanitizes the environment and resolves the true host `pip` via `CONDA_PREFIX` or `VIRTUAL_ENV`, allowing local development installations to successfully compile and link the `uv-ffi` extension.
+* **Streamlined Source Distributions:** Added setuptools exclusion rules in `pyproject.toml` to prevent the heavy Rust compilation directories (`omnipkg._vendor.uv.target*`) from bloating the packaged source distributions.
+* **License Compliance:** Added missing license text for `cryptography-wasm`.
+
+* **Windows ARM64 Wheels:** Fixed the GitHub Actions runner configuration for Windows ARM. The pipeline now correctly targets `windows-11-arm` with proper `setup-python` architecture flags, ensuring pre-built Windows ARM64 wheels are successfully published to PyPI.
+* **Matrix Resiliency:** Refined `continue-on-error` conditions across the wheel publishing jobs to ensure edge-case failures don't block the primary release artifacts.
+
+---
+
+**⚙️ Configuration:**
+- pyproject.toml (26 lines)
+
+**Updates:**
+- Update Windows ARM64 build configuration in workflow
+- Update conditions for publishing wheels in workflow
+
+_4 files changed, 233 insertions(+), 113 deletions(-)_
+
 ## [3.3.3] — 2026-05-21
 
 fix pure-python builds and stabilize wheel publishing pipeline
