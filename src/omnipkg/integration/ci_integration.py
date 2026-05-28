@@ -3,9 +3,12 @@ from __future__ import annotations
 import sys
 from typing import List, Optional
 
-import typer
+try:
+    import typer
+except ImportError:
+    typer = None  # type: ignore[assignment]
 
-app = typer.Typer()
+app = typer.Typer() if typer is not None else None
 
 from omnipkg.common_utils import safe_print
 

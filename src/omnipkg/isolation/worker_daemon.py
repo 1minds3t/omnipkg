@@ -2570,7 +2570,10 @@ class PersistentWorker:
         Returns:
             Response dict from worker
         """
-        import psutil
+        try:
+            import psutil
+        except ImportError:
+            psutil = None  # type: ignore[assignment]
 
         try:
             ps_process = psutil.Process(worker_process.pid)

@@ -818,7 +818,8 @@ if _DAEMON_WORKER_MODE:
             if msg.get("type") == "stdin_line":
                 return msg.get("data", default).strip()
         except Exception:
-            pass  # relay failed — fall through to non-interactive default
+            # relay failed — fall through BUT warn so we know why
+            safe_print(f"[safe_input] relay failed: {e}", file=sys.stderr)
         result = auto_value if auto_value is not None else default
         safe_print(_("🤖 Auto-selecting: {}").format(result))
         return result
