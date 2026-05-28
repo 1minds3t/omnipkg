@@ -237,11 +237,17 @@ def main():
         and argv_commands[1] == "logs"
         and "-f" in sys.argv
     )
-    is_interactive_command = is_info_command or is_config_command or is_logs_follow
+    # uninstall without version spec needs interactive picker
+    is_uninstall_interactive = (
+        len(argv_commands) >= 2
+        and argv_commands[0] == "uninstall"
+        and not any(c in arg for arg in argv_commands[1:] for c in ("=", ">", "<"))
+    )
+    is_interactive_command = is_info_command or is_config_command or is_logs_follow or is_uninstall_interactive
 
     # Commands that need a real TTY (streaming output, interactive, long-running).
     # Bypass the daemon entirely and run directly as a subprocess.
-    _DIRECT_COMMANDS = {"stress-test", "demo", "monitor", "logs"}
+    _DIRECT_COMMANDS = {"stress-test", "demo", "monitor", "heal", "logs"}
     is_direct_command = bool(argv_commands) and argv_commands[0] in _DIRECT_COMMANDS
 
     if is_direct_command:

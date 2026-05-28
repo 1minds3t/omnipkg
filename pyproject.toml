@@ -88,11 +88,10 @@ dependencies = [
     "aiohttp>=3.10.11,<3.11.0; python_version == '3.8'", # Last Py3.8 version (9 known CVEs)
     "aiohttp>=3.13.5; python_version >= '3.9'",          # Latest with all patches
 
-    # cryptography - version split by Python
     "cryptography>=46.0.7 ; python_version >= '3.8' and platform_system != 'Emscripten'",
     "cryptography>=45.0.7,<46.0 ; python_version == '3.7' and platform_system != 'Emscripten'",
-    "cryptography-wasm>=42.0.2 ; platform_system == 'Emscripten'",
-
+    "cryptography ; platform_system == 'Emscripten'",
+    
     # Security scanning
     "pip-audit>=2.0.0",
     

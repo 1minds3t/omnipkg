@@ -9852,7 +9852,6 @@ class omnipkg:
         for pkg in sorted(reconciled_plan):
             safe_print(_('  - 🎯 {}').format(pkg))
         safe_print("─" * 60)
-
         if dry_run:
             safe_print("\n🔬 Dry run complete. No changes were made.")
             return 0
@@ -9969,6 +9968,7 @@ class omnipkg:
                 return live_packages
             except Exception as e:
                 safe_print(_("    ⚠️  Could not perform live package scan: {}").format(e))
+                # relay failed — fall through BUT warn so we know why
                 return self._installed_packages_cache or {}
         if self._installed_packages_cache is None:
             if not self.cache_client:

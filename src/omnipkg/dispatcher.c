@@ -2191,6 +2191,7 @@ int main(int argc, char **argv) {
          * that contain the word python (e.g. "info python-dotenv"). */
         int info_python = (is_info && argc >= 3 &&
                            strcmp(argv[2], "python") == 0);
+        int is_heal = (strcmp(argv[1], "heal") == 0);
         int is_logs_follow = 0;
         if (argc >= 3 && strcmp(argv[1], "daemon") == 0 && strcmp(argv[2], "logs") == 0) {
             for (int _i = 3; _i < argc; _i++) {
@@ -2200,6 +2201,9 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        int is_stress_test = (strcmp(argv[1], "stress-test") == 0);
+        int is_demo        = (strcmp(argv[1], "demo")        == 0);
+        int is_monitor     = (strcmp(argv[1], "monitor")     == 0);
         /* "uninstall <pkg>" with no version spec needs interactive version picker */
         int is_uninstall_interactive = 0;
         if (argc >= 3 && strcmp(argv[1], "uninstall") == 0) {
@@ -2211,7 +2215,7 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        is_interactive_command = ((is_info && !info_python) || is_config || is_logs_follow || is_uninstall_interactive);
+        is_interactive_command = ((is_info && !info_python) || is_config || is_logs_follow || is_heal || is_stress_test || is_demo || is_monitor || is_uninstall_interactive);
     }
     if (!is_swap_python && !is_interactive_command) {
         try_daemon_cli(target_python, argc, argv, version_injected, forced_version);
