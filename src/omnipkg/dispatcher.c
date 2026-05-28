@@ -2200,7 +2200,18 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        is_interactive_command = ((is_info && !info_python) || is_config || is_logs_follow);
+        /* "uninstall <pkg>" with no version spec needs interactive version picker */
+        int is_uninstall_interactive = 0;
+        if (argc >= 3 && strcmp(argv[1], "uninstall") == 0) {
+            is_uninstall_interactive = 1;
+            for (int _i = 2; _i < argc; _i++) {
+                if (strchr(argv[_i], '=') || strchr(argv[_i], '>') || strchr(argv[_i], '<')) {
+                    is_uninstall_interactive = 0; /* version spec present — daemon is fine */
+                    break;
+                }
+            }
+        }
+        is_interactive_command = ((is_info && !info_python) || is_config || is_logs_follow || is_uninstall_interactive);
     }
     if (!is_swap_python && !is_interactive_command) {
         try_daemon_cli(target_python, argc, argv, version_injected, forced_version);
