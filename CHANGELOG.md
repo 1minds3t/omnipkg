@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.5] — 2026-05-28
+
+Core Synchronization & Cross-Platform Performance
+
+🔒 DISPATCHER SYNCHRONIZATION & INTERACTIVE TTY FIXES
+• Synchronized 'dispatcher.c' and 'dispatcher.py' direct-command routing.
+• Added 'heal', 'stress-test', 'demo', and 'monitor' to direct execution bypass.
+• Versionless 'uninstall' commands now correctly bypass the daemon to expose
+  the interactive TUI version picker without hitting silent stdin timeouts.
+• Swapped silent failures in safe_input() for logged warnings to stderr.
+
+⚡ RESTORED LINUX DAEMON FAST-PATH (~3x WALL-TIME SPEEDUP)
+• Fixed Linux site-packages layout discovery logic (previously hardcoded to
+  Windows layout), preventing endless configuration rewrites on POSIX systems.
+• Fallback Python dispatcher now queries 'daemon_connection.txt' to identify
+  hashed UNIX socket paths rather than looking for a nonexistent flat path.
+• Fixed a missing clean-disconnect exit hook to stop successful socket runs
+  from bleeding down into an unwanted cold subprocess 'os.execv' redraw.
+
+🛡️ STABILITY & DEPENDENCY DEGRADATION
+• Wrapped 'psutil' and 'typer' imports in defensive try/except blocks to safeguard
+  minimal environment runtime hypervisor contexts from crashing on missing deps.
+• Swapped 'cryptography-wasm' proxy for standard 'cryptography' on Emscripten targets.
+• Bumped worker stdin reply timeout from 5s to 120s to accommodate slow cold-installs.
+• Improved setup.py compilation logging to output full compiler stdout/stderr text.
+
+📦 CI/CD WHEEL PIPELINE HARDENING
+• Updated workflow to catch auditwheel repair failures on pure Python wheels.
+  Instead of crashing, the pipeline copies them out as 'noarch-compatible'.
+• Added a post-build scrub stage to ensure raw, un-repaired '*-linux_*.whl' assets
+  are purged before publishing release artifacts to GitHub/PyPI.
+
+---
+
+**Bug Fixes:**
+- fix: sync interactive/direct command routing between C and Python dispatchers
+
+**Other Changes:**
+- fix(dispatcher): restore daemon fast-path for Linux without C dispatcher
+- Ensure skip-existing option is set to true
+- Enhance publish-wheels.yml for better wheel handling
+
+_10 files changed, 131 insertions(+), 38 deletions(-)_
+
 ## [3.3.4] — 2026-05-22
 
 fix editable installs and Windows ARM64 wheel builds
