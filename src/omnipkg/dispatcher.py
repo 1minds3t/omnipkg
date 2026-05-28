@@ -258,7 +258,7 @@ def main():
             print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
         sys.exit(subprocess.call(exec_args))
 
-    if not is_swap_command and not is_daemon_lifecycle and not is_interactive_command:
+    if not is_swap_command and not is_daemon_lifecycle and not is_interactive_command and sys.platform != "win32":
         try:
             import socket
             import tempfile
