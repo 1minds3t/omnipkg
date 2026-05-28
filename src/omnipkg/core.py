@@ -7901,43 +7901,9 @@ class omnipkg:
         except (json.JSONDecodeError, IOError):
             return False
 
-        lock_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild.lock"
-        _STALE_LOCK_SECONDS = 300
-
-        # ── Attempt to become the owner ──────────────────────────────────────
-        # We are the owner if EITHER:
-        #   (a) no lock exists and we create it atomically, OR
-        #   (b) the existing lock is stale and we replace it atomically.
-        #
-        # Use os.open with O_CREAT|O_EXCL for a true atomic create on all
-        # platforms (FileLock itself uses this internally).  If the file already
-        # exists and is fresh, someone else is genuinely working — skip.
-        we_own_lock = False
-        try:
-            if lock_file.exists():
-                age = time.time() - lock_file.stat().st_mtime
-                if age <= _STALE_LOCK_SECONDS:
-                    # Live process holds it — don't wait, just skip.
-                    safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(
-                        current_version_str))
-                    return False
-                # Stale — atomically replace it by deleting then exclusive-creating.
-                if lock_file.exists(): lock_file.unlink()
-
-            # Atomic exclusive create — fails if another process beat us here.
-            fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode())
-            os.close(fd)
-            we_own_lock = True
-
-        except FileExistsError:
-            # Another process won the race for the lock — skip silently.
-            return False
-        except OSError:
-            return False
-
-        if not we_own_lock:
-            return False
+        # No lock needed — Redis writes are atomic and idempotent.
+        # Two concurrent rebuilds produce identical results; redundant work
+        # is cheaper than a ghost lock silently blocking the rebuild for minutes.
 
         # ── We own the lock — do the rebuild ─────────────────────────────────
         try:
@@ -7980,8 +7946,7 @@ class omnipkg:
                 return False
 
         finally:
-            # Always release our lock, even if rebuild raised an exception.
-            if lock_file.exists(): lock_file.unlink()
+            pass
 
     def _repair_manifest_context_mismatch(
         self, dist: importlib.metadata.Distribution, current_python_version: str
@@ -8318,8 +8283,6 @@ class omnipkg:
 
         self._clean_corrupted_installs()
         self._cleanup_all_cloaks_globally()
-        if self._check_and_run_pending_rebuild():
-            pass
                 # ── Fast missing-METADATA scan (main env + bubbles) ──────────────
         if self._fast_missing_metadata_check():
             safe_print("   🔧 Auto-healed broken metadata, re-running discovery...")
