@@ -273,6 +273,20 @@ def main():
                 else:
                     raise ValueError()
             else:
+                # Read daemon_connection.txt to get the actual socket path (daemon
+                # may use a hash subdir e.g. /tmp/omnipkg/4db29431/omnipkg_daemon.sock).
+                # Fall back to the flat path if the file is absent.
+                conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
+                if os.path.exists(conn_file):
+                    try:
+                        with open(conn_file, "r") as f:
+                            conn_str = f.read().strip()
+                        if conn_str.startswith("unix://"):
+                            sock_path = conn_str[7:]
+                        elif conn_str and not conn_str.startswith("tcp://"):
+                            sock_path = conn_str  # bare path
+                    except Exception:
+                        pass
                 if os.path.exists(sock_path):
                     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                     sock.connect(sock_path)
@@ -315,6 +329,7 @@ def main():
                 elif msg.get("status") == "ERROR":
                     sys.stderr.write(msg.get("error", "") + "\n")
                     sys.exit(msg.get("exit_code", 1))
+            sys.exit(0)  # daemon closed connection cleanly — do NOT fall through to execv
         except Exception:
             pass
 
@@ -1047,7 +1062,12 @@ def determine_target_python() -> Path:
                 current_exe = Path(sys.executable).resolve()
 
                 # Strong check: both executable AND site_packages_path must match native
-                expected_site = str(find_absolute_venv_root() / "Lib" / "site-packages")
+                _vr_check = find_absolute_venv_root()
+                if sys.platform == "win32":
+                    expected_site = str(_vr_check / "Lib" / "site-packages")
+                else:
+                    _py_mm_check = f"{sys.version_info.major}.{sys.version_info.minor}"
+                    expected_site = str(_vr_check / "lib" / f"python{_py_mm_check}" / "site-packages")
                 actual_site = config.get("site_packages_path", "")
 
                 is_correct = (config_python == current_exe) and (actual_site == expected_site)
@@ -1067,7 +1087,10 @@ def determine_target_python() -> Path:
                     root_config = venv_root / ".omnipkg_config.json"
 
                     native_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-                    site_packages = str(venv_root / "Lib" / "site-packages")
+                    if sys.platform == "win32":
+                        site_packages = str(venv_root / "Lib" / "site-packages")
+                    else:
+                        site_packages = str(venv_root / "lib" / f"python{native_version}" / "site-packages")
 
                     config["python_executable"] = str(current_exe.resolve())
                     config["python_version"] = native_version

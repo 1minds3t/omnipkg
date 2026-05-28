@@ -10,7 +10,7 @@ version = "3.3.4"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
-description = "Runtime Hypervisor. Run infinite Python package & interpreter versions concurrently in one environment in milliseconds."
+description = "Python Runtime Hypervisor. Run infinite Python package & interpreter versions concurrently in one environment in milliseconds."
 readme = "README.md"
 requires-python = ">=3.7, <3.16"
 

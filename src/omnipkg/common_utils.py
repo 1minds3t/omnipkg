@@ -766,7 +766,7 @@ def _worker_read_reply() -> dict:
 
     t = threading.Thread(target=_read, daemon=True)
     t.start()
-    t.join(5.0)
+    t.join(120.0)
     if t.is_alive():
         raise TimeoutError("no stdin reply within 5s")
     if exc[0]:

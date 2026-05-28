@@ -103,7 +103,7 @@ def _install_dispatcher_binary(install_dir=None):
         gcc = shutil.which("gcc")
         if gcc:
             compiler = gcc
-            compiler_args = ["-O2", "-o", "{out}", "{src}", "-ldl"]
+            compiler_args = ["-O2", "-o", "{out}", "{src}"]
         if sys.platform == "darwin":
             archflags = os.environ.get("ARCHFLAGS", "")
             if archflags:
@@ -133,7 +133,9 @@ def _install_dispatcher_binary(install_dir=None):
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, env=compile_env)
         if result.returncode != 0:
-            print(f"  [dispatcher] Compilation failed: {result.stderr[:200]}")
+            print(f"  [dispatcher] Compilation failed (retcode={result.returncode})")
+            print(f"  [dispatcher] cmd: {' '.join(cmd)}")
+            print(f"  [dispatcher] stderr:\n{result.stderr.strip()}")
             return
 
         import time
@@ -154,10 +156,9 @@ def _install_dispatcher_binary(install_dir=None):
         if replaced:
             binary_out.unlink(missing_ok=True)
             print(f"  [dispatcher] ✅ Fast C dispatcher installed over: {replaced}")
-        print(f"  [dispatcher]    binary source : {binary_out}")
-        for name in replaced:
-            target = Path(install_dir) / (name + _exe)
-            print(f"  [dispatcher]    → {target}")
+            for name in replaced:
+                target = Path(install_dir) / (name + _exe)
+                print(f"  [dispatcher]    → {target}")
         else:
             print(f"  [dispatcher] Bundling compiled C dispatcher into the wheel.")
             print(f"  [dispatcher]    binary at : {binary_out.resolve()}")
