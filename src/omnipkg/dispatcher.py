@@ -996,6 +996,31 @@ def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) 
             if debug:
                 print(f"[C-INSTALL] push: could not write marker in {target_bin}: {e}", file=sys.stderr)
 
+def _safe_resolve(path: Path) -> Path:
+    """
+    Resolve a path safely for omnipkg identity and path comparisons.
+    Uses resolve() when possible, falls back to absolute() if resolution fails.
+    """
+    try:
+        return path.resolve()
+    except Exception:
+        return path.absolute()
+
+
+def _canonical_path_str(path: Path) -> str:
+    """
+    Stable path canonicalization WITHOUT dereferencing symlinks.
+    Suitable for virtualenv identity comparisons.
+    """
+    p = path.absolute()
+
+    s = os.path.normpath(str(p)).replace("\\", "/")
+
+    if os.name == "nt":
+        s = s.lower()
+
+    return s.rstrip("/")
+
 def determine_target_python() -> Path:
     """
     PRIORITY ORDER:
@@ -1064,8 +1089,8 @@ def determine_target_python() -> Path:
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
 
-                config_python = Path(config.get("python_executable", "")).resolve()
-                current_exe = Path(sys.executable).resolve()
+                config_python = Path(config.get("python_executable", "")).absolute()  # absolute() not resolve() — preserve venv symlink
+                current_exe = Path(sys.executable).absolute()  # absolute() not resolve() — venv symlink must not be dereferenced
 
                 # Strong check: both executable AND site_packages_path must match native
                 _vr_check = find_absolute_venv_root()
@@ -1076,7 +1101,13 @@ def determine_target_python() -> Path:
                     expected_site = str(_vr_check / "lib" / f"python{_py_mm_check}" / "site-packages")
                 actual_site = config.get("site_packages_path", "")
 
-                is_correct = (config_python == current_exe) and (actual_site == expected_site)
+                # Canonical comparisons to handle Windows casing, slashes, and trailing slashes safely
+                canon_config_py = _canonical_path_str(config_python)
+                canon_current_py = _canonical_path_str(current_exe)
+                canon_actual_site = _canonical_path_str(Path(actual_site))
+                canon_expected_site = _canonical_path_str(Path(expected_site))
+
+                is_correct = (canon_config_py == canon_current_py) and (canon_actual_site == canon_expected_site)
 
                 if is_correct:
                     if debug_mode:
@@ -1149,7 +1180,7 @@ def determine_target_python() -> Path:
     # venv Python (not inside .omnipkg/interpreters/), trust sys.executable
     # instead of any potentially stale config.
     # ─────────────────────────────────────────────────────────────
-    current = Path(sys.executable).resolve()
+    current = Path(sys.executable).absolute()  # absolute() not resolve() — venv symlink must not be dereferenced
     if ".omnipkg/interpreters" not in str(current).replace("\\", "/"):
         if debug_mode:
             print(f'[DEBUG-DISPATCH] ✅ Running native venv Python → returning {current}', file=sys.stderr)
