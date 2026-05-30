@@ -231,11 +231,13 @@ def main():
         and not (len(argv_commands) >= 2 and argv_commands[1] == "python")
     )
     is_config_command = len(argv_commands) >= 1 and argv_commands[0] == "config"
+    # "daemon logs" (with or without -f) must never consume a pre-warmed worker.
+    # It just tails a log file; routing it through the daemon burns a worker and
+    # forces a cold replacement spawn that bloats the next real command.
     is_logs_follow = (
         len(argv_commands) >= 2
         and argv_commands[0] == "daemon"
         and argv_commands[1] == "logs"
-        and "-f" in sys.argv
     )
     # uninstall without version spec needs interactive picker
     is_uninstall_interactive = (
@@ -512,29 +514,70 @@ def _maybe_install_c_dispatcher():
             stored_hash = marker_content.split(":", 1)[0].strip()
         except Exception:
             stored_hash = ""
-        if stored_hash == src_hash and src_hash:            # Native bin is up to date. Also push to any adopted bin dirs that
-            # are missing their marker or have a stale hash — this heals adopted
-            # interpreters that were added after the last compile.
-            for adopted_bin in _collect_all_dispatcher_bin_dirs()[1:]:  # skip native (index 0)
-                adopted_marker = adopted_bin / ".omnipkg_dispatch_compiled"
-                adopted_ok = False
-                if adopted_marker.exists():
-                    try:
-                        # Handle both marker formats:
-                        #   "hash:path"  written by ghost.c and _install_binary_into_bin_dir
-                        #   "hash"       written by _push_binary_to_bin_dir (older format)
-                        # Always extract the hash prefix so both compare correctly.
-                        adopted_content = adopted_marker.read_text(encoding="utf-8").strip()
-                        adopted_stored_hash = adopted_content.split(":", 1)[0].strip()
-                        adopted_ok = (adopted_stored_hash == src_hash)
-                    except Exception:
-                        pass
-                if not adopted_ok:
-                    # Push native binary to this adopted bin/ without recompiling
-                    _push_binary_to_bin_dir(bin_dir, adopted_bin, src_hash, debug)
-            if debug:
-                print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
-            return
+        if stored_hash == src_hash and src_hash:
+            # ── Pip-clobber guard ─────────────────────────────────────────────
+            # pip install writes Python entry-point shims AFTER our build hook
+            # already compiled and installed the C binary (and wrote the marker).
+            # The hash still matches on the next invocation, but argv[0] is now
+            # a text script — the C binary was silently replaced by pip.
+            # Detect this by reading the first two bytes of each entry-point file:
+            # a real C binary starts with the ELF magic "\x7fELF" (Linux/macOS)
+            # or "MZ" (Windows PE), never "#!" or "imp".  If any entry-point is
+            # a text script we invalidate the marker so we fall through to recompile.
+            _clobber_detected = False
+            _exe_suffix = ".exe" if sys.platform == "win32" else ""
+            for _ep_name in ("8pkg", "omnipkg"):
+                _ep = bin_dir / (_ep_name + _exe_suffix)
+                if not _ep.exists():
+                    continue
+                try:
+                    with open(_ep, "rb") as _f:
+                        _magic = _f.read(4)
+                    # ELF magic: \x7fELF  |  PE/COFF magic: MZ
+                    _is_binary = _magic[:4] == b"\x7fELF" or _magic[:2] == b"MZ"
+                    if not _is_binary:
+                        _clobber_detected = True
+                        if debug:
+                            print(
+                                f"[C-INSTALL] pip-clobber detected: {_ep.name} is a text script "
+                                f"(magic={_magic!r}) despite valid marker — forcing recompile",
+                                file=sys.stderr,
+                            )
+                        break
+                except Exception as _ce:
+                    if debug:
+                        print(f"[C-INSTALL] could not read magic bytes of {_ep}: {_ce}", file=sys.stderr)
+
+            if _clobber_detected:
+                # Wipe the marker so we fall through to the compile path below.
+                try:
+                    marker.unlink()
+                except Exception:
+                    pass
+            else:
+                # Native bin is up to date. Also push to any adopted bin dirs that
+                # are missing their marker or have a stale hash — this heals adopted
+                # interpreters that were added after the last compile.
+                for adopted_bin in _collect_all_dispatcher_bin_dirs()[1:]:  # skip native (index 0)
+                    adopted_marker = adopted_bin / ".omnipkg_dispatch_compiled"
+                    adopted_ok = False
+                    if adopted_marker.exists():
+                        try:
+                            # Handle both marker formats:
+                            #   "hash:path"  written by ghost.c and _install_binary_into_bin_dir
+                            #   "hash"       written by _push_binary_to_bin_dir (older format)
+                            # Always extract the hash prefix so both compare correctly.
+                            adopted_content = adopted_marker.read_text(encoding="utf-8").strip()
+                            adopted_stored_hash = adopted_content.split(":", 1)[0].strip()
+                            adopted_ok = (adopted_stored_hash == src_hash)
+                        except Exception:
+                            pass
+                    if not adopted_ok:
+                        # Push native binary to this adopted bin/ without recompiling
+                        _push_binary_to_bin_dir(bin_dir, adopted_bin, src_hash, debug)
+                if debug:
+                    print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
+                return
 
     # ── Failure marker check (all platforms) ─────────────────────────────────
     # If we previously failed to compile this exact source hash, don't retry
