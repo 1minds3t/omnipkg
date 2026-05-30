@@ -33,12 +33,16 @@ def _install_dispatcher_binary(install_dir=None):
     Compile the C dispatcher and overwrite the pip-generated 8pkg/omnipkg
     wrapper scripts with the fast binary.
     Supports gcc (Linux/macOS) and MSVC cl.exe (Windows).
+    Returns a result dict for _write_build_manifest().
     """
+    def _fail(reason, **kw): return {"status": "failed", "reason": reason, **kw}
+    def _skip(reason, **kw): return {"status": "skipped", "reason": reason, **kw}
+
     repo_root = Path(__file__).parent
     c_source = repo_root / "src" / "omnipkg" / "dispatcher.c"
     if not c_source.exists():
         print("  [dispatcher] No C source found, skipping binary install")
-        return
+        return _skip("no C source")
 
     # --- Compiler detection ---
     compiler = None
@@ -113,7 +117,7 @@ def _install_dispatcher_binary(install_dir=None):
 
     if not compiler:
         print("  [dispatcher] no compiler found — using Python dispatcher")
-        return
+        return _skip("no compiler found")
 
     if install_dir is None:
         install_dir = Path(sys.executable).parent
@@ -136,7 +140,8 @@ def _install_dispatcher_binary(install_dir=None):
             print(f"  [dispatcher] Compilation failed (retcode={result.returncode})")
             print(f"  [dispatcher] cmd: {' '.join(cmd)}")
             print(f"  [dispatcher] stderr:\n{result.stderr.strip()}")
-            return
+            return _fail("compilation error", returncode=result.returncode,
+                         stderr=result.stderr.strip()[-300:])
 
         import time
         replaced = []
@@ -156,38 +161,48 @@ def _install_dispatcher_binary(install_dir=None):
         if replaced:
             binary_out.unlink(missing_ok=True)
             print(f"  [dispatcher] ✅ Fast C dispatcher installed over: {replaced}")
+            installed_paths = []
             for name in replaced:
                 target = Path(install_dir) / (name + _exe)
                 print(f"  [dispatcher]    → {target}")
+                installed_paths.append(str(target))
+            return {"status": "ok", "installed_over": replaced, "paths": installed_paths}
         else:
             print(f"  [dispatcher] Bundling compiled C dispatcher into the wheel.")
             print(f"  [dispatcher]    binary at : {binary_out.resolve()}")
+            return {"status": "ok", "installed_over": [], "paths": [str(binary_out.resolve())],
+                    "note": "bundled into wheel (no entrypoints found yet)"}
 
     except Exception as e:
         print(f"  [dispatcher] Skipping C dispatcher: {e}")
+        return _fail(str(e))
 
 def _build_uv_ffi(install_dir=None):
     """
     Build the uv_ffi PyO3 extension via maturin and install the .so
     into the active environment. Only runs in a dev checkout (submodule present);
     normal installs get uv-ffi from PyPI as a declared dependency.
+    Returns a result dict for _write_build_manifest().
     """
+    def _fail(reason, **kw): return {"status": "failed", "reason": reason, **kw}
+    def _skip(reason, **kw): return {"status": "skipped", "reason": reason, **kw}
+
     repo_root = Path(__file__).parent
     crate = repo_root / "src/omnipkg/_vendor/uv/crates/uv-ffi"
     # Crate only exists when the git submodule is checked out (dev env).
     # Wheel/sdist installs won't have it — skip silently, PyPI dep covers it.
     if not crate.exists() or not (repo_root / ".git").exists():
-        return
+        return _skip("no dev submodule (PyPI dep covers uv-ffi)")
 
     if not shutil.which("cargo"):
-        return
+        return _skip("cargo not found")
 
     if not shutil.which("maturin"):
         try:
             subprocess.run([sys.executable, "-m", "pip", "install", "maturin", "-q"],
                            check=True)
         except Exception:
-            return
+            return _skip("maturin unavailable and install failed")
 
     try:
         # maturin locates pip via VIRTUAL_ENV; conda envs don't set this,
@@ -214,14 +229,14 @@ def _build_uv_ffi(install_dir=None):
         if build_result.returncode != 0:
             print(f"  [uv-ffi] build failed — FFI unavailable, daemon path will be used")
             print(f"  {build_result.stderr[-500:].strip()}")
-            return
+            return _fail("maturin build failed", stderr=build_result.stderr.strip()[-300:])
         wheels = sorted(wheel_dir.glob("uv_ffi*.whl"), key=lambda p: p.stat().st_mtime, reverse=True)
 
         if wheels:
             print(f"  [uv-ffi] installing   : {wheels[0].resolve()}")
         if not wheels:
             print(f"  [uv-ffi] build succeeded but no wheel found in {wheel_dir}")
-            return
+            return _fail("build succeeded but no wheel found", wheel_dir=str(wheel_dir))
 
         # pip install -e . runs setup.py inside an isolated build venv whose
         # Python has no pip module. Find the real env pip executable via
@@ -251,7 +266,7 @@ def _build_uv_ffi(install_dir=None):
         pip_cmd = _get_pip_cmd()
         if pip_cmd is None:
             print(f"  [uv-ffi] pip unavailable — FFI unavailable, daemon path will be used")
-            return
+            return _fail("pip unavailable in isolated build env")
 
         install_result = subprocess.run(
             pip_cmd + ["install", "--force-reinstall", str(wheels[0])],
@@ -260,13 +275,319 @@ def _build_uv_ffi(install_dir=None):
         if install_result.returncode == 0:
             import importlib.util, site
             sp = site.getsitepackages()
+            sp0 = sp[0] if sp else "unknown"
             print("  [uv-ffi] ✅ PyO3 FFI extension built and installed")
-            print(f"  [uv-ffi]    site-packages : {sp[0] if sp else 'unknown'}")
+            print(f"  [uv-ffi]    site-packages : {sp0}")
+            # Find the actual .so path for the manifest
+            import glob as _uvg
+            so_pat = os.path.join(sp0, "uv_ffi*.so") if sp else ""
+            so_matches = _uvg.glob(so_pat) if so_pat else []
+            so_path = so_matches[0] if so_matches else str(wheels[0])
+            return {"status": "ok", "wheel": str(wheels[0].name), "so_path": so_path,
+                    "site_packages": sp0}
         else:
             print(f"  [uv-ffi] pip install failed — FFI unavailable, daemon path will be used")
             print(f"  {install_result.stderr[-500:].strip()}")
+            return _fail("pip install failed", stderr=install_result.stderr.strip()[-300:])
     except Exception as e:
         print(f"  [uv-ffi] Skipping: {e}")
+        return _fail(str(e))
+
+
+
+# ── Build manifest + install stamp ───────────────────────────────────────────
+
+def _collect_host_info() -> dict:
+    """
+    Collect host system + toolchain info for the build manifest.
+    Inspired by reproducible.py _detect_host_profile() — captures the properties
+    that actually matter for diagnosing why a binary built on CI runner A works
+    but runner B fails.
+
+    Fields:
+      libc_family      "glibc" | "musl" | "unknown"   — hard binary compat wall
+      libc_version     e.g. "2.39"
+      linux_distro_id  e.g. "ubuntu", "cachyos", "alpine"
+      linux_distro_version e.g. "24.04"
+      linux_id_like    e.g. "arch" (CachyOS), "debian"
+      gcc_version      e.g. "13.3.0" or "unknown"
+      gcc_path         full path to gcc used
+      cl_version       MSVC cl.exe version (Windows)
+      cargo_version    e.g. "1.87.0" (for uv-ffi/maturin builds)
+      maturin_version  e.g. "1.8.3"
+      env_kind         "conda" | "venv" | "uv" | "docker" | "system" | "unknown"
+      env_name         e.g. "evocoder_env"
+      is_docker        bool
+    """
+    import shutil as _sh
+    info: dict = {
+        "libc_family": "unknown",
+        "libc_version": "unknown",
+        "linux_distro_id": "unknown",
+        "linux_distro_version": "unknown",
+        "linux_id_like": "unknown",
+        "gcc_version": "unknown",
+        "gcc_path": "unknown",
+        "cl_version": "unknown",
+        "cargo_version": "unknown",
+        "maturin_version": "unknown",
+        "env_kind": "unknown",
+        "env_name": "unknown",
+        "is_docker": False,
+    }
+
+    # ── docker ───────────────────────────────────────────────────────────────
+    info["is_docker"] = (
+        Path("/.dockerenv").exists()
+        or os.environ.get("container") == "docker"
+        or os.environ.get("DOCKER_CONTAINER") == "1"
+    )
+
+    # ── env kind (conda > venv > uv > system) ────────────────────────────────
+    conda_prefix = os.environ.get("CONDA_PREFIX", "")
+    conda_default = os.environ.get("CONDA_DEFAULT_ENV", "")
+    virtual_env   = os.environ.get("VIRTUAL_ENV", "")
+    if info["is_docker"]:
+        info["env_kind"] = "docker"
+    elif conda_prefix:
+        conda_root = os.environ.get("CONDA_ROOT") or os.environ.get("CONDA_EXE", "")
+        is_base = (
+            Path(conda_prefix) == Path(conda_root).parent.parent
+            if conda_root else conda_default in ("base", "")
+        )
+        info["env_kind"] = "conda-base" if is_base else "conda"
+        info["env_name"] = conda_default or Path(conda_prefix).name
+    elif virtual_env:
+        pyvenv = Path(virtual_env) / "pyvenv.cfg"
+        if pyvenv.exists() and "uv" in pyvenv.read_text().lower():
+            info["env_kind"] = "uv"
+        else:
+            info["env_kind"] = "venv"
+        info["env_name"] = Path(virtual_env).name
+    else:
+        info["env_kind"] = "system"
+
+    # ── linux distro + libc ───────────────────────────────────────────────────
+    if sys.platform == "linux":
+        # /etc/os-release
+        for osr in ("/etc/os-release", "/usr/lib/os-release"):
+            try:
+                fields = {}
+                for line in Path(osr).read_text().splitlines():
+                    if "=" in line and not line.startswith("#"):
+                        k, _, v = line.partition("=")
+                        fields[k.strip()] = v.strip().strip('"')
+                info["linux_distro_id"]      = fields.get("ID", "unknown").lower()
+                info["linux_distro_version"] = fields.get("VERSION_ID", "unknown")
+                info["linux_id_like"]        = fields.get("ID_LIKE", "unknown").lower()
+                break
+            except OSError:
+                continue
+
+        # libc: ldd --version first
+        try:
+            import subprocess as _sp
+            r = _sp.run(["ldd", "--version"], capture_output=True, text=True, timeout=5)
+            out = (r.stdout + r.stderr).lower()
+            if "gnu libc" in out or "glibc" in out:
+                info["libc_family"] = "glibc"
+                for line in out.splitlines():
+                    m = __import__("re").search(r"(\d+\.\d+)", line)
+                    if m:
+                        info["libc_version"] = m.group(1)
+                        break
+            elif "musl" in out:
+                info["libc_family"] = "musl"
+                for line in out.splitlines():
+                    m = __import__("re").search(r"(\d+\.\d+\.\d+|\d+\.\d+)", line)
+                    if m:
+                        info["libc_version"] = m.group(1)
+                        break
+        except Exception:
+            pass
+
+        # libc: musl fallback via ldd symlink or lib files
+        if info["libc_family"] == "unknown":
+            try:
+                import subprocess as _sp, glob as _gl
+                ldd_real = os.path.realpath(_sp.run(
+                    ["which", "ldd"], capture_output=True, text=True, timeout=3
+                ).stdout.strip() or "")
+                if "musl" in ldd_real.lower():
+                    info["libc_family"] = "musl"
+                elif _gl.glob("/lib/libc.musl-*") or _gl.glob("/usr/lib/libc.musl-*"):
+                    info["libc_family"] = "musl"
+            except Exception:
+                pass
+
+        # libc: ctypes glibc last resort
+        if info["libc_family"] == "unknown":
+            try:
+                import ctypes
+                libc = ctypes.CDLL("libc.so.6", use_errno=True)
+                libc.gnu_get_libc_version.restype = ctypes.c_char_p
+                info["libc_family"] = "glibc"
+                info["libc_version"] = libc.gnu_get_libc_version().decode()
+            except Exception:
+                pass
+
+    # ── compiler versions ─────────────────────────────────────────────────────
+    import subprocess as _sp
+
+    # gcc / clang
+    gcc = _sh.which("gcc")
+    if gcc:
+        try:
+            r = _sp.run([gcc, "--version"], capture_output=True, text=True, timeout=5)
+            first = r.stdout.splitlines()[0] if r.stdout else ""
+            m = __import__("re").search(r"(\d+\.\d+\.\d+)", first)
+            info["gcc_version"] = m.group(1) if m else first.strip()[:40]
+            info["gcc_path"] = gcc
+        except Exception:
+            info["gcc_path"] = gcc
+
+    # MSVC cl.exe (Windows)
+    if sys.platform == "win32":
+        cl = _sh.which("cl")
+        if cl:
+            try:
+                r = _sp.run([cl], capture_output=True, text=True, timeout=5)
+                first = (r.stdout + r.stderr).splitlines()[0] if (r.stdout + r.stderr) else ""
+                m = __import__("re").search(r"(\d+\.\d+\.\d+)", first)
+                info["cl_version"] = m.group(1) if m else first.strip()[:60]
+            except Exception:
+                pass
+
+    # cargo
+    cargo = _sh.which("cargo")
+    if cargo:
+        try:
+            r = _sp.run([cargo, "--version"], capture_output=True, text=True, timeout=5)
+            m = __import__("re").search(r"(\d+\.\d+\.\d+)", r.stdout)
+            info["cargo_version"] = m.group(1) if m else "unknown"
+        except Exception:
+            pass
+
+    # maturin
+    maturin = _sh.which("maturin")
+    if maturin:
+        try:
+            r = _sp.run([maturin, "--version"], capture_output=True, text=True, timeout=5)
+            m = __import__("re").search(r"(\d+\.\d+\.\d+)", r.stdout)
+            info["maturin_version"] = m.group(1) if m else "unknown"
+        except Exception:
+            pass
+
+    return info
+
+
+
+def _write_build_manifest(dispatcher, uv_ffi, atomic):
+    """
+    Write <venv>/.omnipkg/build_manifest.json with the outcome of every
+    C/Rust compilation step.  CI can read this file directly instead of
+    grepping pip install logs.
+
+    Schema:
+      {
+        "omnipkg_version": "X.Y.Z",
+        "python":          "3.11.9",
+        "platform":        "linux / darwin / win32",
+        "arch":            "x86_64",
+        "timestamp":       "<ISO-8601>",
+        "dispatcher":  {"status": "ok|failed|skipped", ...},
+        "uv_ffi":      {"status": "ok|failed|skipped", ...},
+        "atomic":      {"status": "ok|failed|skipped", ...},
+        "summary":     "✅ all passed | ⚠️  N failed: ..."
+      }
+    """
+    import json, datetime
+    try:
+        ver = "unknown"
+        try:
+            import importlib.metadata as _im
+            ver = _im.version("omnipkg")
+        except Exception:
+            try:
+                toml_path = Path(__file__).parent / "pyproject.toml"
+                content = toml_path.read_text(encoding="utf-8")[:2048]
+                for line in content.split("\n"):
+                    s = line.strip()
+                    if s.startswith("version"):
+                        ver = s.split("=", 1)[1].strip().strip("\"'")
+                        break
+            except Exception:
+                pass
+
+        failed = [k for k, v in [("dispatcher", dispatcher), ("uv_ffi", uv_ffi), ("atomic", atomic)]
+                  if v.get("status") == "failed"]
+        ok     = [k for k, v in [("dispatcher", dispatcher), ("uv_ffi", uv_ffi), ("atomic", atomic)]
+                  if v.get("status") == "ok"]
+        if failed:
+            summary = f"⚠️  {len(failed)} failed: {', '.join(failed)} | ok: {', '.join(ok) or 'none'}"
+        else:
+            summary = f"✅ all passed ({', '.join(ok) or 'none built'})"
+
+        host = _collect_host_info()
+        manifest = {
+            "omnipkg_version": ver,
+            "python":    sys.version.split()[0],
+            "python_impl": platform.python_implementation().lower(),
+            "platform":  sys.platform,
+            "arch":      platform.machine(),
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "host":      host,
+            "dispatcher": dispatcher,
+            "uv_ffi":     uv_ffi,
+            "atomic":     atomic,
+            "summary":    summary,
+        }
+
+        venv_root = Path(sys.prefix)
+        stamp_dir = venv_root / ".omnipkg"
+        stamp_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = stamp_dir / "build_manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        print(f"  [omnipkg] build manifest → {manifest_path}")
+        print(f"  [omnipkg]   {summary}")
+    except Exception as e:
+        print(f"  [omnipkg] manifest write skipped: {e}")
+
+
+def _write_install_stamp():
+    # Writes <venv>/.omnipkg/omnipkg_install_stamp.json so core.py init
+    # can bail out of _self_heal_omnipkg_installation in a single file read.
+    try:
+        import json
+        ver = "unknown"
+        try:
+            import importlib.metadata as _im
+            ver = _im.version("omnipkg")
+        except Exception:
+            try:
+                repo_root = Path(__file__).parent
+                toml_path = repo_root / "pyproject.toml"
+                if not toml_path.exists():
+                    toml_path = repo_root / "src" / "pyproject.toml"
+                content = toml_path.read_text(encoding="utf-8")[:2048]
+                for line in content.split("\n"):
+                    s = line.strip()
+                    if s.startswith("version"):
+                        ver = s.split("=", 1)[1].strip().strip("\"'")
+                        break
+            except Exception:
+                pass
+        if ver == "unknown":
+            return
+
+        venv_root = Path(sys.prefix)
+        stamp_dir = venv_root / ".omnipkg"
+        stamp_dir.mkdir(parents=True, exist_ok=True)
+        stamp_path = stamp_dir / "omnipkg_install_stamp.json"
+        stamp_path.write_text(json.dumps({"version": ver}), encoding="utf-8")
+        print(f"  [omnipkg] install stamp  → {stamp_path}  (v{ver})")
+    except Exception as e:
+        print(f"  [omnipkg] stamp write skipped: {e}")
 
 
 # ── Atomic extension ─────────────────────────────────────────────────────────
@@ -341,6 +662,10 @@ def _print_exotic_platform_hint():
 # For the noarch wheel we explicitly skip dispatcher too via the env var guard
 # inside run() below.
 class OptionalBuildExt(build_ext):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._atomic_result = {"status": "skipped", "reason": "not attempted"}
+
     def build_extension(self, ext):
         so_path = self.get_ext_fullpath(ext.name)
         print(f"  [atomic]   source        : {Path(ext.sources[0]).resolve()}")
@@ -348,12 +673,14 @@ class OptionalBuildExt(build_ext):
         try:
             super().build_extension(ext)
             print(f"  [atomic]   ✅ built to   : {Path(so_path).resolve()}")
+            self._atomic_result = {"status": "ok", "so_path": str(Path(so_path).resolve())}
         except Exception as e:
             print(f"\n{'!'*60}")
             print(f"WARNING: OmniPkg Hardware Atomics failed to compile.")
             print(f"Reason: {e}")
             print(f"Installing successfully with Python-speed fallback.")
             print(f"{'!'*60}\n")
+            self._atomic_result = {"status": "failed", "reason": str(e)}
         finally:
             _print_exotic_platform_hint()
 
@@ -361,17 +688,31 @@ class OptionalBuildExt(build_ext):
         super().run()  # compiles ext_modules (empty list = no-op for noarch)
         if SKIP_C_EXTENSIONS:
             # Noarch wheel build — skip everything, pure Python only
+            _write_build_manifest(
+                dispatcher={"status": "skipped", "reason": "noarch build"},
+                uv_ffi={"status": "skipped", "reason": "noarch build"},
+                atomic={"status": "skipped", "reason": "noarch build"},
+            )
             return
         # For platform wheel builds AND sdist installs: attempt dispatcher + ffi.
         # Both functions are silent no-ops if compiler/cargo/maturin are absent.
+        disp_result = {"status": "skipped", "reason": "unknown error"}
         try:
-            _install_dispatcher_binary(Path(sys.executable).parent)
+            disp_result = _install_dispatcher_binary(Path(sys.executable).parent) or disp_result
         except Exception as e:
             print(f"  [dispatcher] Skipping: {e}")
+            disp_result = {"status": "failed", "reason": str(e)}
+        ffi_result = {"status": "skipped", "reason": "unknown error"}
         try:
-            _build_uv_ffi(Path(sys.executable).parent)
+            ffi_result = _build_uv_ffi(Path(sys.executable).parent) or ffi_result
         except Exception as e:
             print(f"  [uv-ffi] Skipping: {e}")
+            ffi_result = {"status": "failed", "reason": str(e)}
+        _write_build_manifest(
+            dispatcher=disp_result,
+            uv_ffi=ffi_result,
+            atomic=self._atomic_result,
+        )
 
 
 if SKIP_C_EXTENSIONS:
@@ -391,15 +732,19 @@ cmdclass = {'build_ext': OptionalBuildExt}
 class InstallWithDispatcher(install):
     def run(self):
         super().run()
-        _install_dispatcher_binary(self.install_scripts)
-        _build_uv_ffi(self.install_scripts)
+        disp = _install_dispatcher_binary(self.install_scripts) or {"status": "skipped", "reason": "no result"}
+        ffi  = _build_uv_ffi(self.install_scripts) or {"status": "skipped", "reason": "no result"}
+        _write_build_manifest(dispatcher=disp, uv_ffi=ffi, atomic={"status": "skipped", "reason": "setup.py install path"})
+        _write_install_stamp()
 
 
 class DevelopWithDispatcher(develop):
     def run(self):
         super().run()
-        _install_dispatcher_binary(Path(sys.executable).parent)
-        _build_uv_ffi(Path(sys.executable).parent)
+        disp = _install_dispatcher_binary(Path(sys.executable).parent) or {"status": "skipped", "reason": "no result"}
+        ffi  = _build_uv_ffi(Path(sys.executable).parent) or {"status": "skipped", "reason": "no result"}
+        _write_build_manifest(dispatcher=disp, uv_ffi=ffi, atomic={"status": "skipped", "reason": "develop path"})
+        _write_install_stamp()
 
 # Force the wheel to be tagged as cp37-abi3 (only when building C ext;
 # noarch wheel gets its own py3-none-any tag via OMNIPKG_SKIP_C_EXT=1)
