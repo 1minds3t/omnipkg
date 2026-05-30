@@ -991,13 +991,17 @@ try:
     class StreamRedirector(io.TextIOBase):
         def __init__(self, stream_name):
             self.stream_name = stream_name
+            self._buf = []
         def write(self, s):
             if isinstance(s, bytes):
                 s = s.decode('utf-8', 'replace')
+            self._buf.append(s)
             msg = {'stream': self.stream_name, 'data': s}
             _original_stdout.write(json.dumps(msg) + '\\n')
             _original_stdout.flush()
             return len(s)
+        def getvalue(self):
+            return ''.join(self._buf)
         def isatty(self):
             return setup_data.get('isatty', False)
         def flush(self):
@@ -1006,7 +1010,7 @@ try:
         def buffer(self):
             class DummyBuffer:
                 def write(self_buf, b):
-                    return self.write(b)
+                    return self.write(b.decode('utf-8', 'replace') if isinstance(b, bytes) else b)
                 def flush(self_buf):
                     pass
             return DummyBuffer()
@@ -1061,6 +1065,8 @@ try:
                 sys.stderr.write(traceback.format_exc())
                 exit_code = 1
 
+            _captured_stdout = sys.stdout.getvalue() if hasattr(sys.stdout, 'getvalue') else ''
+            _captured_stderr = sys.stderr.getvalue() if hasattr(sys.stderr, 'getvalue') else ''
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
@@ -1092,7 +1098,7 @@ try:
             _t_done = _wtime.perf_counter()
             sys.stderr.write(f'[WORKER-TIMING] worker total req\u2192COMPLETED: {(_t_done-_t_req)*1000:.2f}ms\\n')
             sys.stderr.flush()
-            _original_stdout.write(json.dumps({'status': 'COMPLETED', 'exit_code': exit_code}) + '\\n')
+            _original_stdout.write(json.dumps({'status': 'COMPLETED', 'exit_code': exit_code, 'stdout': _captured_stdout, 'stderr': _captured_stderr}) + '\\n')
             _original_stdout.flush()
 
         elif _req_type == 'run_uv':
@@ -2815,32 +2821,26 @@ class PersistentWorker:
             self.force_shutdown()
             raise RuntimeError(_('Failed to send setup: {}').format(e))
 
-        # Wait for READY with timeout
+        # Wait for READY with timeout — read from stdout_queue (fed by _reader_thread)
+        import queue as _q
         try:
-            # Windows-compatible waiting for READY
+            deadline = time.time() + 30.0
             ready_line = None
-            if IS_WINDOWS:
-                result = [None]
-                def try_read():
-                    try: result[0] = self.process.stdout.readline()
-                    except: pass
-                t = threading.Thread(target=try_read, daemon=True)
-                t.start()
-                t.join(timeout=30.0)
-                ready_line = result[0]
-            else:
-                readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
-                if readable:
-                    ready_line = self.process.stdout.readline()
+            while time.time() < deadline:
+                try:
+                    ready_line = self.stdout_queue.get(timeout=max(0.1, deadline - time.time()))
+                    break
+                except _q.Empty:
+                    if self.process.poll() is not None:
+                        raise RuntimeError(f"Worker crashed during startup (check {DAEMON_LOG_FILE})")
+                    continue
 
             if not ready_line:
-                # Check if process died
                 if self.process.poll() is not None:
                     raise RuntimeError(f"Worker crashed during startup (check {DAEMON_LOG_FILE})")
                 raise RuntimeError("Worker timeout waiting for READY")
 
             ready_line = ready_line.strip()
-
             if not ready_line:
                 raise RuntimeError("Worker sent blank READY line")
 
@@ -2852,7 +2852,6 @@ class PersistentWorker:
             if ready_status.get("status") != "READY":
                 raise RuntimeError(_('Worker failed to initialize: {}').format(ready_status))
 
-            # Success!
             self.last_health_check = time.time()
             self.health_check_failures = 0
 
@@ -4023,6 +4022,7 @@ class WorkerPoolDaemon:
             # fatal - breaking on parse failure was causing "Worker failed to
             # send READY" and forcing a cold execv fallback on every call.
             ready_parsed = None
+            _drain_count = 0
             ready_line = None
             _deadline = _rt.perf_counter() + 30.0
             while _rt.perf_counter() < _deadline:
@@ -4052,7 +4052,7 @@ class WorkerPoolDaemon:
             _t_ready = _rt.perf_counter()
             if os.environ.get('OMNIPKG_DEBUG') == '1':
                 _elapsed_us = int((_t_ready - locals().get('_t_post_flush', _t_ready)) * 1000000)
-                safe_print(f"[RUN-CLI-T] queue.get READY={_elapsed_us}us drained={_drain_count} line={repr(ready_line)}", file=sys.stderr)
+                safe_print(f"[RUN-CLI-T] queue.get READY={_elapsed_us}us drained=? line={repr(ready_line)!r}", file=sys.stderr)
 
             _t_first_frame = None
             _frame_count = 0
@@ -4143,25 +4143,14 @@ class WorkerPoolDaemon:
                             worker.process.stdin.flush()
                         except Exception:
                             break
-                #  COMPLETED / ERROR - forward and finish 
-                elif msg.get("status") in ("COMPLETED", "ERROR"):
-                    _t_completed = _rt.perf_counter()
-                    safe_print(
-                        f"[RUN-CLI] COMPLETED in {(_t_completed-_t0)*1000:.2f}ms total "
-                        f"(worker->daemon->client relay)",
-                        file=sys.stderr
-                    )
-                    #  Store last result so the recycle gate can read
-                    # _worker_abi_contaminated before putting this worker
-                    # back into idle_pools. _run_cli bypasses execute_shm_task
-                    # so we must set it here directly.
-                    worker._last_result = msg
+                else:
+                    # stream frame ({"stream":"stdout/stderr","data":"..."}) — forward to C dispatcher
+                    _frame_count += 1
+                    raw = line.encode("utf-8")
                     try:
-                        send_json(conn, msg)
+                        conn.sendall(len(raw).to_bytes(8, "big") + raw)
                     except Exception:
                         pass
-                    _completed_cleanly = True
-                    break
 
         except Exception as e:
             try:

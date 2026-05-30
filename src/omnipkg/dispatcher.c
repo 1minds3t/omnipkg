@@ -627,8 +627,8 @@ static int write_all(int fd, const void *buf, size_t count) {
 
 static int send_json_msg(int sock, const char *json_str) {
     uint64_t len = (uint64_t)strlen(json_str);
-    uint8_t be_len[8];
-    for (int i = 0; i < 8; i++)
+
+    /* Pack header + payload into one buffer → one write_all() → one syscall.
      * This eliminates the double kernel wake-up that was costing ~110us:
      * Python would wake on the 8-byte header, block waiting for the payload,
      * OS context-switched back to C, C sent payload, switched back to Python.
@@ -1015,6 +1015,13 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv,
             if (strncmp(stream_type, "COMPLETED", 9) == 0) {
                 int exit_code = 0;
                 json_get_int(msg, "exit_code", &exit_code);
+                char *out_field;
+                if (json_get_raw_str(msg, "stdout", &out_field))
+                    print_unescaped(out_field, stdout);
+                char *err_field;
+                if (json_get_raw_str(msg, "stderr", &err_field))
+                    print_unescaped(err_field, stderr);
+                fflush(stdout); fflush(stderr);
                 free(msg); sock_close(sock);
                 exit(exit_code);
             } else if (strncmp(stream_type, "NEEDS_INPUT", 11) == 0) {
