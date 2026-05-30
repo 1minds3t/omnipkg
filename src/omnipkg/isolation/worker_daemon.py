@@ -3527,28 +3527,6 @@ class WorkerPoolDaemon:
         with open(PID_FILE, "w", encoding="utf-8") as f:
             f.write(str(os.getpid()))
 
-        # ── Version stamp ─────────────────────────────────────────────────────
-        # Record the installed omnipkg version so we can detect stale-code runs.
-        # When a CI job reinstalls omnipkg from source while this daemon is still
-        # alive, the workers are running old bytecode.  We detect the mismatch on
-        # the next run_cli call and self-exit so the client auto-relaunches us.
-        try:
-            import importlib.metadata as _ilm
-            _stamp_ver = _ilm.version("omnipkg")
-        except Exception:
-            _stamp_ver = "unknown"
-        self._daemon_omnipkg_version = _stamp_ver
-        try:
-            with open(DAEMON_VERSION_STAMP_FILE, "w", encoding="utf-8") as _sf:
-                _sf.write(_stamp_ver)
-            safe_print(
-                f"[DAEMON] Started with omnipkg=={_stamp_ver} "
-                f"(stamp: {DAEMON_VERSION_STAMP_FILE})",
-                file=sys.stderr,
-            )
-        except Exception as _se:
-            safe_print(f"[DAEMON] Could not write version stamp: {_se}", file=sys.stderr)
-        # ─────────────────────────────────────────────────────────────────────
 
         # Set signal handlers for graceful shutdown
         try:
@@ -3982,140 +3960,9 @@ class WorkerPoolDaemon:
             except Exception:
                 pass
 
-    def _check_daemon_version_stale(self) -> bool:
-        """
-        Return True if the installed omnipkg version no longer matches what this
-        daemon process started with.
 
-        Only fires for normal (non-editable) installs — the version string in
-        importlib.metadata is what changes when `pip install` drops a new dist-info.
-        """
-        try:
-            import importlib.metadata as _ilm
-            live_ver = _ilm.version("omnipkg")
-        except Exception:
-            return False  # Can't read — don't restart on uncertainty
-
-        stamped = getattr(self, "_daemon_omnipkg_version", None)
-        if stamped is None:
-            # Daemon started before this patch; try the stamp file
-            try:
-                with open(DAEMON_VERSION_STAMP_FILE, "r", encoding="utf-8") as _sf:
-                    stamped = _sf.read().strip()
-                self._daemon_omnipkg_version = stamped
-            except Exception:
-                return False
-
-        return live_ver != stamped
-
-    def _spawn_restart_process(self, live_ver: str, stamped: str) -> None:
-        """
-        Spawn a fully detached external process to restart the daemon.
-
-        We CANNOT call cli_stop()/cli_start() from inside the daemon itself —
-        cli_stop() would kill the very process we're running in, so cli_start()
-        would never execute.  Instead we spawn an independent child (fully
-        detached, not a daemon thread) that outlives us and does the stop+start
-        from outside.
-
-        The child runs: python -m omnipkg.isolation.worker_daemon restart
-        which is exactly what `8pkg daemon restart` calls — cli_stop() then
-        cli_start() — but from a separate OS process that survives the daemon
-        dying.  Works identically on Windows, macOS, and Linux.
-        """
-        safe_print(
-            f"[DAEMON] ⚡ omnipkg version changed: was {stamped!r}, now {live_ver!r}. "
-            f"Current request served via fallback. Spawning restart process.",
-            file=sys.stderr,
-        )
-        try:
-            cmd = [_venv_python_exe(), "-m", "omnipkg.isolation.worker_daemon", "restart"]
-            if IS_WINDOWS:
-                # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP — fully independent
-                DETACHED = 0x00000008
-                CREATE_NEW = 0x00000200
-                subprocess.Popen(
-                    cmd,
-                    creationflags=DETACHED | CREATE_NEW,
-                    close_fds=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                # Double-fork equivalent: start_new_session detaches from our
-                # process group so the child is not killed when we die.
-                subprocess.Popen(
-                    cmd,
-                    start_new_session=True,
-                    close_fds=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-        except Exception as _e:
-            safe_print(f"[DAEMON-RESTART] Failed to spawn restart process: {_e}", file=sys.stderr)
 
     def _run_cli(self, req, conn):
-        # ── Stale-code guard ─────────────────────────────────────────────────
-        # If omnipkg was reinstalled since this daemon started, our workers hold
-        # old bytecode.  We handle this in two steps:
-        #
-        #   1. Serve the current request anyway via subprocess fallback so the
-        #      user sees no failure — their command runs normally right now.
-        #
-        #   2. Spawn a detached external process to do cli_stop() + cli_start()
-        #      from *outside* the daemon.  It outlives us and brings up a fresh
-        #      daemon that loads the new code.  Every subsequent per-Python worker
-        #      spawned by the new daemon auto-inherits the updated code —
-        #      that's the silent cross-Python self-healing cascade.
-        #
-        # We do NOT try to restart from within (cli_stop would kill us mid-run).
-        # We do NOT return an error to the client (the fallback services them).
-        if self._check_daemon_version_stale():
-            try:
-                import importlib.metadata as _ilm
-                live_ver = _ilm.version("omnipkg")
-            except Exception:
-                live_ver = "unknown"
-            stamped = getattr(self, "_daemon_omnipkg_version", "unknown")
-
-            # Step 1 — serve the request via direct subprocess so user sees no failure
-            try:
-                _fb_python = req.get("python_exe") or _venv_python_exe()
-                _fb_argv = req.get("argv", [])[1:]  # strip "8pkg", keep subcommand
-                _fb_cmd = [_fb_python, "-m", "omnipkg.cli"] + _fb_argv
-                _fb_cwd = req.get("cwd") or None
-                safe_print(f"[DAEMON-STALE] subprocess fallback: {_fb_cmd}", file=sys.stderr)
-                _fb_result = subprocess.run(
-                    _fb_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    cwd=_fb_cwd,
-                )
-                send_json(conn, {
-                    "status": "COMPLETED",
-                    "exit_code": _fb_result.returncode,
-                    "stdout": _fb_result.stdout,
-                    "stderr": _fb_result.stderr,
-                    "via": "stale_version_fallback",
-                })
-            except Exception as _fb_err:
-                try:
-                    send_json(conn, {"status": "ERROR", "error": str(_fb_err), "exit_code": 1})
-                except Exception:
-                    pass
-            finally:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-
-            # Step 2 — restart daemon from outside so next request uses fresh code
-            self._spawn_restart_process(live_ver, stamped)
-            return
-        # ─────────────────────────────────────────────────────────────────────
         _completed_cleanly = False
         import traceback as _rc_tb
         import time as _rt
