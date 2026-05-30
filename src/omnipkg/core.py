@@ -6575,6 +6575,25 @@ class omnipkg:
         """
         overall_start = time.perf_counter_ns()
 
+        # === STAMP CHECK: single file read, ~0.01ms ===
+        # Written by build_hooks._run_post_install / setup.py on every pip install.
+        # If the stamp version matches what's currently running, we are guaranteed
+        # to be in sync — no interpreter walk, no toml parse, nothing.
+        try:
+            _stamp_path = self.config_manager.venv_path / ".omnipkg" / "omnipkg_install_stamp.json"
+            if _stamp_path.exists():
+                _stamp = json.loads(_stamp_path.read_text(encoding="utf-8"))
+                _stamped_ver = _stamp.get("version")
+                if _stamped_ver:
+                    # Get running version fast (toml first, then metadata)
+                    _running_ver, _ = self._get_master_version_ultra_fast()
+                    if _running_ver == _stamped_ver:
+                        # Already stamped at this exact version — nothing to do.
+                        return
+        except Exception as e:
+            # Print the failure reason to stderr/stdout so you can debug the stamp bypass
+            print(f"[omnipkg debug] Stamp verification failed/bypassed: {e}")
+
         # === SAFETY CHECK 1: Determine if we're the native interpreter ===
         if platform.system() == "Windows":
             native_exe_candidates = [

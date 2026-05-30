@@ -1328,6 +1328,7 @@ _CACHED_8PKG_PARSER = None # cached create_8pkg_parser() result
 # ─────────────────────────────────────────────────────────────────────────
 def main():
     """Main application entry point with pre-flight version check."""
+    import time as _mt; _t_main_entry = _mt.perf_counter()
     # ── Windows console fix (must be FIRST) ───────────────────────────────────
     if sys.platform == 'win32':
         try:
@@ -1400,8 +1401,14 @@ def main():
 
         if command is None or "-h" in remaining_args or "--help" in remaining_args:
             prog_name_lower = Path(sys.argv[0]).name.lower()
+            import time as _ct; _t_pre_parser = _ct.perf_counter()
             parser = create_8pkg_parser() if "8pkg" in prog_name_lower else create_parser()
+            import time as _ct2; _t_pre_help = _ct2.perf_counter()
             parser.print_help()
+            import time as _ct3; _t_post_help = _ct3.perf_counter()
+            sys.stderr.write(f'[CLI-TIMING] create_parser: {(_t_pre_help-_t_pre_parser)*1000000:.0f} us\n')
+            sys.stderr.write(f'[CLI-TIMING] print_help:    {(_t_post_help-_t_pre_help)*1000000:.0f} us\n')
+            sys.stderr.flush()
             return 0
 
         # ── Choose minimal vs full init ────────────────────────────────────────────
@@ -1475,6 +1482,7 @@ def main():
                 ensure_python_or_relaunch(python_flag)
                 # ensure_python_or_relaunch does os.execve, so we only reach here on failure
                 return 1
+        sys.stderr.write(f'[CLI-TIMING] main-entry→pre-parser: {(_mt.perf_counter()-_t_main_entry)*1000000:.0f} us\n')
 
         # ── No command: show help ──────────────────────────────────────────
         if args.command is None:
