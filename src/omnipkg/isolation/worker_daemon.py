@@ -938,8 +938,14 @@ try:
     _cli_mod._PRELOADED_CM = _pre_cm
     _cli_mod._PRELOADED_CORE = _pre_core
     # Pre-warm i18n cache so set_language() is a no-op in main()
+    # Pre-warm i18n cache so set_language() is a no-op in main()
     from omnipkg.i18n import _
-    _.set_language(os.environ.get('OMNIPKG_LANG') or 'en')
+    _pre_lang = (os.environ.get('OMNIPKG_LANG')
+                 or _pre_cm.config.get('language')
+                 or 'en')
+    _.set_language(_pre_lang)
+    if _pre_lang not in (None, '', 'en', 'English'):
+        os.environ['OMNIPKG_LANG'] = _pre_lang
     # Pre-build parser so create_8pkg_parser() is a no-op in main()
     _cli_mod.create_8pkg_parser()
     _preload_ok = True

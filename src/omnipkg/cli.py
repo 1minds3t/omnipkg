@@ -584,8 +584,36 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
             safe_print(_("   Example: {} config set language es").format(parser_prog))
             return 1
         cm.set("language", normalized)
+        # After cm.set("language", normalized) in both handlers:
+        # Write to shell config so OMNIPKG_LANG persists across sessions
+        _shell_rc = None
+        _shell = os.environ.get("SHELL", "")
+        if "zsh" in _shell:
+            _shell_rc = Path.home() / ".zshrc"
+        elif "bash" in _shell:
+            _shell_rc = Path.home() / ".bashrc"
+        if _shell_rc and _shell_rc.exists():
+            _rc_text = _shell_rc.read_text()
+            _new_line = f'\nexport OMNIPKG_LANG="{normalized}"\n'
+            if "OMNIPKG_LANG" in _rc_text:
+                _rc_text = re.sub(r'\nexport OMNIPKG_LANG=.*\n', _new_line, _rc_text)
+            else:
+                _rc_text += _new_line
+            _shell_rc.write_text(_rc_text)
         _.set_language(normalized)
         os.environ["OMNIPKG_LANG"] = normalized
+        _marker = Path.home() / ".config" / "omnipkg" / "lang_marker_en"
+        if normalized in ("en", "English"):
+            try:
+                _marker.parent.mkdir(parents=True, exist_ok=True)
+                _marker.touch()
+            except OSError:
+                pass
+        else:
+            try:
+                _marker.unlink(missing_ok=True)
+            except OSError:
+                pass
         safe_print(_("✅ Language set to: {} ({})").format(normalized, SUPPORTED_LANGUAGES[normalized]))
 
     elif choice in ("q", ""):
@@ -740,27 +768,23 @@ def create_parser():
     starts; this path only runs when --help appears alongside a real subcommand
     (e.g. '8pkg install --help') in which case argparse uses each subparser's
     epilog= string.
-
-    To add a new command:
-      1. Add a [[command]] block to src/omnipkg/help.toml
-      2. Add the subparser + arguments here (help= stays argparse.SUPPRESS)
-      3. Add the handler function and wire it in main()
-      4. Run dev_tools/gen_help.py to regenerate _help.h and _help.py
-      5. Recompile dispatcher.c (the stale-check will trigger this automatically)
     """
     import omnipkg.cli as _cli_mod
     _lang_key = _.current_lang
     if _lang_key in _cli_mod._CACHED_PARSER:
         return _cli_mod._CACHED_PARSER[_lang_key]
     epilog_parts = [
-        _("Common commands:"),
-        _("  install <pkg>              install, uninstall, info, list, upgrade"),
-        _("  python adopt|switch|info   manage Python interpreters"),
-        _("  reset kb|config            reset knowledge base or configuration"),
-        _("  daemon start|stop|status   manage background worker"),
-        _("  run <script|cmd>           auto-healing script runner"),
-        "",
-        _("Version: {}").format(VERSION),
+    "Automation/CI: set OMNIPKG_NONINTERACTIVE=1 to disable prompts across all omnipkg processes",
+    "",
+    "Common commands:",
+    "  install <pkg>              install, uninstall, info, list, upgrade",
+    "  python adopt|switch|info   manage Python interpreters",
+    "  reset kb|config            reset knowledge base or configuration",
+    "  daemon start|stop|status   manage background worker",
+    "  run <script|cmd>           auto-healing script runner",
+
+    "",
+    "Version: {VERSION}",
     ]
     translated_epilog = "\n".join(epilog_parts)
     parser = argparse.ArgumentParser(
@@ -775,28 +799,30 @@ def create_parser():
     parser.add_argument(
         "--lang",
         metavar="CODE",
-        help=argparse.SUPPRESS,
+        help=_("Override the display language for this command (e.g., es, de, ja)"),
     )
     parser.add_argument(
         "--py", "--python",
         dest="python",
         metavar="VER",
-        help=argparse.SUPPRESS,
+        help=_(
+            "Specify which Python version to use for this command (e.g. 3.10, 3.11).\n"
+            "Also usable as a versioned alias: 8pkg311 install foo"
+        ),
     )
-    parser
     parser.add_argument(
         "--verbose", "-V",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
     subparsers = parser.add_subparsers(
-        dest="command", metavar="<command>", required=False
+        dest="command", metavar="<command>", required=False, help=_("Available commands:")
     )
 
     # ── install ───────────────────────────────────────────────────────────────
     install_parser = subparsers.add_parser(
         "install",
-        help=argparse.SUPPRESS,
+        help=_("Install packages with intelligent conflict resolution"),
         formatter_class=_CleanFormatter,
         epilog=_(
             "Examples:\n"
@@ -822,122 +848,121 @@ def create_parser():
         "--upgrade", "-U",
         action="store_true",
         dest="upgrade",
-        help=argparse.SUPPRESS,
+        help=_("Upgrade all specified packages to the newest available version"),
     )
     install_parser.add_argument(
-        "-r", "--requirement", help=argparse.SUPPRESS, metavar="FILE"
+        "-r", "--requirement", help=_("Install from requirements file"), metavar="FILE"
     )
     install_parser.add_argument(
         "--force", "--force-reinstall",
         dest="force_reinstall",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Force reinstall even if already satisfied"),
     )
 
     install_parser.add_argument(
         "-y", "--yes",
         dest="yes",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip all confirmation prompts (non-interactive / CI mode)"),
     )
     install_parser.add_argument(
         "--dry-run",
         action="store_true",
         dest="dry_run",
-        help=argparse.SUPPRESS,
+        help=_("Preview what would be installed without making any changes"),
     )
     install_parser.add_argument(
         "--strategy",
         dest="strategy",
         choices=["stable-main", "latest-active"],
         metavar="STRATEGY",
-        help=argparse.SUPPRESS,
+        help=_("Override the default install strategy for this operation"),
     )
     install_parser.add_argument(
         "--target", "-t",
         dest="target",
         metavar="DIR",
-        help=argparse.SUPPRESS,
+        help=_("Install packages into this custom directory"),
     )
     install_parser.add_argument(
         "--no-deps",
         action="store_true",
         dest="no_deps",
-        help=argparse.SUPPRESS,
+        help=_("Don't install package dependencies"),
     )
     install_parser.add_argument(
         "--pre",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Include pre-release and development versions"),
     )
     install_parser.add_argument(
         "--no-cache-dir",
         action="store_true",
         dest="no_cache_dir",
-        help=argparse.SUPPRESS,
+        help=_("Disable the cache"),
     )
-    install_parser.add_argument("--index-url", "-i", metavar="URL", help=argparse.SUPPRESS)
-    install_parser.add_argument("--extra-index-url", metavar="URL", help=argparse.SUPPRESS)
+    install_parser.add_argument("--index-url", "-i", metavar="URL", help=_("Base URL of the Python Package Index"))
+    install_parser.add_argument("--extra-index-url", metavar="URL", help=_("Extra URLs of package indexes to use"))
     install_parser.add_argument(
         "--find-links",
         dest="find_links",
         metavar="URL",
-        help=argparse.SUPPRESS,
+        help=_("If a URL or path to an html file, then parse for links to archives"),
     )
     install_parser.add_argument(
         "--trusted-host",
         dest="trusted_host",
         metavar="HOST",
-        help=argparse.SUPPRESS,
+        help=_("Mark this host or host:port pair as trusted, even though it does not have valid or any HTTPS"),
     )
     install_parser.add_argument(
         "--timeout",
         dest="timeout",
         type=int,
         metavar="SECS",
-        help=argparse.SUPPRESS,
+        help=_("Set the socket timeout (default 15 seconds)"),
     )
     install_parser.add_argument(
         "--retries",
         dest="retries",
         type=int,
         metavar="N",
-        help=argparse.SUPPRESS,
+        help=_("Maximum number of retries each connection should attempt (default 5 times)"),
     )
     install_parser.add_argument(
         "--no-binary",
         dest="no_binary",
         metavar="PKG",
-        help=argparse.SUPPRESS,
+        help=_("Do not use binary packages. Can be supplied multiple times"),
     )
     install_parser.add_argument(
         "--only-binary",
         dest="only_binary",
         metavar="PKG",
-        help=argparse.SUPPRESS,
+        help=_("Do not use source packages. Can be supplied multiple times"),
     )
     install_parser.add_argument(
         "--ignore-installed", "--ignore-requires-python",
         dest="ignore_installed",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Ignore the installed packages, overwriting them"),
     )
     install_parser.add_argument(
         "packages", nargs="*",
-        help=argparse.SUPPRESS,
+        help=_('Packages to install (e.g., "requests==2.25.1", "numpy>=1.20")'),
     )
     install_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── install-with-deps ────────────────────────────────────────────────────
-    # NOTE: handler not yet implemented — hidden from help until ready
     install_with_deps_parser = subparsers.add_parser(
         "install-with-deps",
-        help=argparse.SUPPRESS,   # hide from top-level help until implemented
+        help=_("Install a package with pinned dependency versions (experimental)"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "⚠️  This command is not yet fully implemented.\n"
@@ -949,44 +974,44 @@ def create_parser():
         ),
     )
     install_with_deps_parser.add_argument(
-        "package", help=argparse.SUPPRESS
+        "package", help=_('Package to install (e.g., "tensorflow==2.13.0")')
     )
     install_with_deps_parser.add_argument(
         "--dependency", "-d",
         action="append",
-        help=argparse.SUPPRESS,
+        help=_('Pinned dependency (e.g., "numpy==1.24.3"). Repeat for multiple.'),
         default=[],
     )
     install_with_deps_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip all confirmation prompts (non-interactive / CI mode)"),
     )
 
     # ── uninstall ─────────────────────────────────────────────────────────────
     uninstall_parser = subparsers.add_parser(
         "uninstall",
-        help=argparse.SUPPRESS,
+        help=_("Intelligently remove packages and their dependencies"),
     )
-    uninstall_parser.add_argument("packages", nargs="+", help=argparse.SUPPRESS)
+    uninstall_parser.add_argument("packages", nargs="+", help=_("Packages to uninstall"))
     uninstall_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompts"),
     )
     uninstall_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── info ──────────────────────────────────────────────────────────────────
     info_parser = subparsers.add_parser(
         "info",
-        help=argparse.SUPPRESS,
+        help=_("Interactive package explorer with version management"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Examples:\n"
@@ -998,55 +1023,55 @@ def create_parser():
     )
     info_parser.add_argument(
         "package_spec",
-        help=argparse.SUPPRESS,
+        help=_('Package to inspect (e.g., "requests" or "requests==2.28.1" or "python")'),
     )
     info_parser.add_argument(
         "selection",
         nargs="?",
         type=int,
-        help=argparse.SUPPRESS,
+        help=_("Optional: Directly select an installation index to skip the prompt (e.g., 1)"),
     )
     info_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompts and auto-expand raw data"),
     )
 
     info_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # pip compat: `8pkg show <pkg>` → same as `8pkg info <pkg>`
-    _show_parser = subparsers.add_parser("show", help=argparse.SUPPRESS)
-    _show_parser.add_argument("package_spec", help=argparse.SUPPRESS)
-    _show_parser.add_argument("--selection", "-s", type=int, default=None, help=argparse.SUPPRESS)
-    _show_parser.add_argument("--force", "-y", action="store_true", help=argparse.SUPPRESS)
+    _show_parser = subparsers.add_parser("show", help=_("Alias for 'info' command"))
+    _show_parser.add_argument("package_spec", help=_('Package to inspect'))
+    _show_parser.add_argument("--selection", "-s", type=int, default=None, help=_('Directly select an installation index'))
+    _show_parser.add_argument("--force", "-y", action="store_true", help=_('Skip confirmation prompts'))
 
     # ── revert ────────────────────────────────────────────────────────────────
     revert_parser = subparsers.add_parser(
         "revert",
-        help=argparse.SUPPRESS,
+        help=_("Revert to last known good environment snapshot"),
     )
     revert_parser.add_argument(
         "--yes", "-y",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompt"),
     )
     revert_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── swap ──────────────────────────────────────────────────────────────────
     swap_parser = subparsers.add_parser(
         "swap",
-        help=argparse.SUPPRESS,
+        help=_("Swap Python version or active package environment"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Swapping Python versions:\n"
@@ -1060,42 +1085,42 @@ def create_parser():
     )
     swap_parser.add_argument(
         "target", nargs="?",
-        help=argparse.SUPPRESS,
+        help=_('What to swap: "python" or a package spec like "numpy==1.26.4"'),
     )
-    swap_parser.add_argument("version", nargs="?", help=argparse.SUPPRESS)
+    swap_parser.add_argument("version", nargs="?", help=_("Specific version to swap to"))
     swap_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompt"),
     )
     swap_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── list ──────────────────────────────────────────────────────────────────
     list_parser = subparsers.add_parser(
         "list",
-        help=argparse.SUPPRESS,
+        help=_("View all installed packages and their status"),
     )
     list_parser.add_argument(
         "filter", nargs="?",
-        help=argparse.SUPPRESS,
+        help=_('Filter packages by name pattern, or "python" to list interpreters'),
     )
     list_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── python ────────────────────────────────────────────────────────────────
     python_parser = subparsers.add_parser(
         "python",
-        help=argparse.SUPPRESS,
+        help=_("Manage Python interpreters"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Subcommands:\n"
@@ -1111,37 +1136,37 @@ def create_parser():
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
     python_subparsers = python_parser.add_subparsers(
-        dest="python_command", help=argparse.SUPPRESS, required=False
+        dest="python_command", help=_("Available subcommands:"), required=False
     )
 
     python_adopt_parser = python_subparsers.add_parser(
         "adopt",
-        help=argparse.SUPPRESS,
+        help=_("Copy or download a Python version into the managed pool"),
     )
-    python_adopt_parser.add_argument("version", help=argparse.SUPPRESS)
+    python_adopt_parser.add_argument("version", help=_('The version to adopt (e.g., "3.9")'))
     python_adopt_parser.add_argument(
         "-f", "--force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Force re-adoption even if already managed (overwrites existing)"),
     )
     python_adopt_parser.add_argument(
         "-y", "--yes",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompts"),
     )
 
     python_switch_parser = python_subparsers.add_parser(
         "switch",
-        help=argparse.SUPPRESS,
+        help=_("Switch the active Python interpreter (same as 'swap python <version>')"),
     )
-    python_switch_parser.add_argument("version", help=argparse.SUPPRESS)
+    python_switch_parser.add_argument("version", help=_('The version to switch to (e.g., "3.10")'))
 
     python_reinstall_parser = python_subparsers.add_parser(
         "reinstall",
-        help=argparse.SUPPRESS,
+        help=_("Remove and re-adopt a Python version (clean reinstall)"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Shortcut for: uninstall python==X.Y && install python==X.Y\n\n"
@@ -1150,71 +1175,73 @@ def create_parser():
             "  omnipkg python reinstall 3.9 -y   # no prompts\n"
         ),
     )
-    python_reinstall_parser.add_argument("version", help=argparse.SUPPRESS)
+    python_reinstall_parser.add_argument("version", help=_('The version to reinstall (e.g., "3.9")'))
     python_reinstall_parser.add_argument(
         "-y", "--yes",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompts"),
     )
 
     python_subparsers.add_parser(
         "rescan",
-        help=argparse.SUPPRESS,
+        help=_("Force a re-scan and repair of the interpreter registry"),
     )
 
     remove_parser = python_subparsers.add_parser(
         "remove",
-        help=argparse.SUPPRESS,
+        help=_("Forcefully remove a managed Python interpreter"),
     )
     remove_parser.add_argument(
         "version",
-        help=argparse.SUPPRESS,
+        help=_('The version to remove (e.g., "3.9")'),
     )
     remove_parser.add_argument(
         "-y", "--yes",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Do not ask for confirmation"),
     )
 
     python_swap_parser = python_subparsers.add_parser(
         "swap",
-        help=argparse.SUPPRESS,
+        help=_("Swap Python version (alias for switch)"),
     )
-    python_swap_parser.add_argument("version", help=argparse.SUPPRESS)
+    python_swap_parser.add_argument("version", help=_('The version to swap to (e.g., "3.10")'))
     python_swap_parser.add_argument(
         "-y", "--yes",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompt"),
     )
 
     python_info_parser = python_subparsers.add_parser(
         "info",
-        help=argparse.SUPPRESS,
+        help=_("Show detailed information about a Python interpreter"),
     )
     python_info_parser.add_argument(
         "package_spec",
-        help=argparse.SUPPRESS,
+        help=_('Interpreter spec (e.g., "python" or "3.10")'),
     )
     python_info_parser.add_argument(
         "selection", nargs="?", type=int,
-        help=argparse.SUPPRESS,
+        help=_("Directly select an installation index to skip the prompt"),
     )
     python_info_parser.add_argument(
         "--yes", "-y", dest="force", action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompts and auto-expand raw data"),
     )
+
     # ── env ────────────────────────────────────────────────────────────────
     subparsers.add_parser(
         "env",
-        help=argparse.SUPPRESS,
+        help=_("Lists all OMNIPKG_* environment variables and their values"),
         description=_("Lists all OMNIPKG_* environment variables, their purpose, and current value."),
         formatter_class=argparse.RawTextHelpFormatter,
     )
+
     # ── status ────────────────────────────────────────────────────────────────
     subparsers.add_parser(
         "status",
-        help=argparse.SUPPRESS,
+        help=_("Environment health dashboard"),
         description=_(
             "Show a full health report of the active environment:\n"
             "  - Jailed tools (pip/uv/conda lockdown status)\n"
@@ -1229,7 +1256,7 @@ def create_parser():
     # ── demo ──────────────────────────────────────────────────────────────────
     demo_parser = subparsers.add_parser(
         "demo",
-        help=argparse.SUPPRESS,
+        help=_("Interactive demo for version switching"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Demos (1-10):\n"
@@ -1250,24 +1277,24 @@ def create_parser():
         "demo_id",
         nargs="?",
         type=int,
-        help=argparse.SUPPRESS,
+        help=_("Run a specific demo by number (1-10) to skip interactive menu"),
     )
     demo_parser.add_argument(
         "--non-interactive", "-n",
         dest="non_interactive",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Run in non-interactive mode (auto-selects defaults, no prompts)"),
     )
     demo_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── stress-test ───────────────────────────────────────────────────────────
     stress_parser = subparsers.add_parser(
         "stress-test",
-        help=argparse.SUPPRESS,
+        help=_("Run chaos theory stress tests"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "⚠️  Each test exercises extreme ABI switching scenarios.\n"
@@ -1282,24 +1309,23 @@ def create_parser():
     stress_parser.add_argument(
         "tests",
         nargs="*",
-        help=argparse.SUPPRESS,
+        help=_("Specific test numbers to run (e.g., '11 17 18'). Leave empty for interactive menu."),
     )
     stress_parser.add_argument(
         "--yes", "-y",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation and run all tests (equivalent to test 0)"),
     )
     stress_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── reset ─────────────────────────────────────────────────────────────────
-    # 'reset' is now a subcommand group. Old bare 'reset' (= reset kb) still works.
     reset_parser = subparsers.add_parser(
         "reset",
-        help=argparse.SUPPRESS,
+        help=_("Reset internal states or knowledge base"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Subcommands:\n"
@@ -1310,36 +1336,35 @@ def create_parser():
             "  8pkg reset config -y\n"
         ),
     )
-    reset_subparsers = reset_parser.add_subparsers(dest="reset_command", required=False)
+    reset_subparsers = reset_parser.add_subparsers(dest="reset_command", required=False, help=_("Available subcommands:"))
     reset_kb_parser = reset_subparsers.add_parser(
-        "kb", help=argparse.SUPPRESS
+        "kb", help=_("Rebuild the omnipkg knowledge base (default)")
     )
     reset_kb_parser.add_argument(
-        "--yes", "-y", dest="force", action="store_true", help=argparse.SUPPRESS
+        "--yes", "-y", dest="force", action="store_true", help=_("Skip confirmation prompt")
     )
     reset_config_sub = reset_subparsers.add_parser(
-        "config", help=argparse.SUPPRESS
+        "config", help=_("Delete config file for a fresh setup")
     )
     reset_config_sub.add_argument(
-        "--yes", "-y", dest="force", action="store_true", help=argparse.SUPPRESS
+        "--yes", "-y", dest="force", action="store_true", help=_("Skip confirmation prompt")
     )
 
-    # Hidden legacy aliases so old scripts/habits still work
     _rebuild_kb_parser = subparsers.add_parser(
-        "rebuild-kb", help=argparse.SUPPRESS
+        "rebuild-kb", help=_("Refresh the intelligence knowledge base")
     )
-    _rebuild_kb_parser.add_argument("--force", "-f", action="store_true")
+    _rebuild_kb_parser.add_argument("--force", "-f", action="store_true", help=_("Skip confirmation prompt"))
     _reset_config_parser = subparsers.add_parser(
-        "reset-config", help=argparse.SUPPRESS
+        "reset-config", help=_("Delete config file for fresh setup")
     )
     _reset_config_parser.add_argument(
-        "--yes", "-y", dest="force", action="store_true"
+        "--yes", "-y", dest="force", action="store_true", help=_("Skip confirmation prompt")
     )
 
     # ── config ────────────────────────────────────────────────────────────────
     config_parser = subparsers.add_parser(
         "config",
-        help=argparse.SUPPRESS,
+        help=_("View or edit omnipkg configuration"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "With no subcommand, prints current config and opens interactive editor.\n\n"
@@ -1357,41 +1382,40 @@ def create_parser():
             "  ru  Russian     ar  Arabic     (run 'omnipkg config' for full list)\n"
         ),
     )
-    # Make subcommand optional — bare 'config' triggers wizard
-    config_subparsers = config_parser.add_subparsers(dest="config_command", required=False)
+    config_subparsers = config_parser.add_subparsers(dest="config_command", required=False, help=_("Available subcommands:"))
     config_subparsers.add_parser(
-        "view", help=argparse.SUPPRESS
+        "view", help=_("Display the current configuration (no interactive editor)")
     )
     config_set_parser = config_subparsers.add_parser(
         "set",
-        help=argparse.SUPPRESS,
+        help=_("Set a configuration value"),
     )
     config_set_parser.add_argument(
         "key",
         choices=["language", "install_strategy"],
-        help=argparse.SUPPRESS,
+        help=_("Configuration key to set"),
     )
-    config_set_parser.add_argument("value", help=argparse.SUPPRESS)
+    config_set_parser.add_argument("value", help=_("Value to set for the key"))
     config_reset_parser = config_subparsers.add_parser(
-        "reset", help=argparse.SUPPRESS
+        "reset", help=_("Reset a specific configuration key to its default")
     )
     config_reset_parser.add_argument(
         "key",
         choices=["interpreters"],
-        help=argparse.SUPPRESS,
+        help=_("Configuration key to reset (e.g., interpreters)"),
     )
 
     reset_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── doctor ────────────────────────────────────────────────────────────────
     doctor_parser = subparsers.add_parser(
         "doctor",
-        help=argparse.SUPPRESS,
+        help=_("Diagnose and repair a corrupted environment"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "🩺  Finds and removes orphaned package metadata ('ghosts') left behind\n"
@@ -1402,30 +1426,30 @@ def create_parser():
     doctor_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Diagnose only — show the healing plan without making any changes"),
     )
     doctor_parser.add_argument(
         "--rebuild",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Nuclear option: dump active packages to requirements, wipe broken bubbles, reinstall everything clean"),
     )
     doctor_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Automatically confirm and proceed with healing without prompting"),
     )
     doctor_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── heal ──────────────────────────────────────────────────────────────────
     heal_parser = subparsers.add_parser(
         "heal",
-        help=argparse.SUPPRESS,
+        help=_("Audit for dependency conflicts and attempt to repair them"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "❤️‍🩹  Automatically resolves version conflicts and installs missing packages\n"
@@ -1436,25 +1460,25 @@ def create_parser():
     heal_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Show what would be installed/reinstalled without making changes"),
     )
     heal_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Automatically proceed with healing without prompting"),
     )
     heal_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── run ───────────────────────────────────────────────────────────────────
     run_parser = subparsers.add_parser(
         "run",
-        help=argparse.SUPPRESS,
+        help=_("Run a script, CLI command, or inline Python with auto-healing"),
         description=_(
             "Execute a Python script, inline code, or CLI command (e.g., pytest) within\n"
             "omnipkg's auto-healing environment. Missing imports and ABI errors are resolved\n"
@@ -1485,29 +1509,29 @@ def create_parser():
     run_parser.add_argument(
         "script_and_args",
         nargs=argparse.REMAINDER,
-        help=argparse.SUPPRESS,
+        help=_("The target script, command, or code, followed by any arguments"),
     )
     run_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── daemon ────────────────────────────────────────────────────────────────
     daemon_parser = subparsers.add_parser(
         "daemon",
-        help=argparse.SUPPRESS,
+        help=_("Manage the persistent worker daemon"),
     )
-    daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command", required=False)
-    daemon_subparsers.add_parser("start", help=argparse.SUPPRESS)
-    daemon_subparsers.add_parser("stop", help=argparse.SUPPRESS)
-    daemon_subparsers.add_parser("restart", help=argparse.SUPPRESS)
-    daemon_subparsers.add_parser("status", help=argparse.SUPPRESS)
+    daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command", required=False, help=_("Available subcommands:"))
+    daemon_subparsers.add_parser("start", help=_("Start the background daemon"))
+    daemon_subparsers.add_parser("stop", help=_("Stop the daemon"))
+    daemon_subparsers.add_parser("restart", help=_("Restart the daemon (stop then start)"))
+    daemon_subparsers.add_parser("status", help=_("Check daemon status and memory usage"))
 
     idle_parser = daemon_subparsers.add_parser(
         "idle",
-        help=argparse.SUPPRESS,
+        help=_("Configure idle worker pools"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Controls how many warm Python workers omnipkg keeps ready in background.\n\n"
@@ -1516,45 +1540,44 @@ def create_parser():
             "  omnipkg daemon idle --python all    # show all configs\n"
         ),
     )
-    # Accept both --python-version and --python (no argparse conflict at subcommand level)
     idle_parser.add_argument(
         "--python-version", "--python",
         type=str,
         dest="idle_python",
         metavar="VERSION",
-        help=argparse.SUPPRESS,
+        help=_('Python version (e.g., 3.11, 3.12) or "all" to show all configs'),
     )
     idle_parser.add_argument(
         "--count",
         type=int,
-        help=argparse.SUPPRESS,
+        help=_("Number of idle workers to keep ready (0 to disable)"),
     )
 
-    daemon_logs = daemon_subparsers.add_parser("logs", help=argparse.SUPPRESS)
+    daemon_logs = daemon_subparsers.add_parser("logs", help=_("View or follow daemon logs"))
     daemon_logs.add_argument(
         "-f", "--follow",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Output appended data as the file grows"),
     )
     daemon_logs.add_argument(
         "-n", "--lines",
         type=int, default=50,
-        help=argparse.SUPPRESS,
+        help=_("Output the last N lines (default: 50)"),
     )
 
     daemon_monitor = daemon_subparsers.add_parser(
-        "monitor", help=argparse.SUPPRESS
+        "monitor", help=_("Live resource usage dashboard (TUI)")
     )
     daemon_monitor.add_argument(
         "-w", "--watch",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Auto-refresh mode (dashboard style)"),
     )
 
     # ── web ───────────────────────────────────────────────────────────────────
     web_parser = subparsers.add_parser(
         "web",
-        help=argparse.SUPPRESS,
+        help=_("Manage the local web bridge"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "The web bridge connects the omnipkg dashboard UI to your local machine.\n\n"
@@ -1567,54 +1590,57 @@ def create_parser():
             "  fix-permission  Chrome blocked 'local network access'? Run this.\n"
         ),
     )
-    web_subparsers = web_parser.add_subparsers(dest="web_command", required=False)
-    web_subparsers.add_parser("start", help=argparse.SUPPRESS)
-    web_subparsers.add_parser("stop", help=argparse.SUPPRESS)
-    web_subparsers.add_parser("status", help=argparse.SUPPRESS)
-    web_subparsers.add_parser("restart", help=argparse.SUPPRESS)
+    web_subparsers = web_parser.add_subparsers(dest="web_command", required=False, help=_("Available subcommands:"))
+    web_subparsers.add_parser("start", help=_("Start the web bridge in background"))
+    web_subparsers.add_parser("stop", help=_("Stop the web bridge"))
+    web_subparsers.add_parser("status", help=_("Check web bridge status"))
+    web_subparsers.add_parser("restart", help=_("Restart the web bridge"))
     web_subparsers.add_parser(
         "fix-permission",
-        help=argparse.SUPPRESS,
+        help=_(
+            "Guide to resolve Chrome 'Allow access to local network resources?' block.\n"
+            "Run this if you accidentally clicked 'Block' on the Chrome permission prompt."
+        ),
     )
 
-    web_logs = web_subparsers.add_parser("logs", help=argparse.SUPPRESS)
+    web_logs = web_subparsers.add_parser("logs", help=_("View web bridge logs"))
     web_logs.add_argument(
         "-f", "--follow",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Follow log output in real-time"),
     )
     web_logs.add_argument(
         "-n", "--lines",
         type=int, default=50,
-        help=argparse.SUPPRESS,
+        help=_("Number of lines to show (default: 50)"),
     )
 
     # ── prune ─────────────────────────────────────────────────────────────────
     prune_parser = subparsers.add_parser(
         "prune",
-        help=argparse.SUPPRESS,
+        help=_("Clean up old, bubbled package versions"),
     )
-    prune_parser.add_argument("package", help=argparse.SUPPRESS)
+    prune_parser.add_argument("package", help=_("Package whose bubbles to prune"))
     prune_parser.add_argument(
         "--keep-latest",
         type=int,
         metavar="N",
-        help=argparse.SUPPRESS,
+        help=_("Keep N most recent bubbled versions"),
     )
     prune_parser.add_argument(
-        "--yes", "-y", dest="force", action="store_true", help=argparse.SUPPRESS
+        "--yes", "-y", dest="force", action="store_true", help=_("Skip confirmation")
     )
     prune_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # --- export ---
     export_parser = subparsers.add_parser(
         "export",
-        help=argparse.SUPPRESS,
+        help=_("Snapshot current environment to a reproducible lock file"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Writes to <venv_root>/.omnipkg/omnipkg.lock by default.\n"
@@ -1628,31 +1654,31 @@ def create_parser():
     export_parser.add_argument(
         "--output", "-o",
         metavar="FILE",
-        help=argparse.SUPPRESS,
+        help=_("Override default lock file location"),
     )
     export_parser.add_argument(
         "--python", "-p",
         metavar="VER",
         action="append",
         dest="pythons",
-        help=argparse.SUPPRESS,
+        help=_("Only export this python version (repeatable: -p 3.11 -p 3.10)"),
     )
     export_parser.add_argument(
         "--venv-root",
         metavar="PATH",
-        help=argparse.SUPPRESS,
+        help=_("Override venv root detection"),
     )
     export_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # --- sync ---
     sync_parser = subparsers.add_parser(
         "sync",
-        help=argparse.SUPPRESS,
+        help=_("Rebuild environment from lock file (DESTRUCTIVE)"),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=_(
             "Reads from <venv_root>/.omnipkg/omnipkg.lock by default.\n"
@@ -1667,71 +1693,71 @@ def create_parser():
     sync_parser.add_argument(
         "lock_file",
         metavar="LOCK_FILE",
-        nargs="?",                  # optional — defaults to canonical path
+        nargs="?",
         default=None,
-        help=argparse.SUPPRESS,
+        help=_("Lock file to sync from (default: <venv_root>/.omnipkg/omnipkg.lock)"),
     )
     sync_parser.add_argument(
         "--yes", "-y",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompt (for CI / Docker)"),
     )
     sync_parser.add_argument(
         "--python", "-p",
         metavar="VER",
         action="append",
         dest="pythons",
-        help=argparse.SUPPRESS,
+        help=_("Only sync this python version (repeatable)"),
     )
     sync_parser.add_argument(
         "--dry-run", "-n",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Print what would happen without making changes"),
     )
     sync_parser.add_argument(
         "--venv-root",
         metavar="PATH",
-        help=argparse.SUPPRESS,
+        help=_("Override venv root detection"),
     )
     sync_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
 
     # ── upgrade ───────────────────────────────────────────────────────────────
     upgrade_parser = subparsers.add_parser(
         "upgrade",
-        help=argparse.SUPPRESS,
+        help=_("Upgrade omnipkg or other packages to the latest version"),
     )
     upgrade_parser.add_argument(
         "package_name",
         nargs="*",
         default=["omnipkg"],
-        help=argparse.SUPPRESS,
+        help=_("Package to upgrade (defaults to omnipkg itself)"),
     )
     upgrade_parser.add_argument(
         "--version",
-        help=argparse.SUPPRESS,
+        help=_("(For omnipkg self-upgrade only) Specify a target version"),
     )
     upgrade_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Skip confirmation prompt"),
     )
     upgrade_parser.add_argument(
         "--force-dev",
         action="store_true",
-        help=argparse.SUPPRESS,
+        help=_("Force upgrade even in a developer environment (use with caution)"),
     )
 
     upgrade_parser.add_argument(
         "--verbose", "-V",
         action="store_true",
         dest="verbose",
-        help=argparse.SUPPRESS,
+        help=_("Enable verbose output for detailed debugging"),
     )
     upgrade_parser.set_defaults(func=upgrade)
 
@@ -1855,19 +1881,37 @@ def main():
                 _.set_language(user_lang)
             os.environ["OMNIPKG_LANG"] = user_lang
 
+        # Write English marker so C dispatcher can serve _help.h instantly next time.
+        # Non-English users never get this marker → always fall through for translation.
+        _resolved_lang = getattr(_, "current_lang", "en")
+        _marker = Path.home() / ".config" / "omnipkg" / "lang_marker_en"
+        if _resolved_lang in (None, "", "en", "English"):
+            if not _marker.exists():
+                try:
+                    _marker.parent.mkdir(parents=True, exist_ok=True)
+                    _marker.touch()
+                except OSError:
+                    pass
+        else:
+            try:
+                _marker.unlink(missing_ok=True)
+            except OSError:
+                pass
+
         if command is None:
-            # No subcommand — print top-level help from the pre-rendered constant.
-            # _help.py is baked at build time from help.toml via dev_tools/gen_help.py.
-            # No argparse construction, no filesystem reads, no formatting.
-            # The daemon already has omnipkg._help in sys.modules from preload,
-            # so this is effectively a free lookup + write().
-            from omnipkg._help import HELP_TEXT
             explicit_help = "-h" in remaining_args or "--help" in remaining_args
             if not explicit_help:
-                # Bare invocation — POSIX convention: error to stderr, exit non-zero.
-                # Mirrors the C dispatcher's argc==1 fast path (same message).
                 sys.stderr.write("error: no command specified\n\n")
-            sys.stdout.write(HELP_TEXT)
+            if _.current_lang in (None, "", "en", "English"):
+                from omnipkg._help import HELP_TEXT
+                sys.stdout.write(HELP_TEXT)
+            else:
+                prog_name_lower = Path(sys.argv[0]).name.lower()
+                if prog_name_lower == "8pkg" or "8pkg" in sys.argv[0].lower():
+                    create_8pkg_parser().print_help(sys.stdout)
+                else:
+                    create_parser().print_help(sys.stdout)
+                sys.stdout.write("\n")
             return 0 if explicit_help else 2
         # When a subcommand IS present with -h/--help, fall through to parse_args()
         # which calls the subparser's print_help() and SystemExits automatically.
@@ -1990,9 +2034,17 @@ def main():
         # Python import) after the early-exit guard above was somehow bypassed.
         # Keep it consistent: same error + HELP_TEXT + exit-1 as the C fast path.
         if args.command is None:
-            from omnipkg._help import HELP_TEXT
             sys.stderr.write("error: no command specified\n\n")
-            sys.stdout.write(HELP_TEXT)
+            if _.current_lang in (None, "", "en", "English"):
+                from omnipkg._help import HELP_TEXT
+                sys.stdout.write(HELP_TEXT)
+            else:
+                prog_name_lower = Path(sys.argv[0]).name.lower()
+                if prog_name_lower == "8pkg" or "8pkg" in sys.argv[0].lower():
+                    create_8pkg_parser().print_help(sys.stdout)
+                else:
+                    create_parser().print_help(sys.stdout)
+                sys.stdout.write("\n")
             return 2
 
         # ══════════════════════════════════════════════════════════════════
@@ -2024,8 +2076,36 @@ def main():
                         _print_language_table()
                         return 1
                     cm.set("language", normalized)
+                    # After cm.set("language", normalized) in both handlers:
+                    # Write to shell config so OMNIPKG_LANG persists across sessions
+                    _shell_rc = None
+                    _shell = os.environ.get("SHELL", "")
+                    if "zsh" in _shell:
+                        _shell_rc = Path.home() / ".zshrc"
+                    elif "bash" in _shell:
+                        _shell_rc = Path.home() / ".bashrc"
+                    if _shell_rc and _shell_rc.exists():
+                        _rc_text = _shell_rc.read_text()
+                        _new_line = f'\nexport OMNIPKG_LANG="{normalized}"\n'
+                        if "OMNIPKG_LANG" in _rc_text:
+                            _rc_text = re.sub(r'\nexport OMNIPKG_LANG=.*\n', _new_line, _rc_text)
+                        else:
+                            _rc_text += _new_line
+                        _shell_rc.write_text(_rc_text)
                     _.set_language(normalized)
                     os.environ["OMNIPKG_LANG"] = normalized
+                    _marker = Path.home() / ".config" / "omnipkg" / "lang_marker_en"
+                    if normalized in ("en", "English"):
+                        try:
+                            _marker.parent.mkdir(parents=True, exist_ok=True)
+                            _marker.touch()
+                        except OSError:
+                            pass
+                    else:
+                        try:
+                            _marker.unlink(missing_ok=True)
+                        except OSError:
+                            pass
                     lang_name = SUPPORTED_LANGUAGES.get(normalized, normalized)
                     safe_print(_("✅ Language set to: {} ({})").format(normalized, lang_name))
 

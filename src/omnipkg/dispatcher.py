@@ -40,9 +40,17 @@ def main():
     _argv_cmds = [a for a in _argv_tail if not a.startswith("-")]
     if (not _argv_cmds or _argv_cmds[0] in ("-h", "--help")) and \
        ("-h" in _argv_tail or "--help" in _argv_tail):
-        from omnipkg._help import HELP_TEXT
-        sys.stdout.write(HELP_TEXT)
-        return
+        # Check English marker — same logic as C dispatcher.
+        # If English confirmed: serve baked text instantly.
+        # If missing: fall through to cli.py which writes the marker for next time.
+        import os as _os
+        _home = _os.path.expanduser("~")
+        _marker = _os.path.join(_home, ".config", "omnipkg", "lang_marker_en")
+        if _os.path.exists(_marker):
+            from omnipkg._help import HELP_TEXT
+            sys.stdout.write(HELP_TEXT)
+            return
+        # else: fall through to cli.main() which resolves language + writes marker
 
     _maybe_install_c_dispatcher()
     _ensure_native_shims()  # idempotent: ~1µs if shim exists, heals native Python shim if missing

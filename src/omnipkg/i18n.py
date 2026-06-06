@@ -398,8 +398,18 @@ _ = Translator()
 
 # CRITICAL: Initialize with environment variable if set
 _initial_lang = os.environ.get("OMNIPKG_LANG")
+if not _initial_lang:
+    # Read config file directly — ConfigManager hasn't run yet
+    try:
+        import json
+        _cfg_path = os.path.join(
+            os.path.dirname(sys.executable), ".omnipkg_config.json"
+        )
+        with open(_cfg_path) as _f:
+            _initial_lang = json.load(_f).get("language")
+    except Exception:
+        pass
 if _initial_lang:
-    # Normalize at the source so everything downstream gets the canonical code
     _initial_lang = normalize_language_code(_initial_lang) or _initial_lang
     os.environ["OMNIPKG_LANG"] = _initial_lang
 _.set_language(_initial_lang)

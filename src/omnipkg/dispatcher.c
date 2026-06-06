@@ -318,9 +318,39 @@ static int md5_file(const char *path, char out[33]) {
     return 1;
 }
 
+
 static int file_exists(const char *path) {
     struct stat st;
     return stat(path, &st) == 0;
+}
+
+/* ── English marker check: one stat() — ~2µs ──────────────────────────────
+ * ~/.config/omnipkg/lang_marker_en exists  → user is English → serve baked text
+ * file missing → first run or non-English → fall through to Python (writes
+ *   marker on first English run so next call is free again)
+ * Called only when we're about to serve help — not on every invocation. */
+static int _has_english_marker(void) {
+    const char *home = getenv("HOME");
+#ifdef _WIN32
+    if (!home) home = getenv("USERPROFILE");
+#endif
+    if (!home) return 0;
+    char path[MAX_PATH];
+    snprintf(path, sizeof(path), "%s/.config/omnipkg/lang_marker_en", home);
+    struct stat _st;
+    return stat(path, &_st) == 0;
+}
+
+static inline int is_help_flag(const char *s) {
+    uint64_t v;
+    memcpy(&v, s, sizeof(v));
+    return (v & 0x00ffffffffffffffULL) == 0x00706c65682d2dULL;
+}
+
+static inline int is_version_flag(const char *s) {
+    uint64_t v;
+    memcpy(&v, s, sizeof(v));
+    return v == 0x6f69737265762d2dULL && s[8] == 'n' && s[9] == '\0';
 }
 
 /* resolve symlink chain to real path.
@@ -1521,17 +1551,23 @@ int main(int argc, char **argv) {
      * --version / -v:
      *   Version string to stdout, exit 0. */
     if (argc == 1) {
-        fputs("error: no command specified\n\n", stderr);
-        fputs(OMNIPKG_HELP_TEXT, stdout);
-        return 2;
+        if (_has_english_marker()) {
+            fputs("error: no command specified\n\n", stderr);
+            fputs(OMNIPKG_HELP_TEXT, stdout);
+            return 2;
+        }
+        /* fall through to Python — will write marker if English */
     }
     if (argc >= 2) {
         const char *a1 = argv[1];
-        if (strcmp(a1, "--help") == 0 || strcmp(a1, "-h") == 0) {
-            fputs(OMNIPKG_HELP_TEXT, stdout);
-            return 0;
+        if (is_help_flag(a1) || (a1[0] == '-' && a1[1] == 'h' && a1[2] == '\0')) {
+            if (_has_english_marker()) {
+                fputs(OMNIPKG_HELP_TEXT, stdout);
+                return 0;
+            }
+            /* fall through to Python */
         }
-        if (strcmp(a1, "--version") == 0 || strcmp(a1, "-v") == 0) {
+        if (is_version_flag(a1) || (a1[0] == '-' && a1[1] == 'v' && a1[2] == '\0')) {
             printf("8pkg %s\n", OMNIPKG_VERSION);
             return 0;
         }
