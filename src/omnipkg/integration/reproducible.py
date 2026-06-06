@@ -961,7 +961,9 @@ def _pick_lock_file(
     except ImportError:
         print(f"[REPRO-DEBUG] FALLBACK safe_input", file=sys.stderr)
         def is_interactive_session():
-            return sys.stdin.isatty() and not os.environ.get("CI")
+            return (sys.stdin.isatty()
+                    and not os.environ.get("CI")
+                    and not os.environ.get("OMNIPKG_NONINTERACTIVE"))
         def safe_input(prompt, default="", auto_value=None):
             if is_interactive_session():
                 try:
@@ -1064,7 +1066,9 @@ def _check_python_version_mismatch(
         from omnipkg.common_utils import is_interactive_session, safe_input
     except ImportError:
         def is_interactive_session():
-            return sys.stdin.isatty() and not os.environ.get("CI")
+            return (sys.stdin.isatty()
+                    and not os.environ.get("CI")
+                    and not os.environ.get("OMNIPKG_NONINTERACTIVE"))
         def safe_input(prompt, default="", auto_value=None):
             if is_interactive_session():
                 try:
@@ -1802,7 +1806,9 @@ def sync_lock(
         from omnipkg.common_utils import is_interactive_session, safe_input
     except ImportError:
         def is_interactive_session():
-            return sys.stdin.isatty() and not os.environ.get("CI")
+            return (sys.stdin.isatty()
+                    and not os.environ.get("CI")
+                    and not os.environ.get("OMNIPKG_NONINTERACTIVE"))
         def safe_input(prompt, default="", auto_value=None):
             if is_interactive_session():
                 try:
@@ -1866,7 +1872,7 @@ def sync_lock(
                     auto_value="no",
                 ).strip()
             except ImportError:
-                ans = input("   Are you absolutely sure? Type 'yes' to proceed: ").strip()
+                ans = safe_input("   Are you absolutely sure? Type 'yes' to proceed: ", default="no", auto_value="no").strip()
             if ans != "yes":
                 print("Aborted.")
                 return
@@ -1954,9 +1960,10 @@ def sync_lock(
                 auto_value="n",
             ).strip().lower()
         except ImportError:
-            ans = input(
+            ans = safe_input(
                 "\n⚠️  This will DESTROY and rebuild the listed python environments.\n"
-                "Proceed? (y/N): "
+                "Proceed? (y/N): ",
+                default="n", auto_value="n",
             ).strip().lower()
         if ans != "y":
             print("Aborted.")
@@ -2035,7 +2042,7 @@ def sync_lock(
                         auto_value="n",
                     ).strip().lower()
                 except ImportError:
-                    ans = input("  Continue anyway? (y/N): ").strip().lower()
+                    ans = safe_input("  Continue anyway? (y/N): ", default="n", auto_value="n").strip().lower()
                 if ans != "y":
                     print(f"  Skipping Python {ver}.")
                     continue

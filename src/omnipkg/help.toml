@@ -1,0 +1,440 @@
+# help.toml — single source of truth for all omnipkg/8pkg help text
+# Edit this file, then run dev_tools/gen_help.py to regenerate _help.h and _help.py.
+# Committed generated files mean users never run the generator.
+
+[meta]
+prog        = "8pkg"
+tagline     = "🚀 The Python runtime hypervisor that eliminated dependency hell! (8pkg = ∞pkg) "
+version_placeholder = "{VERSION}"   # substituted at generation time from pyproject.toml
+
+[meta.epilog]
+lines = [
+    "Automation/CI: set OMNIPKG_NONINTERACTIVE=1 to disable prompts across all omnipkg processes",
+    "",
+    "Common commands:",
+    "  install <pkg>              install, uninstall, info, list, upgrade",
+    "  python adopt|switch|info   manage Python interpreters",
+    "  reset kb|config            reset knowledge base or configuration",
+    "  daemon start|stop|status   manage background worker",
+    "  run <script|cmd>           auto-healing script runner",
+
+    "",
+    "Version: {VERSION}",
+]
+
+[options]
+# Top-level flags shown in the main help block.
+# hidden = true means shown in C fast-path help but suppressed by argparse (SUPPRESS).
+[[options.flag]]
+short = "-v"
+long  = "--version"
+help  = "show program's version number and exit"
+
+[[options.flag]]
+long    = "--lang"
+metavar = "CODE"
+help    = "Override the display language for this command (e.g., es, de, ja)"
+
+[[options.flag]]
+long    = "--py"
+alias   = "--python"
+dest    = "python"
+metavar = "VER"
+help    = "Run under Python VER — or use the alias: 8pkg311, 8pkg312, ..."
+
+[[options.flag]]
+short = "-V"
+long  = "--verbose"
+help  = "Enable verbose output for detailed debugging"
+
+[[options.flag]]
+short = "-y"
+long  = "--yes"
+help  = "Skip all confirmation prompts (non-interactive mode)"
+
+[[options.flag]]
+short = "-n"
+long  = "--non-interactive"
+help  = "Force non-interactive mode (same as -y; useful in CI/scripts)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUBCOMMANDS
+# Each [[command]] entry maps to one argparse subparser.
+# help     = one-liner shown in the command list
+# epilog   = shown at bottom of `8pkg <cmd> --help` (optional)
+# hidden   = true means argparse.SUPPRESS (not shown in main list, but in C help)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[command]]
+name  = "install"
+help  = "Install packages with intelligent conflict resolution"
+epilog = """
+Examples:
+  8pkg install requests
+  8pkg install 'numpy>=1.20' scipy
+  8pkg install uv==0.7.13 uv==0.7.14        # coexisting versions!
+  8pkg install python==3.11                  # adopt a Python interpreter
+  8pkg install -r requirements.txt
+  8pkg install --force requests              # force reinstall
+  8pkg install --dry-run requests            # preview only, no changes
+  8pkg install --strategy latest-active requests  # override install strategy
+  8pkg install --target /tmp/pkgs requests   # install to custom directory
+  8pkg install --no-deps requests            # skip dependency resolution
+  8pkg install --pre requests                # include pre-release versions
+  8pkg install --find-links /path requests   # search local directory for wheels
+  8pkg install --no-binary :all: requests    # force source builds
+  8pkg install --only-binary :all: requests  # force binary wheels only
+  8pkg -y install requests                   # skip all prompts
+  8pkg311 install requests                   # install under Python 3.11
+"""
+
+[[command.arg]]
+short = "-U"
+long  = "--upgrade"
+help  = "upgrade package to latest version"
+
+[[command.arg]]
+short = "-r"
+long  = "--requirement"
+metavar = "FILE"
+help  = "install from requirements file"
+
+[[command.arg]]
+long  = "--force"
+help  = "force reinstall even if already satisfied (alias: --force-reinstall)"
+
+[[command.arg]]
+short = "-y"
+long  = "--yes"
+help  = "skip all confirmation prompts"
+
+[[command.arg]]
+long  = "--dry-run"
+help  = "resolve and validate packages without installing anything"
+
+[[command.arg]]
+long    = "--strategy"
+metavar = "STRATEGY"
+help    = "override install strategy for this run: stable-main | latest-active"
+
+[[command.arg]]
+short   = "-t"
+long    = "--target"
+metavar = "DIR"
+help    = "install packages into DIR instead of the active environment"
+
+[[command.arg]]
+long  = "--no-deps"
+help  = "don't install package dependencies"
+
+[[command.arg]]
+long  = "--pre"
+help  = "include pre-release and development versions"
+
+[[command.arg]]
+long  = "--no-cache-dir"
+help  = "disable the pip/uv cache for this install"
+
+[[command.arg]]
+short   = "-i"
+long    = "--index-url"
+metavar = "URL"
+help    = "base URL of the package index (overrides PyPI)"
+
+[[command.arg]]
+long    = "--extra-index-url"
+metavar = "URL"
+help    = "additional package index URL (searched after --index-url)"
+
+[[command.arg]]
+short   = "-f"
+long    = "--find-links"
+metavar = "URL"
+help    = "search this directory or URL for wheels before hitting the index"
+
+[[command.arg]]
+long    = "--trusted-host"
+metavar = "HOST"
+help    = "mark HOST as trusted even without HTTPS"
+
+[[command.arg]]
+long    = "--timeout"
+metavar = "SECS"
+help    = "socket timeout for network requests (default: 15)"
+
+[[command.arg]]
+long    = "--retries"
+metavar = "N"
+help    = "number of retries on network failure (default: 5)"
+
+[[command.arg]]
+long    = "--no-binary"
+metavar = "PKG"
+help    = "don't use binary packages for PKG (use :all: for everything)"
+
+[[command.arg]]
+long    = "--only-binary"
+metavar = "PKG"
+help    = "only use binary packages for PKG (use :all: for everything)"
+
+[[command.arg]]
+long  = "--ignore-installed"
+help  = "ignore already-installed packages and reinstall"
+
+[[command]]
+name   = "uninstall"
+help   = "Intelligently remove packages and their dependencies"
+epilог = """
+Examples:
+  8pkg uninstall requests
+  8pkg uninstall numpy==1.26.4   # remove a specific version
+  8pkg -y uninstall requests     # skip confirmation
+"""
+
+[[command]]
+name  = "info"
+help  = "Interactive package/python explorer with version management"
+epilog = """
+Examples:
+  8pkg info requests
+  8pkg info requests 1        # Automatically select the first installation
+  8pkg info requests 1 -y     # Select first and auto-expand raw data
+  8pkg info python            # Show managed Python interpreters
+"""
+
+[[command]]
+name   = "revert"
+help   = "Revert to last known good environment snapshot"
+epilog = """
+Reverts to the most recent automatic snapshot taken before an install or uninstall.
+Use --list to see available snapshots.
+"""
+
+[[command]]
+name  = "swap"
+help  = "Swap Python version or active package environment"
+epilog = """
+Swapping Python versions:
+  8pkg swap python 3.11    # Spawns a new shell running Python 3.11
+                            # In CI (non-interactive): updates config only
+  8pkg swap python         # Interactive picker if no version given
+
+Swapping package versions:
+  8pkg swap numpy==1.26.4  # Switch numpy to a specific version
+
+Alias: 'python switch <ver>' does the same thing as 'swap python <ver>'
+"""
+
+[[command]]
+name = "list"
+help = "View all installed packages and their status"
+
+[[command]]
+name  = "python"
+help  = "Manage Python interpreters"
+epilog = """
+Subcommands:
+  adopt 3.11          Copy or download Python 3.11 into the managed pool
+  adopt 3.9 --force   Re-adopt even if already managed (overwrites)
+  switch 3.11         Switch active Python (same as 'swap python 3.11')
+  reinstall 3.9       Remove + re-adopt Python 3.9 (clean reinstall)
+  remove 3.8          Remove a managed interpreter
+  rescan              Re-scan and repair the interpreter registry
+"""
+
+[[command]]
+name = "env"
+help = "Show recognized environment variables and their current values"
+
+[[command]]
+name = "status"
+help = "Environment health dashboard"
+
+[[command]]
+name  = "demo"
+help  = "Interactive demo for version switching"
+epilog = """
+Demos (1-10):
+  1  Rich test (Python module switching)
+  2  UV test (binary switching)
+  3  NumPy + SciPy (C-extension switching) — requires Python 3.11
+  4  TensorFlow (complex dependency switching) — requires Python 3.11
+  5  Multiverse Healing (cross-Python hot-swapping) — requires Python 3.11
+  6  Old Flask Test (legacy package healing) — requires Python 3.8
+  7  Script-healing Test (omnipkg run scripts)
+  8  Quantum Multiverse Warp (concurrent installs) — requires Python 3.11
+  9  Flask Port Finder (auto-healing with Flask)
+ 10  CLI Healing Test (omnipkg run shell commands)
+
+For chaos/stress tests use: 8pkg stress-test
+"""
+
+[[command]]
+name  = "stress-test"
+help  = "Run chaos theory / loader stress tests"
+epilog = """
+⚠️  Each test exercises extreme ABI switching scenarios.
+   Tests are designed to run individually — running all at once is unsafe.
+   Default (no args): launches interactive menu; picks test 1 in non-interactive mode.
+
+Example:
+  8pkg stress-test        # interactive menu
+  8pkg stress-test 3      # run test 3 only
+  8pkg -y stress-test 3   # run test 3, no prompt
+"""
+
+[[command]]
+name  = "reset"
+help  = "Reset omnipkg subsystems (use 'reset -h' for subcommands)"
+epilog = """
+Subcommands:
+  kb      Rebuild the omnipkg knowledge base (default)
+  config  Delete config file for a fresh setup
+
+Examples:
+  8pkg reset kb
+  8pkg reset config -y
+"""
+
+[[command]]
+name  = "config"
+help  = "View or edit omnipkg configuration"
+epilog = """
+With no subcommand, prints current config and opens interactive editor.
+
+Examples:
+  8pkg config                             # view + interactive edit
+  8pkg config set install_strategy latest-active
+  8pkg config set language es
+  8pkg config view                        # print only, no editor
+
+install_strategy options:
+  stable-main    Prefer stable, well-tested releases (default)
+  latest-active  Use the very latest version even if pre-release
+
+language options (use 2-letter code):
+  en  English     es  Spanish     de  German      fr  French
+  ja  Japanese    zh  Chinese     pt  Portuguese  ko  Korean
+  ru  Russian     ar  Arabic     (run '8pkg config' for full list)
+"""
+
+[[command]]
+name  = "doctor"
+help  = "Diagnose and repair a corrupted environment"
+epilog = """
+🩺  Finds and removes orphaned package metadata ('ghosts') left behind
+   by failed or interrupted installations from other package managers.
+
+Use --dry-run first to see what would be changed, then run without it.
+"""
+
+[[command.arg]]
+long  = "--dry-run"
+help  = "preview changes without making them"
+
+[[command.arg]]
+long  = "--rebuild"
+help  = "nuclear option: wipe broken bubbles and do a full reinstall"
+
+[[command.arg]]
+short = "-y"
+long  = "--yes"
+dest  = "force"
+help  = "skip confirmation prompts"
+
+[[command]]
+name  = "heal"
+help  = "Audit for dependency conflicts and attempt to repair them"
+epilog = """
+❤️‍🩹  Automatically resolves version conflicts and installs missing packages
+   required by your currently installed packages.
+
+Tip: run with --dry-run first to preview changes.
+"""
+
+[[command]]
+name  = "run"
+help  = "Run a script, CLI command, or inline Python with auto-healing"
+epilog = """
+USAGE:
+  8pkg run <script.py> [args...]    run a Python script
+  8pkg run <cli-tool> [args...]     run any installed CLI tool
+  8pkg run python -c "code"        run inline Python
+  8pkg run python -                run Python from stdin
+  8pkg run python -m module        run a module
+
+EXAMPLES:
+  8pkg run my_script.py --arg 1
+  8pkg run pytest tests/ -x
+  8pkg run uvicorn main:app --reload
+  8pkg run python -c "import pandas; print(pandas.__version__)"
+  echo "import requests" | 8pkg run python -
+  8pkg38 run pytest                # run under Python 3.8
+  8pkg --py 3.8 run pytest         # same via flag
+
+NOTE: 'python' here means the system/configured python, not a literal
+8pkg subcommand. If it conflicts, use the full path or 8pkg38/8pkg311 aliases.
+"""
+
+[[command]]
+name  = "daemon"
+help  = "Manage the persistent worker daemon"
+epilog = """
+Subcommands:
+  start    Start the daemon
+  stop     Stop the daemon
+  restart  Restart the daemon
+  status   Show daemon status
+  logs     Stream daemon logs
+  monitor  Live activity monitor (interactive)
+"""
+
+[[command]]
+name  = "web"
+help  = "Manage the local web bridge"
+epilog = """
+The web bridge connects the omnipkg dashboard UI to your local machine.
+
+Commands:
+  start           Start the bridge (opens browser, shows permission prompt)
+  stop            Stop the bridge
+  restart         Stop then start
+  status          Show PID, port, memory, uptime
+  logs            Tail the bridge log file
+  fix-permission  Chrome blocked 'local network access'? Run this.
+"""
+
+[[command]]
+name = "prune"
+help = "Clean up old, bubbled package versions"
+
+[[command]]
+name  = "export"
+help  = "Snapshot current environment to a reproducible lock file"
+epilog = """
+Writes to <venv_root>/.omnipkg/omnipkg.lock by default.
+Use --output to override, e.g. for sharing or CI artifacts.
+
+Examples:
+  8pkg export                        # write to default location
+  8pkg export -o /tmp/my.lock        # explicit path
+  8pkg export --python 3.11          # only capture python 3.11
+"""
+
+[[command]]
+name  = "sync"
+help  = "Rebuild environment from lock file (DESTRUCTIVE)"
+epilog = """
+Reads from <venv_root>/.omnipkg/omnipkg.lock by default.
+Clears and reinstalls all packages for each python in the lock file.
+
+Examples:
+  8pkg sync                          # sync from default lock file
+  8pkg sync /path/to/other.lock      # explicit lock file
+  8pkg sync --python 3.11            # only sync python 3.11
+  8pkg sync --yes                    # skip confirmation (CI/Docker)
+"""
+
+[[command]]
+name = "upgrade"
+help = "Upgrade omnipkg or other packages to the latest version"

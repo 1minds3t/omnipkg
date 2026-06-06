@@ -30,6 +30,20 @@ def main():
     """
     Omnipkg Unified Dispatcher.
     """
+    # ── Fast path: --help / -h with no subcommand ─────────────────────────────
+    # Intercept before _maybe_install_c_dispatcher() so the Python fallback path
+    # is just as fast as the C path when someone forces Python dispatch.
+    # The C binary handles this even earlier (before Python starts), so this
+    # branch is only reached on OMNIPKG_FORCE_PYTHON_DISPATCH or first-run
+    # before the C binary is compiled.
+    _argv_tail = sys.argv[1:]
+    _argv_cmds = [a for a in _argv_tail if not a.startswith("-")]
+    if (not _argv_cmds or _argv_cmds[0] in ("-h", "--help")) and \
+       ("-h" in _argv_tail or "--help" in _argv_tail):
+        from omnipkg._help import HELP_TEXT
+        sys.stdout.write(HELP_TEXT)
+        return
+
     _maybe_install_c_dispatcher()
     _ensure_native_shims()  # idempotent: ~1µs if shim exists, heals native Python shim if missing
     # ============================================================================
@@ -479,15 +493,20 @@ def _maybe_install_c_dispatcher():
         print(f"[C-INSTALL] compiler = {compiler}", file=sys.stderr)
 
     # ── Hash-based staleness check ────────────────────────────────────────────
-    # Store the MD5 of dispatcher.c inside the marker file instead of relying
-    # on mtime. This means:
-    #   - Any edit to dispatcher.c (even a blank line) triggers a recompile on
-    #     the very next 8pkg invocation — no pip install -e . needed.
-    #   - The marker being absent (e.g. after pip install -e . wipes it) also
-    #     triggers a recompile, as before.
-    #   - Adopted interpreter bin/ dirs are also kept in sync automatically.
+    # Combined MD5 of dispatcher.c + _help.h so that regenerating help text
+    # (help.toml → gen_help.py → _help.h) also triggers a recompile.
+    # _help.h lives alongside dispatcher.c, so the path is trivial.
+    # Cost: one extra fread of ~2 KB on non-help commands only
+    # (--help / bare invocation exit before this point entirely).
+    #   - Any edit to dispatcher.c OR _help.h triggers recompile on next run.
+    #   - Marker absent → recompile, as before.
+    #   - Adopted interpreter bin/ dirs kept in sync automatically.
     try:
-        src_hash = hashlib.md5(c_source.read_bytes()).hexdigest()
+        _help_h = c_source.parent / "_help.h"
+        _combined = c_source.read_bytes()
+        if _help_h.exists():
+            _combined += _help_h.read_bytes()
+        src_hash = hashlib.md5(_combined).hexdigest()
     except Exception:
         src_hash = ""
 
@@ -1876,6 +1895,17 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         _tf.write(f'export _OMNIPKG_SWAP_ACTIVE=1\n')
         # Prepend shims to PATH (after user rc may have modified PATH)
         _tf.write(f'export PATH="{shims_dir}:$PATH"\n')
+        # Direct interpreter passthrough — bypasses dispatcher for raw python usage
+        # (heredocs, -c, -m, script.py). omnipkg subcommands still go through shims.
+        _tf.write(f'\npython() {{\n')
+        _tf.write(f'    case "${{1-}}" in\n')
+        _tf.write(f'        install|uninstall|info|swap|adopt|config|daemon|doctor|heal|monitor|demo|stress-test|python)\n')
+        _tf.write(f'            "{shims_dir}/8pkg" "$@" ;;\n')
+        _tf.write(f'        *) exec "{python_path}" "$@" ;;\n')
+        _tf.write(f'    esac\n')
+        _tf.write(f'}}\n')
+        _tf.write(f'python3() {{ exec "{python_path}" "$@"; }}\n')
+        _tf.write(f'export -f python python3\n')
         # Override any user-defined exit() shell function (e.g. ones that call
         # conda deactivate instead of actually exiting) so that typing 'exit'
         # inside a swap shell always terminates the bash process and fires the
