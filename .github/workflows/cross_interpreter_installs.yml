@@ -119,11 +119,10 @@ jobs:
           fi
 
       - name: Verify Final State
+        env:
+          OMNIPKG_NONINTERACTIVE: "1"
         run: |
-          echo "--- Verifying final state ---"
-          FINAL_INFO=$(omnipkg info python 2>/dev/null)
-          echo "Final Python info:"
-          echo "$FINAL_INFO"
+          FINAL_INFO=$(omnipkg info python -y 2>/dev/null)
 
           if echo "$FINAL_INFO" | grep -q "Active Context:.*3.13" || \
              echo "$FINAL_INFO" | grep -q "Python 3.13.*currently active"; then
@@ -147,10 +146,12 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Test TensorFlow Import on Python 3.13
+        env:
+          OMNIPKG_NONINTERACTIVE: "1"
         run: |
           echo "--- Testing TensorFlow import ---"
-          PYTHON_INFO=$(omnipkg info python 2>/dev/null)
-          PYTHON_313_EXE=$(echo "$PYTHON_INFO" | grep 'Python 3.13:' | awk '{print $4}' || echo "")
+          PYTHON_INFO=$(omnipkg info python -y 2>/dev/null)
+          PYTHON_313_EXE=$(echo "$PYTHON_INFO" | grep '3.13' | awk '{print $NF}')
 
           if [ -n "$PYTHON_313_EXE" ]; then
             echo "Testing TensorFlow import on Python 3.13..."
