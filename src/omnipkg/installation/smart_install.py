@@ -14,7 +14,9 @@ Key design:
 from __future__ import annotations
 
 import contextlib
-import fcntl
+import sys
+if sys.platform != "win32":
+    import fcntl
 import json
 import os
 import shutil
@@ -82,18 +84,22 @@ class _BubbleLock:
 
     def __enter__(self):
         self._fd = open(self.path, "w")
-        flag = fcntl.LOCK_EX if self.blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
-            fcntl.flock(self._fd, flag)
-        except BlockingIOError:
+            if _sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(self._fd.fileno(), msvcrt.LK_NBLCK if not self.blocking else msvcrt.LK_LOCK, 1)
+            else:
+                flag = fcntl.LOCK_EX if self.blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(self._fd, flag)
+        except (BlockingIOError, OSError):
             self._fd.close()
             self._fd = None
             raise BubbleLockBusy(f"Another process is already creating bubble for {self.path}")
         return self
-
     def __exit__(self, *_):
         if self._fd:
-            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            if _sys.platform != "win32":
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
             self._fd.close()
 
 

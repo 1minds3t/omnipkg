@@ -4196,7 +4196,10 @@ class BubbleIsolationManager:
         """
         NUCLEAR HEALING with file locking to prevent race conditions
         """
-        import fcntl
+        if sys.platform == "win32":
+            import msvcrt
+        else:
+            import fcntl
 
         healed_count = 0
 
@@ -4212,8 +4215,8 @@ class BubbleIsolationManager:
             try:
                 with open(lock_file, "w") as lock_fd:
                     # Acquire exclusive lock
-                    fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
-
+                    if _sys.platform != "win32":
+                        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
                     try:
                         content = metadata_file.read_text(encoding="utf-8", errors="ignore")
 
@@ -4240,10 +4243,11 @@ class BubbleIsolationManager:
                                 _("   🔧 AUTO-HEALED: Injected 'Name: {}' into {}/METADATA").format(pkg_name, dist_info.name)
                             )
                             healed_count += 1
-
+                        
                     finally:
                         # Release lock
-                        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+                        if _sys.platform != "win32":
+                            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
 
             except Exception as e:
                 safe_print(_('   ⚠️  Failed to heal {}: {}').format(dist_info.name, e))
