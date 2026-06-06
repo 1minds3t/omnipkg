@@ -2699,19 +2699,14 @@ def chaos_test_17_triple_python_multiverse():
     available_pythons = {}
 
     def check_python_version(version):
-        """Check if a Python version is available."""
+        """Check if a Python version is available via ConfigManager."""
         try:
-            result = subprocess.run(
-                ["omnipkg", "info", "python"], capture_output=True, text=True, timeout=5
-            )
-            for line in result.stdout.splitlines():
-                if f"Python {version}:" in line:
-                    # Extract path
-                    parts = line.split(":", 1)
-                    if len(parts) == 2:
-                        path = parts[1].strip().split()[0]
-                        return path
-        except:
+            from omnipkg.core import ConfigManager
+            cm = ConfigManager(suppress_init_messages=True)
+            path = cm.get_interpreter_for_version(version)
+            if path and Path(path).exists():
+                return str(path)
+        except Exception:
             pass
         return None
 
@@ -3087,14 +3082,61 @@ arr_out[:] = result.numpy()
                 torch.cuda.synchronize()
                 del _warmup
                 safe_print("   ✅ CUDA warm")
+                # Warm up each worker's CUDA context before timing
+                safe_print("   🔥 Warming worker CUDA contexts...")
+                _warmup_code = "tensor_out[:] = tensor_in + 0.0"
+                _warmup_shape = (32, 32)
+                _warmup_tensor = torch.randn(32, 32, device="cuda:0", dtype=torch.float32)
+                for _u in universes:
+                    try:
+                        client.execute_cuda_ipc(
+                            _u["torch_spec"], _warmup_code, _warmup_tensor, _warmup_shape, "float32",
+                            python_exe=available_pythons[_u["python"]], ipc_mode="universal"
+                        )
+                    except Exception:
+                        pass
+                del _warmup_tensor
+                safe_print("   ✅ Workers warm")
+                # Warm up each worker's CUDA context before timing
+                safe_print("   🔥 Warming worker CUDA contexts...")
+                _warmup_code = "tensor_out[:] = tensor_in + 0.0"
+                _warmup_shape = (32, 32)
+                _warmup_tensor = torch.randn(32, 32, device="cuda:0", dtype=torch.float32)
+                for _u in universes:
+                    try:
+                        client.execute_cuda_ipc(
+                            _u["torch_spec"], _warmup_code, _warmup_tensor, _warmup_shape, "float32",
+                            python_exe=available_pythons[_u["python"]], ipc_mode="universal"
+                        )
+                    except Exception:
+                        pass
+                del _warmup_tensor
+                safe_print("   ✅ Workers warm")
 
+                # 1. DEFINE VARIABLES FIRST!
                 gpu_tensor = torch.randn(500, 250, device="cuda:0", dtype=torch.float32)
-                safe_print(f"   📦 Input: {gpu_tensor.shape} GPU tensor ({gpu_tensor.nbytes/1024/1024:.2f} MB)")
+                safe_print(f"   📦 Input: {gpu_tensor.shape} GPU tensor ({gpu_tensor.element_size() * gpu_tensor.nelement()/1024/1024:.2f} MB)")
 
                 stage1_code_gpu = "tensor_out[:] = torch.nn.functional.relu(tensor_in)"
                 stage2_code_gpu = "tensor_out[:] = torch.sigmoid(tensor_in)"
                 stage3_code_gpu = "tensor_out[:] = torch.tanh(tensor_in)"
 
+                # 2. DISCARD FIRST RUN (Warms CUDA driver IPC tables)
+                for _stage_code, _spec, _pyver in [
+                    (stage1_code_gpu, universes[0]["torch_spec"], "3.9"),
+                    (stage2_code_gpu, universes[1]["torch_spec"], "3.10"),
+                    (stage3_code_gpu, universes[2]["torch_spec"], "3.11"),
+                ]:
+                    try:
+                        client.execute_cuda_ipc(
+                            _spec, _stage_code, gpu_tensor, gpu_tensor.shape, "float32",
+                            python_exe=available_pythons[_pyver], ipc_mode="universal"
+                        )
+                    except Exception:
+                        pass
+                torch.cuda.synchronize()
+                
+                # 3. NOW TIME THE REAL RUN
                 start_time = time.perf_counter()
                 
                 # Stage 1 (Alpha)
@@ -3121,7 +3163,7 @@ arr_out[:] = result.numpy()
                 pipeline_gpu_success = True
 
     except Exception as e:
-        safe_print(_('   ❌ GPU Pipeline failed: {}').format(e))
+        safe_print(f'   ❌ GPU Pipeline failed: {e}')
         import traceback
         safe_print(f"      {traceback.format_exc()[:500]}")
 
