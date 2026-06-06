@@ -546,18 +546,40 @@ def analyze_runtime_failure_and_heal(
 
                     attempted_fixes.add(ghost_key)
 
-                # Force reinstall using stable-main (fix the environment)
+                # Ghost repair: install DIRECTLY to main env.
+                # We MUST NOT use stable-main here — that strategy stashes the old
+                # version, lets uv install the new one, then immediately moves the
+                # new install into a bubble and restores the stash.  For a ghost
+                # (files deleted, metadata still present) that would put the fresh
+                # copy into a bubble while the broken ghost goes back to main —
+                # exactly the failure mode that triggered this healer in the first
+                # place.  latest-active writes straight to site-packages and leaves
+                # it there.
+                #
+                # Pin the version to whatever the CLI owner's resolved_deps snapshot
+                # recorded.  This avoids pulling a newer version that the rest of the
+                # ecosystem wasn't resolved against.
+                pinned_spec = _get_pinned_version_for_dep(
+                    omnipkg_instance, cli_owner_spec, pkg_name
+                )
+                safe_print(
+                    _("   - Installing '{}' directly to main env (no stash/bubble)...").format(pinned_spec)
+                )
 
-                with temporary_install_strategy(omnipkg_instance, "stable-main"):
+                with temporary_install_strategy(omnipkg_instance, "latest-active"):
 
-                    ret = omnipkg_instance.smart_install([pkg_name], force_reinstall=True)
+                    ret = omnipkg_instance.smart_install([pinned_spec], force_reinstall=True)
 
                 if ret == 0:
 
                     safe_print("✅ Reinstall successful. Restarting script...")
 
+                    # After fixing main env, if we have a CLI owner re-launch inside
+                    # a bubble so all the owner's deps are loaded cleanly at runtime.
+                    # Pass the pinned_spec as the override so heal_with_missing_package
+                    # does not re-resolve from scratch.
                     return heal_with_missing_package(
-                        pkg_name,
+                        pinned_spec,
                         Path(cmd_args[0]),
                         cmd_args[1:],
                         original_script_path_for_analysis,
@@ -565,7 +587,7 @@ def analyze_runtime_failure_and_heal(
                         is_context_aware_run,
                         omnipkg_instance=omnipkg_instance,
                         attempted_fixes=attempted_fixes,
-                        error_context=stderr,  # <--- PASS STDERR HERE
+                        error_context=stderr,
                         cli_owner_spec=cli_owner_spec,
                         python_executable=python_executable,
                     )
@@ -980,28 +1002,107 @@ def is_package_corrupted(pkg_name, missing_module_name):
     """
     Checks if a package is 'Ghosted' (metadata exists so pip thinks it's installed,
     but the actual module cannot be imported).
+
+    NOTE: We deliberately check the real site-packages filesystem instead of
+    importlib.util.find_spec(), because the healer process may have bubble paths
+    injected into sys.path.  find_spec() would follow those and falsely report the
+    module as present even when the *main-env* copy is missing/broken.
     """
     try:
-        import importlib.metadata as importlib_metadata
+        import importlib.metadata
+        import sysconfig
     except ImportError:
-        import importlib_metadata
-    import importlib.util
+        return False
 
-    # 1. Is it installed according to metadata?
+    # 1. Is it installed according to metadata in the main env?
     try:
         importlib.metadata.distribution(pkg_name)
     except importlib.metadata.PackageNotFoundError:
-        return False  # Not installed -> Not corrupted (just missing)
+        return False  # Not installed at all -> not corrupted (just missing)
 
-    # 2. Can we actually find the module spec?
+    # 2. Check the real main-env site-packages on disk (bypass any bubble sys.path pollution).
     try:
-        # If find_spec returns None, the python files are missing
-        if importlib.util.find_spec(missing_module_name) is None:
+        sp = Path(sysconfig.get_path("purelib"))
+        has_package_dir = (sp / missing_module_name / "__init__.py").exists() or \
+                          (sp / missing_module_name).is_dir()
+        has_module_file = (sp / f"{missing_module_name}.py").exists()
+        # Also check platlib (for compiled extensions)
+        platlib = Path(sysconfig.get_path("platlib"))
+        has_ext = any(platlib.glob(f"{missing_module_name}*.so")) or \
+                  any(platlib.glob(f"{missing_module_name}*.pyd")) if platlib != sp else False
+        if not has_package_dir and not has_module_file and not has_ext:
+            return True  # Metadata present but files gone → ghost
+    except Exception:
+        # Fallback to find_spec if filesystem check fails
+        import importlib.util
+        try:
+            if importlib.util.find_spec(missing_module_name) is None:
+                return True
+        except (ImportError, ValueError, AttributeError):
             return True
-    except (ImportError, ValueError, AttributeError):
-        return True  # Import system choked on it -> Corrupted
 
     return False
+
+def _get_resolved_deps_from_kb(omnipkg_instance, pkg_name, version=None):
+    """
+    Reads the ``resolved_deps`` JSON field from the KB instance record for
+    *pkg_name*.  Returns a {canonical_name: version_str} dict, or {} on any
+    failure.
+
+    Key reconstruction:
+        main_key  = redis_key_prefix + pkg_name
+        inst_hash = main_key["active_version_instance_hash"]
+        inst_ver  = version or main_key["active_version"]
+        inst_key  = prefix.replace(':pkg:',':inst:') + pkg + ':' + ver + ':' + hash
+    """
+    try:
+        if not omnipkg_instance or not getattr(omnipkg_instance, "cache_client", None):
+            return {}
+        cc = omnipkg_instance.cache_client
+        prefix = omnipkg_instance.redis_key_prefix          # e.g. omnipkg:env_XXX:py3.11:pkg:
+        inst_prefix = prefix.replace(":pkg:", ":inst:")
+        from packaging.utils import canonicalize_name
+        canon = canonicalize_name(pkg_name)
+        main_key = f"{prefix}{canon}"
+        inst_ver  = version or cc.hget(main_key, "active_version")
+        inst_hash = cc.hget(main_key, "active_version_instance_hash")
+        if not inst_ver or not inst_hash:
+            return {}
+        inst_key = f"{inst_prefix}{canon}:{inst_ver}:{inst_hash}"
+        raw = cc.hget(inst_key, "resolved_deps")
+        if raw:
+            import json as _json
+            return _json.loads(raw)
+    except Exception:
+        pass
+    return {}
+
+
+def _get_pinned_version_for_dep(omnipkg_instance, cli_owner_spec, dep_pkg_name):
+    """
+    Given a CLI owner spec like ``jupyterlab==4.5.7`` and a broken dep name
+    like ``attrs``, look up what version the owner's resolved_deps snapshot
+    requires.  Returns e.g. ``"attrs==26.1.0"`` or bare ``dep_pkg_name`` if
+    not found.
+    """
+    try:
+        if not cli_owner_spec:
+            return dep_pkg_name
+        parts = cli_owner_spec.split("==", 1)
+        owner_name = parts[0].strip()
+        owner_ver  = parts[1].strip() if len(parts) > 1 else None
+        deps = _get_resolved_deps_from_kb(omnipkg_instance, owner_name, owner_ver)
+        if not deps:
+            return dep_pkg_name
+        from packaging.utils import canonicalize_name
+        canon_dep = canonicalize_name(dep_pkg_name)
+        pinned_ver = deps.get(canon_dep)
+        if pinned_ver:
+            return f"{dep_pkg_name}=={pinned_ver}"
+    except Exception:
+        pass
+    return dep_pkg_name
+
 
 _CF_MAPPING_CACHE = {}
 _CF_CACHE_LOADED = False
@@ -1602,9 +1703,21 @@ def heal_with_missing_package(
     if not omnipkg_instance:
         omnipkg_instance = OmnipkgCore(config_manager)
 
-    # Use stable-main strategy to protect the environment during this repair
-    # We pass force_reinstall=force to the core installer
-    with temporary_install_strategy(omnipkg_instance, "stable-main"):
+    # If we know the CLI owner, pin the dep version from the owner's resolved_deps
+    # snapshot rather than always fetching latest.  Also install via latest-active
+    # so the package lands directly in main env — not bubbled — which is the only
+    # place the CLI subprocess will find it without an explicit loader.
+    # (stable-main's stash mechanism would move the fresh install into a bubble and
+    # restore the ghost to main, repeating the exact failure we are trying to fix.)
+    if cli_owner_spec and "==" not in pkg_name:
+        pkg_name = _get_pinned_version_for_dep(omnipkg_instance, cli_owner_spec, pkg_name)
+
+    if cli_owner_spec:
+        install_strategy = "latest-active"
+    else:
+        install_strategy = "stable-main"
+
+    with temporary_install_strategy(omnipkg_instance, install_strategy):
         return_code = omnipkg_instance.smart_install([pkg_name], force_reinstall=force)
 
     if return_code != 0:
@@ -1615,10 +1728,37 @@ def heal_with_missing_package(
     safe_print(_("🚀 Re-running..."))
 
     if cli_owner_spec:
-        # Re-run as CLI inside a bubble, preserving the original python interpreter.
+        # Re-run as CLI inside a bubble loader that covers the FULL owner dep tree.
+        # Pull all resolved_deps from the owner's KB record so every dep is shimmed,
+        # not just the one we just fixed.  This prevents the same symptom re-appearing
+        # for a sibling dep that is also broken in main env.
         command = temp_script_path.name if isinstance(temp_script_path, Path) else str(temp_script_path)
+
+        owner_dep_specs = [cli_owner_spec]
+        try:
+            parts = cli_owner_spec.split("==", 1)
+            owner_deps = _get_resolved_deps_from_kb(
+                omnipkg_instance, parts[0].strip(),
+                parts[1].strip() if len(parts) > 1 else None
+            )
+            if owner_deps:
+                # Build pinned specs for every dep; put the owner first so the primary
+                # bubble is registered, then add deps as additional specs.
+                dep_specs = [
+                    f"{dep_name}=={dep_ver}"
+                    for dep_name, dep_ver in owner_deps.items()
+                ]
+                # De-duplicate: owner spec is already first
+                seen = {cli_owner_spec}
+                for s in dep_specs:
+                    if s not in seen:
+                        owner_dep_specs.append(s)
+                        seen.add(s)
+        except Exception:
+            pass  # fall back to just cli_owner_spec
+
         exit_code, heal_stats, wrapper_output = run_cli_with_healing_wrapper(
-            [cli_owner_spec],
+            owner_dep_specs,
             command,
             list(temp_script_args),
             config_manager,
@@ -2855,7 +2995,7 @@ def execute_run_command(
             is_stdin_mode = True
             script_args = cmd_args[2:]  # Everything after '-'
         # Check if only 'python' with no other args and stdin has data
-        elif len(cmd_args) == 1 and not sys.stdin.isatty():
+        elif len(cmd_args) == 1 and not is_interactive_session():
             is_stdin_mode = True
             script_args = []
 
@@ -3243,10 +3383,7 @@ def _run_script_logic(
 
         # 1. Run interactively attached to terminal
         # In non-interactive mode, don't inherit stdin — use DEVNULL
-        _is_noninteractive = (
-            not is_interactive_session()
-            or os.environ.get("OMNIPKG_NONINTERACTIVE")
-        )
+        _is_noninteractive = not is_interactive_session()
 
         try:
             try:
