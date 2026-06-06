@@ -3735,7 +3735,11 @@ class omnipkgLoader:
                   '(ABI-safe)...').format(spec)
             )
 
-        cmd = ["8pkg", "install", spec]
+        # When called from a daemon worker, sys.executable is already the target
+        # interpreter set by the daemon (e.g. cpython-3.12). Using 8pkg here goes
+        # through the C dispatcher which re-resolves python from argv and routes
+        # to the wrong interpreter. Use sys.executable directly instead.
+        cmd = [sys.executable, "-m", "omnipkg", "install", spec]
 
         # Propagate PyTorch index automatically
         if 'torch' in spec.lower() and '+cu' in spec:
@@ -3745,11 +3749,21 @@ class omnipkgLoader:
             except Exception:
                 pass
 
+        # Tell the C dispatcher which interpreter to target.
+        # When called from inside a daemon worker, sys.executable IS the
+        # target interpreter (e.g. cpython-3.12.11). Without this the
+        # dispatcher falls back to self-aware mode and routes to the main
+        # env python (3.11), installing into the wrong site-packages.
+        _install_env = os.environ.copy()
+        _install_env["OMNIPKG_PYTHON_EXECUTABLE"] = sys.executable
+        _install_env["OMNIPKG_ACTIVE_PYTHON"] = sys.executable
+
         try:
             rc = subprocess.call(
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=_install_env,
             )
         except FileNotFoundError:
             # 8pkg not on PATH — fall back to `python -m omnipkg install`
