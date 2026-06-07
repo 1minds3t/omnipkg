@@ -24,7 +24,7 @@ def _i18n():
 def _safe_print(msg, **kwargs):
     """Lazy _safe_print — only imported on error paths."""
     from omnipkg.common_utils import safe_print
-    _safe_print(msg, **kwargs)
+    safe_print(msg, **kwargs)
 
 def main():
     """
