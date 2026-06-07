@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.0] — 2026-06-07
+
+The Modular Installation & IPC Engine Update
+
+Welcome to **omnipkg v3.4.0**, a massive architectural milestone! This release brings a completely overhauled installation pipeline, microsecond-level C dispatcher optimizations, true zero-copy GPU IPC fallbacks, and deep ELF-level NumPy ABI parsing.
+
+With over 35 commits and 14,000 lines of code changed, omnipkg is faster, safer, and smarter than ever.
+
+## ✨ Major Architectural Features
+
+We have decoupled the monolithic `_run_pip_install` into a highly optimized `ModularInstaller`.
+* **Staircase Dispatch:** Installations now cascade intelligently through `FFI` → `Daemon IPC` → `subprocess uv` → `pip fallback`, maximizing speed while ensuring bulletproof reliability across all environments.
+* **Atomic Stash-Swaps (`stable-main`):** Rebuilding bubbles from scratch is a thing of the past. Omnipkg now temporarily stashes the active package, allows `uv` to install the new version directly into the main environment, moves the fresh install into a bubble, and atomically restores the stash.
+
+* **Instant Help:** `8pkg --help` and `8pkg --version` are now intercepted directly by the C dispatcher using `uint64_t` word-load comparisons, rendering in **< 300 microseconds** (0ms startup time).
+* **Smart i18n Routing:** Implemented a lightweight `lang_marker_en` file and `OMNIPKG_LANG` environment variable cache. English users hit the ultra-fast C rendering path, while non-English locales seamlessly fall back to fully translated Python `argparse` menus.
+* **Persistent Config:** Changing your language via `8pkg config set language` now automatically updates your `.bashrc` / `.zshrc` to ensure your language choice persists across terminal sessions.
+
+* Omnipkg's package metadata builder now natively parses `.so` ELF sections to extract the baked-in `NPY_FEATURE_VERSION` C-API requirement from compiled extensions (like PyTorch and TensorFlow).
+* This intelligence is saved to the Knowledge Base (`numpy_abi_version` and `numpy_abi_range`), allowing the daemon to flawlessly select the correct NumPy bubble at runtime and ensuring Content-Addressable Storage (CAS) safely segregates incompatible tensor binaries.
+
+* **Turing/CUDA 13 Fallback:** Added the `TORCH_MP_QUEUE` IPC fallback for environments where raw `cudaIpcOpenMemHandle` is broken (e.g., Turing GPUs on driver 610). Tensors stay on the GPU using `share_memory_()`, keeping execution blazingly fast.
+* **TUI Resource Monitor:** `8pkg daemon monitor` now features an interactive TUI to track live RAM/VRAM usage.
+* **Configurable Idle Policies:** Use `8pkg daemon idle` to persistently configure exactly how many warm Python workers stay alive in the background, balancing instant execution with idle RAM footprint.
+
+## 🛡️ Security & Dependency Updates
+A massive sweep of dependency bumps to resolve several GitHub Dependabot CVE alerts:
+* **Bumped `urllib3` to `2.7.0`:** Resolves High-severity decompression bomb (CVE-2026-44432) and sensitive header leaks.
+* **Bumped `uv` to `0.11.19`:** Patches Arbitrary File Write/Deletion via entrypoint names and RECORD files.
+* **Bumped `idna` to `3.18`:** Resolves Domain Name encoding bypasses.
+* **Bumped `aiohttp` to `3.14.0`:** Fixes cross-origin redirect and untrusted deserialization vulnerabilities.
+* **Bumped `authlib` to `1.7.2`:** Fixes OIDC open redirects and CSRF-via-cache vulnerabilities.
+* **Dependabot config:** Excluded the `licenses/` directory to prevent false-positive syntax crashes during manifest parsing.
+
+## 🐛 Bug Fixes & Quality of Life
+* **Ghost Repair Targeting:** The self-healer now targets the main environment directly using a pinned KB snapshot, preventing "ghost" metadata from tricking the system into bubbling a repaired package while leaving the main environment broken.
+* **Translation Shadowing:** Replaced all `_` tuple unpacking variables with `unused` globally to prevent shadowing of the `gettext` `_()` translation function.
+* **Unicode / Terminal Safety:** Standardized `safe_print` across the entire codebase (Dispatcher, Core, and Tests) to prevent `UnicodeEncodeError` crashes on Windows and strict ASCII terminals.
+* **Windows Compatibility:** Guarded POSIX `fcntl` usage behind platform checks, leveraging `msvcrt.locking` on Windows for safe cross-process file locks.
+
+## 🧪 Testing & Diagnostics
+* **KBSyncVerifier:** Refactored `test_verify_bubble_deps.py` into a robust, object-oriented symmetry checker that bi-directionally validates the SQLite Knowledge Base against physical disk states.
+* **Daemon IPC Showcase:** Added an interactive "Daemon IPC Showcase" to the `8pkg demo` menu (Option 11) to demonstrate zero-copy GPU tensor sharing across Python boundaries.
+* Consolidated FFI diagnostic and contract tests into the main `tests/` directory and added the `integration` marker to `pytest.ini`.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: build_hooks.py (269 lines changed)
+- UPDATE: setup.py (383 lines changed)
+- UPDATE: src/omnipkg/cli.py (1068 lines changed)
+- UPDATE: src/omnipkg/core.py (2691 lines changed)
+- UPDATE: src/omnipkg/dispatcher.c (292 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (341 lines changed)
+- UPDATE: src/omnipkg/i18n.py (12 lines changed)
+- UPDATE: src/omnipkg/installation/installers.py (805 lines changed)
+- UPDATE: src/omnipkg/installation/smart_install.py (2453 lines changed)
+- UPDATE: src/omnipkg/integration/reproducible.py (105 lines changed)
+- UPDATE: src/omnipkg/isolation/fs_lock_queue.py (2 lines changed)
+- UPDATE: src/omnipkg/isolation/fs_watcher.py (14 lines changed)
+- UPDATE: src/omnipkg/isolation/resource_monitor.py (432 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (948 lines changed)
+- UPDATE: src/omnipkg/package_meta_builder.py (333 lines changed)
+- UPDATE: src/omnipkg/windows_bootstrap/launcher.py (2 lines changed)
+
+**🧪 Tests:**
+- UPDATE: pytest.ini (1 lines)
+- UPDATE: src/omnipkg/tests/omnipkg_ipc_showcase.py (1002 lines)
+- UPDATE: src/omnipkg/tests/test_concurrent_install.py (4 lines)
+- UPDATE: src/omnipkg/tests/test_daemon_tags.py (40 lines)
+- UPDATE: src/omnipkg/tests/test_loader_stress_test.py (72 lines)
+- UPDATE: src/omnipkg/tests/test_old_rich.py (2 lines)
+- UPDATE: src/omnipkg/tests/test_rich_switching.py (6 lines)
+- UPDATE: src/omnipkg/tests/test_tensorflow_switching.py (17 lines)
+- NEW: tests/diag_uv_ffi.py (425 lines)
+- UPDATE: tests/test_dispatcher_contracts.py (2 lines)
+- UPDATE: tests/test_ffi_verify.py (22 lines)
+- UPDATE: tests/test_flask_port_finder.py (18 lines)
+- UPDATE: tests/test_omnipkg_contracts.py (22 lines)
+- NEW: tests/test_uv_ffi_contracts.py (793 lines)
+- UPDATE: tests/test_verify_bubble_deps.py (296 lines)
+
+**⚙️ Configuration:**
+- pyproject.toml (2 lines)
+
+**Additional Changes:**
+- Update 1 code files; Update configuration
+- Update 1 code files
+- fix: fix safe print usage in dispatcher.py
+- fix: resolve translation shadowing, standardize safe_print, and refactor tests
+- feat(i18n): per-language help routing and fast-path string micro-optimizations
+
+**Updates:**
+- Update global reach badge in README
+
+_51 files changed, 10172 insertions(+), 4637 deletions(-)_
+
 ## [3.3.5] — 2026-05-28
 
 Core Synchronization & Cross-Platform Performance
