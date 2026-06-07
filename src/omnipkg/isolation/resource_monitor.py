@@ -44,6 +44,44 @@ BASELINE_METRICS = {
 }
 
 
+def get_idle_policy() -> dict:
+    """
+    Fetch the live idle-worker config from the daemon.
+
+    Returns a dict keyed by display version string (e.g. "3.11") whose
+    values are (target_count, python_exe).  Returns {} if the daemon is
+    unreachable or the import failed.
+    """
+    if not DaemonClient or not WorkerPoolDaemon or not WorkerPoolDaemon.is_running():
+        return {}
+    try:
+        client = DaemonClient()
+        client.auto_start = False
+        result = client.get_idle_config()
+        if not result.get("success"):
+            return {}
+        policy = {}
+        for exe, count in result.get("config", {}).items():
+            ver = _extract_python_version(exe, exe)
+            policy[ver] = (count, exe)
+        return policy
+    except Exception:
+        return {}
+
+
+def _set_idle_for_version(ver: str, exe: str, count: int) -> bool:
+    """Push a single idle-count change to the daemon. Returns True on success."""
+    if not DaemonClient:
+        return False
+    try:
+        client = DaemonClient()
+        client.auto_start = False
+        result = client.set_idle_config(exe, count)
+        return bool(result.get("success"))
+    except Exception:
+        return False
+
+
 def estimate_package_memory(worker_name):
     w = worker_name.lower()
     for pkg, mb in PACKAGE_FOOTPRINTS.items():
@@ -292,6 +330,276 @@ def calculate_efficiency_metrics(workers_dict, total_ram_mb, total_gpu_mb, avg_s
             "worker_count": worker_count, "total_ram_mb": total_ram_mb}
 
 
+def _do_kill(to_kill: list):
+    """Kill a list of process dicts; return (killed, total)."""
+    killed = 0
+    for p in to_kill:
+        try:
+            if IS_WINDOWS:
+                subprocess.run(["taskkill", "/F", "/PID", p["pid"]],
+                               capture_output=True, check=False)
+            else:
+                import signal as _sig
+                os.kill(int(p["pid"]), _sig.SIGTERM)
+            safe_print(f"  ✅ Killed PID {p['pid']} ({format_memory(p['rss'])})")
+            killed += 1
+        except Exception as e:
+            safe_print(f"  ❌ Failed PID {p['pid']}: {e}")
+    return killed, len(to_kill)
+
+
+def _menu_kill(workers: dict, idle_workers_by_version: dict):
+    """Interactive kill sub-menu (one-time process kill, not config change)."""
+    all_killable = []
+    for wt, procs in sorted(workers.items()):
+        for p in procs:
+            all_killable.append(("active", wt, p))
+    for pv, procs in sorted(idle_workers_by_version.items()):
+        for p in procs:
+            all_killable.append(("idle", f"Python {pv}", p))
+
+    if not all_killable:
+        safe_print("  No killable workers found.")
+        return
+
+    print()
+    print("=" * 120)
+    safe_print("💀 KILL WORKERS  (one-time — daemon will replenish per your idle policy)")
+    print("=" * 120)
+    safe_print("  NOTE: This kills the process NOW but does not change your idle policy.")
+    safe_print("        The daemon will respawn workers to match your configured counts.")
+    safe_print("        To permanently reduce idle RAM → use [i] Configure idle policy instead.")
+    print()
+    safe_print("  Shortcuts:  [a] stale (>24h)  [f] fat (>150MB)  [A] ALL idle  [q] back")
+    safe_print("  Or enter comma-separated numbers or PIDs from the list below.")
+    print("-" * 120)
+    for i, (kind, label, p) in enumerate(all_killable):
+        ram_mb = p["rss"] / 1024
+        flag = ""
+        if p["elapsed"] > 86400:
+            flag += " ⚠️ STALE"
+        if ram_mb > 150:
+            flag += " 🐘 FAT"
+        kind_icon = "⚙️ " if kind == "active" else "💤"
+        print(f"  [{i+1:>2}] {kind_icon} {label:<25} "
+              f"PID {p['pid']:>6} | RAM: {ram_mb:>7.1f}MB | "
+              f"Age: {format_time(p['elapsed'])}{flag}")
+    print("-" * 120)
+
+    resp = input("\n  Kill> ").strip()
+
+    to_kill = []
+    rl = resp.lower()
+    if rl in ("q", "", "b", "back"):
+        return
+    elif rl == "a":
+        to_kill = [p for _, _, p in all_killable if p["elapsed"] > 86400]
+        safe_print(f"  Killing {len(to_kill)} stale workers...")
+    elif rl == "f":
+        to_kill = [p for _, _, p in all_killable if p["rss"] / 1024 > 150]
+        safe_print(f"  Killing {len(to_kill)} fat workers...")
+    elif resp.upper() == "A":
+        to_kill = [p for kind, _, p in all_killable if kind == "idle"]
+        safe_print(f"  Killing ALL {len(to_kill)} idle workers...")
+    else:
+        requested = [x.strip() for x in resp.replace(" ", ",").split(",") if x.strip()]
+        pid_lookup = {p["pid"]: p for _, _, p in all_killable}
+        num_lookup = {str(i + 1): p for i, (_, _, p) in enumerate(all_killable)}
+        for r in requested:
+            if r in pid_lookup:
+                to_kill.append(pid_lookup[r])
+            elif r in num_lookup:
+                to_kill.append(num_lookup[r])
+            else:
+                safe_print(f"  ⚠️  Unknown: {r}")
+
+    if to_kill:
+        killed, total = _do_kill(to_kill)
+        safe_print(f"\n  Done: {killed}/{total} workers killed")
+        if killed > 0:
+            safe_print("  💡 Daemon will replenish idle pool per your policy.")
+            safe_print("     To reduce that replenishment → [i] Configure idle policy")
+
+
+def _menu_idle_config(idle_workers_by_version: dict, idle_policy: dict):
+    """
+    Interactive idle-policy configurator.
+
+    Shows current policy, lets the user edit counts per-version, and
+    pushes changes to the daemon via set_idle_config.  Explains the
+    RAM trade-off inline so users can make an informed decision.
+    """
+    if not idle_policy:
+        safe_print("  ⚠️  Could not read idle policy from daemon (is it running?)")
+        safe_print("  💡  8pkg daemon start  →  then re-open the monitor")
+        return
+
+    # Merge versions from live workers and configured policy
+    all_versions = sorted(set(list(idle_policy.keys()) + list(idle_workers_by_version.keys())))
+
+    while True:
+        print()
+        print("=" * 120)
+        safe_print("⚙️  CONFIGURE IDLE WORKER POLICY")
+        print("=" * 120)
+        safe_print("  How many warm Python workers to keep running at all times.")
+        print()
+        safe_print("  TRADE-OFF:")
+        safe_print("    More workers  →  instant 8pkg commands, higher idle RAM")
+        safe_print("    Fewer workers →  first command slightly slower (~150–600ms cold start)")
+        safe_print("    0 workers     →  no idle RAM, but every invocation pays the startup cost")
+        print()
+        safe_print("  RECOMMENDATION:")
+        safe_print("    - 32 GB RAM machine  → keep 2 for your active version, 1 for others")
+        safe_print("    - 16 GB RAM machine   → keep 1 for your active version, 0 for others")
+        safe_print("    - 8 GB RAM machine    → 0 for everything, or 1 for your main version only")
+        print("-" * 120)
+        print(f"  {'#':<4} {'Version':<10} {'Target':>8}   {'Live workers':>14}   {'Est. idle RAM':>14}")
+        safe_print(f"  {'─'*4} {'─'*10} {'─'*8}   {'─'*14}   {'─'*14}")
+        for i, ver in enumerate(all_versions):
+            count, exe = idle_policy.get(ver, (0, ""))
+            live = len(idle_workers_by_version.get(ver, []))
+            est_mb = count * 90
+            print(f"  [{i+1:<2}] Python {ver:<6} {count:>8}   {live:>14} live   ~{est_mb:>10} MB")
+        print("-" * 120)
+        total_target = sum(idle_policy.get(v, (0,))[0] for v in all_versions)
+        print(f"  {'':4} {'TOTAL':<10} {total_target:>8}                        ~{total_target*90:>10} MB")
+        print()
+        safe_print("  Options:")
+        safe_print("    Enter a number [1–N] to edit that version's count")
+        safe_print("    [d] smart defaults  (2 for your active Python, 1 for rest)")
+        safe_print("    [0] disable ALL idle workers (max RAM savings)")
+        safe_print("    [q] back / done")
+        print("-" * 120)
+
+        resp = input("\n  Config> ").strip().lower()
+
+        if resp in ("q", "b", "back", ""):
+            break
+
+        elif resp == "0":
+            print()
+            confirm = input("  ⚠️  Disable ALL idle workers? This saves ~{:.0f} MB but slows cold starts. [y/N] ".format(
+                total_target * 90)).strip().lower()
+            if confirm == "y":
+                changed = 0
+                for ver in all_versions:
+                    unused, exe = idle_policy.get(ver, (0, ""))
+                    if exe and _set_idle_for_version(ver, exe, 0):
+                        idle_policy[ver] = (0, exe)
+                        changed += 1
+                safe_print(f"  ✅ Disabled idle workers for {changed} version(s).")
+                safe_print("  💡 Workers still running will be reaped when they time out.")
+            else:
+                safe_print("  No change.")
+
+        elif resp == "d":
+            # Smart defaults: detect active python from own executable
+            own_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+            changed = 0
+            for ver in all_versions:
+                unused, exe = idle_policy.get(ver, (0, ""))
+                if not exe:
+                    continue
+                new_count = 2 if ver == own_ver else 1
+                if _set_idle_for_version(ver, exe, new_count):
+                    idle_policy[ver] = (new_count, exe)
+                    safe_print(f"  ✅ Python {ver}: {new_count} worker(s)")
+                    changed += 1
+            if changed:
+                safe_print(f"\n  Smart defaults applied to {changed} version(s).")
+                safe_print(f"  (Active Python: {own_ver} → 2, others → 1)")
+            else:
+                safe_print("  ⚠️  Could not apply defaults — daemon may be unreachable.")
+
+        else:
+            # Try to parse as a menu number
+            try:
+                idx = int(resp) - 1
+                if not (0 <= idx < len(all_versions)):
+                    raise ValueError
+            except ValueError:
+                safe_print(f"  ⚠️  Unknown option: {resp!r}")
+                continue
+
+            ver = all_versions[idx]
+            current_count, exe = idle_policy.get(ver, (0, ""))
+            if not exe:
+                safe_print(f"  ⚠️  No executable path known for Python {ver}. "
+                            f"Run 'omnipkg daemon idle --python {ver} --count N' from CLI.")
+                continue
+
+            print()
+            safe_print(f"  Python {ver}  (current: {current_count} worker(s)  ≈ {current_count*90} MB idle)")
+            safe_print(f"  exe: {exe}")
+            print()
+            safe_print("  Enter new count (0 = disabled, recommended max = 4):")
+            raw = input(f"  Count [{current_count}]> ").strip()
+            if raw == "":
+                safe_print("  No change.")
+                continue
+            try:
+                new_count = int(raw)
+                if new_count < 0:
+                    raise ValueError
+            except ValueError:
+                safe_print(f"  ⚠️  Invalid count: {raw!r}  (must be 0 or a positive integer)")
+                continue
+
+            delta_mb = (new_count - current_count) * 90
+            sign = "+" if delta_mb >= 0 else ""
+            safe_print(f"  Change: {current_count} → {new_count} workers  ({sign}{delta_mb} MB estimated idle RAM)")
+            if new_count == 0:
+                safe_print("  ℹ️   Workers for this version will drain after the current idle timeout.")
+            confirm = input("  Apply? [Y/n] ").strip().lower()
+            if confirm in ("", "y", "yes"):
+                if _set_idle_for_version(ver, exe, new_count):
+                    idle_policy[ver] = (new_count, exe)
+                    safe_print(f"  ✅ Python {ver}: set to {new_count} worker(s).")
+                else:
+                    safe_print(f"  ❌ Failed to update — is the daemon running?")
+            else:
+                safe_print("  Cancelled.")
+
+
+def _run_interactive_controls(
+    workers: dict,
+    idle_workers_by_version: dict,
+    idle_policy: dict,
+    stale: list,
+    fat: list,
+):
+    """Top-level daemon management menu shown after the stats block."""
+    while True:
+        print()
+        print("=" * 120)
+        safe_print("🎛️  DAEMON CONTROLS")
+        print("=" * 120)
+        alerts = []
+        if stale:
+            alerts.append(f"⚠️  {len(stale)} stale worker(s) (>24h)")
+        if fat:
+            alerts.append(f"🐘 {len(fat)} fat worker(s) (>150 MB)")
+        if alerts:
+            safe_print("  Alerts:  " + "   ".join(alerts))
+            print()
+        safe_print("  [i]  Configure idle policy  ← change persistent RAM usage")
+        safe_print("  [k]  Kill workers            ← one-time process kill")
+        safe_print("  [q]  Quit / do nothing")
+        print("-" * 120)
+
+        resp = input("\n  > ").strip().lower()
+
+        if resp in ("q", "", "n", "no"):
+            break
+        elif resp == "i":
+            _menu_idle_config(idle_workers_by_version, idle_policy)
+        elif resp == "k":
+            _menu_kill(workers, idle_workers_by_version)
+        else:
+            safe_print(f"  ⚠️  Unknown option: {resp!r}")
+
+
 def print_stats(watch_mode=False):
     if watch_mode:
         clear_screen()
@@ -310,7 +618,7 @@ def print_stats(watch_mode=False):
     if gpu_summary:
         g = gpu_summary
         pct = (g["used_mb"] / g["total_mb"] * 100) if g["total_mb"] else 0
-        print(f"\n🎮 GPU: {g['util']}% util | VRAM {g['used_mb']}MB / {g['total_mb']}MB ({pct:.1f}%)")
+        safe_print(f"\n🎮 GPU: {g['util']}% util | VRAM {g['used_mb']}MB / {g['total_mb']}MB ({pct:.1f}%)")
 
     print()
     pid_map   = get_daemon_worker_info()
@@ -409,11 +717,41 @@ def print_stats(watch_mode=False):
 
     print("=" * 120)
 
+    # ── IDLE POLICY BLOCK ─────────────────────────────────────────────────
+    idle_policy = get_idle_policy()
+    if idle_policy:
+        print()
+        print("=" * 120)
+        safe_print("⚙️  IDLE WORKER POLICY  (persistent — survives daemon restarts)")
+        print("=" * 120)
+        safe_print("  Workers kept warm in the background so your first 8pkg command is instant.")
+        safe_print("  Each sleeping idle worker costs ~75–120 MB RSS.  Set count=0 to disable a version.")
+        print("-" * 120)
+        policy_total_workers = 0
+        for ver in sorted(idle_policy):
+            count, exe = idle_policy[ver]
+            policy_total_workers += count
+            # Show actual RAM for this version if we have live data
+            actual_ram_mb = None
+            if ver in idle_workers_by_version:
+                actual_ram_mb = sum(p["rss"] for p in idle_workers_by_version[ver]) / 1024
+            ram_str = f"  (actual: {actual_ram_mb:.0f} MB)" if actual_ram_mb is not None else ""
+            status = "✅" if count > 0 else "🔇"
+            print(f"  {status}  Python {ver:<6}  target: {count} worker(s){ram_str}")
+        print("-" * 120)
+        estimated_mb = policy_total_workers * 90
+        print(f"  Configured total:  {policy_total_workers} worker(s)  ≈ {estimated_mb} MB baseline idle RAM")
+        print()
+        safe_print("  💡 Change via CLI:")
+        safe_print("       8pkg daemon idle --python 3.11 --count 2   # keep 2 warm for 3.11")
+        safe_print("       8pkg daemon idle --python 3.9  --count 0   # disable for 3.9")
+        safe_print("       8pkg daemon idle --python all              # show full config")
+        print("=" * 120)
+
     if idle_workers_by_version and not watch_mode:
-        # ── STALE WORKER DETECTION ─────────────────────────────────────────
+        # ── STALE / FAT DETECTION ─────────────────────────────────────────
         stale = [(pv, p) for pv, procs in idle_workers_by_version.items()
                  for p in procs if p["elapsed"] > 86400]
-        # ── FAT WORKER DETECTION (loaded heavy packages) ───────────────────
         fat = [(pv, p) for pv, procs in idle_workers_by_version.items()
                for p in procs if p["rss"] / 1024 > 150]
 
@@ -431,88 +769,14 @@ def print_stats(watch_mode=False):
             for pv, p in fat:
                 print(f"  Python {pv} | PID {p['pid']:>6} | RAM: {format_memory(p['rss']):>8} | Age: {format_time(p['elapsed'])}")
 
-        # When running via daemon CLI worker, stdin is a pipe not a TTY.
-        # Check the env var set by the C dispatcher instead.
-        _is_tty = sys.stdin.isatty() or os.environ.get("_OMNIPKG_ISATTY") == "1"
-        if _is_tty:
+        # Use is_interactive_session() — the single source of truth that respects
+        # OMNIPKG_NONINTERACTIVE, CI, _OMNIPKG_ISATTY, Docker, and -y/--non-interactive.
+        from omnipkg.common_utils import is_interactive_session
+        if is_interactive_session():
             try:
-                # ── BUILD FULL KILL MENU ────────────────────────────────────
-                # Collect ALL workers (active + idle) into a numbered list
-                all_killable = []
-                for wt, procs in sorted(workers.items()):
-                    for p in procs:
-                        all_killable.append(("active", wt, p))
-                for pv, procs in sorted(idle_workers_by_version.items()):
-                    for p in procs:
-                        all_killable.append(("idle", f"Python {pv}", p))
-
-                print()
-                print("=" * 120)
-                safe_print("🎯 INTERACTIVE KILL MENU")
-                print("=" * 120)
-                safe_print("  Enter PIDs to kill, or use shortcuts:")
-                safe_print("  [a] = kill all stale (>24h)  [f] = kill all fat (>150MB)")
-                safe_print("  [A] = kill ALL idle           [q] = quit / do nothing")
-                safe_print("  Or enter comma-separated PIDs: 1234,5678")
-                print("-" * 120)
-                for i, (kind, label, p) in enumerate(all_killable):
-                    ram_mb = p["rss"] / 1024
-                    flag = ""
-                    if p["elapsed"] > 86400:
-                        flag += " ⚠️ STALE"
-                    if ram_mb > 150:
-                        flag += " 🐘 FAT"
-                    kind_icon = "⚙️ " if kind == "active" else "💤"
-                    print(f"  [{i+1:>2}] {kind_icon} {label:<25} "
-                          f"PID {p['pid']:>6} | RAM: {ram_mb:>7.1f}MB | "
-                          f"Age: {format_time(p['elapsed'])}{flag}")
-                print("-" * 120)
-
-                resp = input("\n  Kill> ").strip().lower()
-
-                to_kill = []
-                if resp in ("q", "", "n", "no"):
-                    print("  No action taken.")
-                elif resp == "a":
-                    to_kill = [p for _, _, p in all_killable if p["elapsed"] > 86400]
-                    safe_print(f"  Killing {len(to_kill)} stale workers...")
-                elif resp == "f":
-                    to_kill = [p for _, _, p in all_killable if p["rss"] / 1024 > 150]
-                    safe_print(f"  Killing {len(to_kill)} fat workers...")
-                elif resp == "a" or resp.upper() == "A":
-                    to_kill = [p for kind, _, p in all_killable if kind == "idle"]
-                    safe_print(f"  Killing ALL {len(to_kill)} idle workers...")
-                else:
-                    # Parse comma-separated PIDs or menu numbers
-                    requested = [x.strip() for x in resp.replace(" ", ",").split(",") if x.strip()]
-                    pid_lookup = {p["pid"]: p for _, _, p in all_killable}
-                    num_lookup = {str(i+1): p for i, (_, _, p) in enumerate(all_killable)}
-                    for r in requested:
-                        if r in pid_lookup:
-                            to_kill.append(pid_lookup[r])
-                        elif r in num_lookup:
-                            to_kill.append(num_lookup[r])
-                        else:
-                            print(f"  ⚠️  Unknown PID/number: {r}")
-
-                if to_kill:
-                    killed = 0
-                    for p in to_kill:
-                        try:
-                            if IS_WINDOWS:
-                                subprocess.run(["taskkill", "/F", "/PID", p["pid"]],
-                                               capture_output=True, check=False)
-                            else:
-                                import signal as _sig
-                                os.kill(int(p["pid"]), _sig.SIGTERM)
-                            print(f"  ✅ Killed PID {p['pid']} ({format_memory(p['rss'])})")
-                            killed += 1
-                        except Exception as e:
-                            print(f"  ❌ Failed PID {p['pid']}: {e}")
-                    safe_print(f"\n  Done: killed {killed}/{len(to_kill)} workers")
-                    if killed > 0:
-                        safe_print("  💡 Daemon will replenish idle pool automatically")
-
+                _run_interactive_controls(
+                    workers, idle_workers_by_version, idle_policy, stale, fat
+                )
             except (EOFError, KeyboardInterrupt):
                 print("\n  Cancelled.")
         else:

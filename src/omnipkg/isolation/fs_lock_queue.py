@@ -145,7 +145,7 @@ class FsOpLock:
             self._pkg_lock = None
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, *unused):
         if self._pkg_lock is not None:
             try:
                 self._pkg_lock.release()

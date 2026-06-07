@@ -998,7 +998,7 @@ class omnipkgMetadataGatherer:
                         if dist.metadata.get("Name") and dist.version in (version, _base_ver):
                             found_dists.append(dist)
                             if _dbg:
-                                print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
+                                safe_print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
                             continue
                         if _dbg:
                             print(f"[FAST-DISC] P1: version mismatch {dist.version} != {version}", flush=True)
@@ -1037,7 +1037,7 @@ class omnipkgMetadataGatherer:
                                 _bubble_found = True
                             if _dbg:
                                 _display_ver = getattr(dist, '_omnipkg_local_version', dist.version)
-                                print(f"[FAST-DISC] P2: ✅ found via bubble, version={_display_ver}", flush=True)
+                                safe_print(f"[FAST-DISC] P2: ✅ found via bubble, version={_display_ver}", flush=True)
                             break
                         except Exception as e:
                             if _dbg:
@@ -1062,14 +1062,14 @@ class omnipkgMetadataGatherer:
                             found_dists.append(dist)
                             _main_found = True
                             if _dbg:
-                                print(f"[FAST-DISC] P3: ✅ found in main env: {match}", flush=True)
+                                safe_print(f"[FAST-DISC] P3: ✅ found in main env: {match}", flush=True)
                             break
                     except Exception as e:
                         if _dbg:
                             print(f"[FAST-DISC] P3: PathDistribution failed for {match}: {e}", flush=True)
                         continue
             if _dbg and not _main_found:
-                print(f"[FAST-DISC] P3: ❌ not found in main env (tried {len(name_variants)} variants)", flush=True)
+                safe_print(f"[FAST-DISC] P3: ❌ not found in main env (tried {len(name_variants)} variants)", flush=True)
 
             # PRIORITY 4: Only if not found, do limited recursive search in multiversion_base
             if not any(
@@ -1089,7 +1089,7 @@ class omnipkgMetadataGatherer:
                             dist = PathDistribution(matches[0])
                             found_dists.append(dist)
                             if _dbg:
-                                print(f"[FAST-DISC] P4: ✅ found nested: {matches[0]}", flush=True)
+                                safe_print(f"[FAST-DISC] P4: ✅ found nested: {matches[0]}", flush=True)
                             break
                         except Exception as e:
                             if _dbg:
@@ -1100,7 +1100,7 @@ class omnipkgMetadataGatherer:
                 canonicalize_name(d.metadata.get("Name", "")) == canonical_name and d.version == version
                 for d in found_dists
             ):
-                print(f"[FAST-DISC] ❌ MISSED {pkg_spec} — not found anywhere", flush=True)
+                safe_print(f"[FAST-DISC] ❌ MISSED {pkg_spec} — not found anywhere", flush=True)
 
         if verbose:
             safe_print(
@@ -1209,16 +1209,7 @@ class omnipkgMetadataGatherer:
             return cached
 
         # Check if running in CI/CD (non-interactive)
-        ci_vars = [
-            "CI",
-            "CONTINUOUS_INTEGRATION",
-            "GITHUB_ACTIONS",
-            "GITLAB_CI",
-            "CIRCLECI",
-            "TRAVIS",
-            "JENKINS_HOME",
-        ]
-        is_ci = any(os.environ.get(var) for var in ci_vars) or not sys.stdin.isatty()
+        is_ci = not is_interactive_session()
 
         if is_ci:
             # CI/CD: Don't upgrade, just warn
@@ -1243,7 +1234,7 @@ class omnipkgMetadataGatherer:
         safe_print("")
 
         try:
-            response = input("    Auto-upgrade safety for this session? [Y/n]: ").strip().lower()
+            response = safe_input("    Auto-upgrade safety for this session? [Y/n]: ", default="n", auto_value="n").strip().lower()
             if response in ["", "y", "yes"]:
                 safe_print("    ✅ Will auto-upgrade safety tool when needed")
                 self._cache_safety_decision(True)
@@ -2083,11 +2074,11 @@ class omnipkgMetadataGatherer:
         #   wheel_abi_tag      → full wheel tag for cross-machine ABI safety
         #   global_cache_key   → deterministic slot name in ~/.cache/omnipkg/store/
         #   symlink_targets    → exact dirs/files to symlink into a bubble
-        #   resolved_bubble_deps → lock snapshot of what's installed with this pkg
+        #   resolved_deps        → lock snapshot of what's installed with this pkg
         #
         # Ref-counting query pattern (SQLite):
         #   SELECT COUNT(*) FROM hash_store
-        #   WHERE field='resolved_bubble_deps' AND value LIKE '%"markupsafe": "1.1.1"%'
+        #   WHERE field='resolved_deps' AND value LIKE '%"markupsafe": "1.1.1"%'
         #   → 0 means the slot is safe to evict from the global cache.
 
         context_info = self._get_install_context(dist)
@@ -2098,8 +2089,8 @@ class omnipkgMetadataGatherer:
         metadata["symlink_targets"] = json.dumps(
             self._get_top_level_symlink_targets(dist)
         )
-        resolved_neighbors = self._get_resolved_bubble_neighbors(dist, context_info)
-        metadata["resolved_bubble_deps"] = json.dumps(resolved_neighbors)
+        resolved_neighbors = self._get_resolved_deps(dist, context_info)
+        metadata["resolved_deps"] = json.dumps(resolved_neighbors)
 
         # Convenience flag: is this slot safe to hard-deduplicate across machines?
         # True only when the package is pure-python (record_hash stable across OS).
@@ -2506,6 +2497,206 @@ class omnipkgMetadataGatherer:
             candidates.extend(common_mappings[canonical])
         return candidates
 
+    # ── NumPy ABI probing (ELF binary scan) ─────────────────────────────────
+    # Maps NPY_FEATURE_VERSION (the C-API version baked into compiled extensions)
+    # to the compatible numpy release range.  Used by the daemon to select the
+    # right numpy bubble and by the CAS to reject illegal reflink sharing between
+    # torch builds that need non-overlapping numpy versions.
+    _NPY_ABI_MAP: Dict[int, Tuple[str, str]] = {
+        0x7:  ("1.0",  "1.6"),
+        0x8:  ("1.7",  "1.7"),
+        0x9:  ("1.8",  "1.8"),
+        0xa:  ("1.9",  "1.9"),
+        0xb:  ("1.10", "1.11"),
+        0xc:  ("1.12", "1.13"),
+        0xd:  ("1.14", "1.15"),
+        0xe:  ("1.16", "1.19"),
+        0xf:  ("1.20", "1.23"),
+        0x10: ("1.24", "1.25"),
+        0x11: ("1.26", "1.26"),
+        0x12: ("2.0",  "2.0"),
+        0x13: ("2.1",  "9.9"),
+    }
+
+    @staticmethod
+    def _elf_parse_sections(data: bytes) -> Dict[str, Tuple[int, int, int, int]]:
+        """
+        Parse ELF64 section headers from raw bytes.
+        Returns {section_name: (sh_type, vma, file_offset, size)}.
+        Silently returns {} on any parse error (non-ELF inputs, 32-bit ELF, etc.).
+        """
+        import struct as _struct
+        try:
+            if data[:4] != b'\x7fELF' or data[4] != 2:   # EI_CLASS=2 → 64-bit only
+                return {}
+            e_shoff     = _struct.unpack_from('<Q', data, 0x28)[0]
+            e_shentsize = _struct.unpack_from('<H', data, 0x3a)[0]
+            e_shnum     = _struct.unpack_from('<H', data, 0x3c)[0]
+            e_shstrndx  = _struct.unpack_from('<H', data, 0x3e)[0]
+            sh_shstr    = e_shoff + e_shstrndx * e_shentsize
+            shstr_off   = _struct.unpack_from('<Q', data, sh_shstr + 0x18)[0]
+            shstr_size  = _struct.unpack_from('<Q', data, sh_shstr + 0x20)[0]
+            shstr = data[shstr_off:shstr_off + shstr_size]
+            sections: Dict[str, Tuple[int, int, int, int]] = {}
+            for i in range(e_shnum):
+                sh = e_shoff + i * e_shentsize
+                nm_off  = _struct.unpack_from('<I', data, sh)[0]
+                sh_type = _struct.unpack_from('<I', data, sh + 0x04)[0]
+                vma     = _struct.unpack_from('<Q', data, sh + 0x10)[0]
+                foff    = _struct.unpack_from('<Q', data, sh + 0x18)[0]
+                size    = _struct.unpack_from('<Q', data, sh + 0x20)[0]
+                nul = shstr.find(b'\x00', nm_off)
+                name = shstr[nm_off:nul].decode('ascii', errors='replace')
+                sections[name] = (sh_type, vma, foff, size)
+            return sections
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _elf_scan_numpy_abi(data: bytes, sections: Dict) -> Optional[int]:
+        import struct as _struct
+        from collections import Counter as _Counter
+
+        def _scan_window(window):
+            hits = []
+            for j in range(len(window) - 5):
+                b0, b1 = window[j], window[j + 1]
+                if b0 == 0x83 and (b1 & 0xf8) == 0xf8:
+                    imm = window[j + 2]
+                    if 0xe <= imm <= 0x13:
+                        hits.append(imm)
+                elif b0 == 0x81 and (b1 & 0xf8) == 0xf8:
+                    imm = _struct.unpack_from('<I', window, j + 2)[0]
+                    if 0xe <= imm <= 0x13:
+                        hits.append(imm)
+                elif 0xb8 <= b0 <= 0xbf:
+                    imm = _struct.unpack_from('<I', window, j + 1)[0]
+                    if 0xe <= imm <= 0x13:
+                        hits.append(imm)
+            return hits
+
+        text_entry = sections.get('.text')
+        if not text_entry:
+            return None
+        unused, text_vma, text_foff, text_size = text_entry
+        text_data = data[text_foff:text_foff + text_size]
+        all_hits = []
+
+        for anchor in (b'numpy.core._multiarray_umath', b'numpy.core.multiarray'):
+            idx = data.find(anchor)
+            if idx == -1:
+                continue
+            str_vma = None
+            for unused, (stype, vma, foff, size) in sections.items():
+                if foff > 0 and foff <= idx < foff + size:
+                    str_vma = vma + (idx - foff)
+                    break
+            if str_vma is None:
+                continue
+            candidates = []
+            for i in range(len(text_data) - 7):
+                if text_data[i] == 0x48 and text_data[i + 1] == 0x8d:
+                    disp = _struct.unpack_from('<i', text_data, i + 3)[0]
+                    if text_vma + i + 7 + disp == str_vma:
+                        candidates.append(i)
+            for func_off in candidates:
+                window = text_data[max(0, func_off - 512):func_off + 512]
+                all_hits.extend(_scan_window(window))
+            if all_hits:
+                break
+
+        if not all_hits:
+            fail_str = b'Failed to initialize NumPy'
+            idx = data.find(fail_str)
+            if idx != -1:
+                str_vma = None
+                for unused, (stype, vma, foff, size) in sections.items():
+                    if foff > 0 and foff <= idx < foff + size:
+                        str_vma = vma + (idx - foff)
+                        break
+                if str_vma:
+                    for i in range(len(text_data) - 7):
+                        if text_data[i] == 0x48 and text_data[i + 1] == 0x8d:
+                            disp = _struct.unpack_from('<i', text_data, i + 3)[0]
+                            if text_vma + i + 7 + disp == str_vma:
+                                window = text_data[max(0, i - 512):i + 512]
+                                all_hits.extend(_scan_window(window))
+
+        if not all_hits:
+            return None
+        return _Counter(all_hits).most_common(1)[0][0]
+
+
+    def _probe_numpy_abi(self, dist: importlib.metadata.Distribution) -> Tuple[Optional[int], Optional[Tuple[str, str]]]:
+        """
+        Given a distribution, scan its native extensions for a baked-in
+        NPY_FEATURE_VERSION.  Works for torch (libtorch_python.so), tensorflow,
+        and any other package that embeds a numpy C-API version check.
+
+        Returns (npy_abi_version: int | None, (min_ver, max_ver) | None).
+        Result is cheap — ELF parsing only; no imports, no subprocess.
+        """
+        if not dist or not dist.files:
+            return None, None
+
+        # Priority order: the canonical torch bridge .so first, then any .so
+        # that mentions 'numpy' in its name, then any .so in the package.
+        so_candidates: List[Path] = []
+        priority_names = ('libtorch_python.so', '_multiarray_umath', 'numpy_')
+
+        try:
+            bubble_root = Path(dist._path).parent
+            pkg_name_canon = canonicalize_name(dist.metadata.get('Name') or '')
+
+            # 1. Well-known paths
+            for candidate_rel in (
+                f'{pkg_name_canon}/lib/libtorch_python.so',
+                'torch/lib/libtorch_python.so',
+            ):
+                p = bubble_root / candidate_rel
+                if p.exists():
+                    so_candidates.append(p)
+
+            # 2. Walk RECORD for .so files — prioritise by name hint
+            priority: List[Path] = []
+            fallback: List[Path] = []
+            for file_path in (dist.files or []):
+                fp_str = str(file_path)
+                if not fp_str.endswith('.so') and '.so.' not in fp_str:
+                    continue
+                abs_p = dist.locate_file(file_path)
+                if not abs_p or not abs_p.exists():
+                    continue
+                if any(h in fp_str for h in priority_names):
+                    priority.append(abs_p)
+                else:
+                    fallback.append(abs_p)
+            so_candidates.extend(priority)
+            so_candidates.extend(fallback)
+
+        except Exception:
+            return None, None
+
+        seen: set = set()
+        for so_path in so_candidates:
+            try:
+                rp = so_path.resolve()
+                if rp in seen:
+                    continue
+                seen.add(rp)
+                data = so_path.read_bytes()
+                sections = self._elf_parse_sections(data)
+                if not sections:
+                    continue
+                ver = self._elf_scan_numpy_abi(data, sections)
+                if ver is not None:
+                    return ver, self._NPY_ABI_MAP.get(ver)
+            except Exception:
+                continue
+        return None, None
+
+    # ── END NumPy ABI probing ─────────────────────────────────────────────
+
     def _build_binary_info(self, dist: importlib.metadata.Distribution) -> Dict:
         """
         Scans the dist RECORD for native extension files and parses the platform
@@ -2516,12 +2707,20 @@ class omnipkgMetadataGatherer:
           - binary_extensions: JSON  — list of relative paths to native files
           - platform_tag     : str   — e.g. "linux_x86_64", "win_amd64", or "none"
           - reload_safe      : bool  — False when has_c_extension is True (loader hint)
+          - numpy_abi_version: int | None  — NPY_FEATURE_VERSION baked into .so
+          - numpy_abi_range  : JSON "[min, max]" | "null"  — compatible numpy range
+            Used by the daemon for numpy bubble selection and by the CAS to detect
+            when two builds require non-overlapping numpy versions and cannot share
+            a reflink slot.
         """
         result: Dict[str, object] = {
             "has_c_extension": False,
             "binary_extensions": "[]",
             "platform_tag": "none",
             "reload_safe": True,
+            # numpy ABI fields — populated below for packages with C extensions
+            "numpy_abi_version": None,
+            "numpy_abi_range": "null",
         }
         if not dist or not dist.files:
             return result
@@ -2536,6 +2735,15 @@ class omnipkgMetadataGatherer:
         result["has_c_extension"] = bool(native_files)
         result["binary_extensions"] = json.dumps(native_files)
         result["reload_safe"] = not bool(native_files)
+
+        # Probe numpy ABI requirement for any package with C extensions.
+        # This is fast (pure ELF byte scan, no imports) so we run it for all
+        # compiled packages, not just torch.  Non-numpy packages return (None, None).
+        if native_files:
+            npy_ver, npy_range = self._probe_numpy_abi(dist)
+            if npy_ver is not None:
+                result["numpy_abi_version"] = npy_ver
+                result["numpy_abi_range"] = json.dumps(list(npy_range)) if npy_range else "null"
 
         # Parse platform tag from the dist-info dirname, e.g.:
         #   numpy-1.26.4-cp311-cp311-linux_x86_64.dist-info  -> "linux_x86_64"
@@ -2652,6 +2860,20 @@ class omnipkgMetadataGatherer:
           - has_c_extension  (pure vs compiled copy divergence)
           - record_hash      (byte-level identity — catches glibc/OS build diffs)
           - wheel_abi_tag    (manylinux vs musllinux vs pure-python)
+          - numpy_abi_version (NPY_FEATURE_VERSION baked into the .so, if any)
+
+        The last field is the critical CAS correctness fix: two torch builds that
+        differ only in their numpy C-API bake-in (e.g. 0xe vs 0xf) must NOT share
+        a global cache slot or a reflink — they need different numpy bubbles at
+        runtime and are therefore not interchangeable.  record_hash already catches
+        this at the byte level, but storing numpy_abi_version explicitly lets the
+        CAS rule engine reason about numpy overlap without re-reading any binary:
+
+            # Can bubble A reuse torch from bubble B?
+            if a.numpy_abi_version != b.numpy_abi_version:
+                # different numpy range required — cannot reflink, need new slot
+            elif ranges_overlap(a.numpy_abi_range, b.numpy_abi_range):
+                # same or compatible range — safe to reflink if record_hash matches
 
         Two instances sharing the same content_hash are safe to deduplicate /
         symlink in the global flat cache without risk of ABI corruption.
@@ -2668,6 +2890,9 @@ class omnipkgMetadataGatherer:
             # Include byte-level identity fields from the new global cache helpers
             record_hash = self._get_exact_record_hash(dist)
             wheel_abi_tag = self._get_wheel_abi_tag(dist)
+            # Probe numpy ABI version — cheap ELF scan, result is None for pure-python
+            # packages and for compiled packages that don't embed a numpy C-API check.
+            npy_abi_ver, unused = self._probe_numpy_abi(dist) if has_c_ext else (None, None)
             fingerprint = json.dumps(
                 {
                     "name": name,
@@ -2677,6 +2902,8 @@ class omnipkgMetadataGatherer:
                     "has_c_ext": has_c_ext,
                     "record_hash": record_hash,
                     "wheel_abi_tag": wheel_abi_tag,
+                    # null for packages with no numpy C-API dependency
+                    "numpy_abi_version": npy_abi_ver,
                 },
                 sort_keys=True,
             )
@@ -2866,32 +3093,71 @@ class omnipkgMetadataGatherer:
             pass
         return "any"
 
-    def _get_resolved_bubble_neighbors(
+    def _get_resolved_deps(
         self, dist: importlib.metadata.Distribution, context_info: Dict
     ) -> Dict[str, str]:
         """
-        When this dist lives inside a bubble, scan its sibling dist-info
-        directories to build a ``{canonical_name: version}`` snapshot of
-        everything installed alongside it.
+        Build a ``{canonical_name: version}`` snapshot of everything installed
+        alongside (or under) this package.
 
-        For bubble installs: grab all co-installed dist-infos (full sibling scan).
-        For nested installs: BFS-walk only this pkg's own Requires-Dist tree so
-        we don't bleed the owner package's unrelated deps into the snapshot.
+        For active/main-env installs: BFS through Requires-Dist using all dists
+        in the main site-packages as the available set.  Populates the same field
+        that was previously empty for active packages, enabling loader precision
+        for the stable-main stash path and global-cache ref-counting.
 
-        This is the runtime lock — it tells the loader exactly which version
-        of every dep is present in *this* bubble so it can cloak conflicts
-        against the main environment without guessing.
+        For bubble installs: full sibling scan (all *.dist-info in bubble dir).
+        For nested installs: BFS only through this pkg's own dep tree so we don't
+        bleed the owner package's unrelated deps into the snapshot.
+
+        Self-inclusion (the pkg itself in the dict) is preserved across all types
+        -- it makes the dict self-describing and simplifies loader queries.
 
         Used for:
         - Global cache ref-counting  (query: "who depends on markupsafe==1.1.1?")
-        - Loader precision  (inject only the deps this bubble actually resolved)
+        - Loader precision  (inject only the deps this bubble/env actually resolved)
         - MCP tooling       (explain the exact isolation state of a bubble)
+        - stable-main stash path  (know which transitive deps to copy into bubble)
         """
         install_type = context_info.get("install_type")
-        if install_type not in ("bubble", "nested"):
+        if install_type not in ("bubble", "nested", "active"):
             return {}
+        from importlib.metadata import PathDistribution, distributions
+        from packaging.requirements import Requirement
         resolved: Dict[str, str] = {}
         try:
+            if install_type == "active":
+                # BFS through this pkg's Requires-Dist using all dists in
+                # the main site-packages as the available set.
+                # No subprocess — pure in-process PathDistribution walk.
+                site_packages = str(
+                    Path(self.config.get("site_packages_path", "")).resolve()
+                )
+                available: Dict[str, PathDistribution] = {}
+                for d in distributions(path=[site_packages]):
+                    n = d.metadata.get("Name", "")
+                    if n:
+                        available[canonicalize_name(n)] = d
+                visited: set = set()
+                queue = [dist]
+                while queue:
+                    current = queue.pop()
+                    c_name = canonicalize_name(current.metadata.get("Name", ""))
+                    if c_name in visited:
+                        continue
+                    visited.add(c_name)
+                    resolved[c_name] = current.version
+                    for req_str in (current.metadata.get_all("Requires-Dist") or []):
+                        try:
+                            req = Requirement(req_str)
+                            if req.marker and not req.marker.evaluate({"extra": ""}):
+                                continue
+                            dep_name = canonicalize_name(req.name)
+                            if dep_name not in visited and dep_name in available:
+                                queue.append(available[dep_name])
+                        except Exception:
+                            continue
+                return resolved
+
             bubble_root = Path(dist._path).parent
 
             if install_type == "bubble":
@@ -2921,7 +3187,6 @@ class omnipkgMetadataGatherer:
                         continue
 
                 # BFS only through this pkg's own dep tree
-                from packaging.requirements import Requirement
                 visited: set = set()
                 queue = [dist]
                 while queue:

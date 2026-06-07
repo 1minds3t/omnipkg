@@ -171,6 +171,13 @@ def _import_numpy_from_main_env(name, globals, locals, fromlist, level):
         # The snapshot objects are kept alive by _numpy_snapshot dict which
         # lives on the stack of the outer genius_import call — that's enough.
         return result
+    except ModuleNotFoundError:
+        # Main-env numpy is not available (e.g. stripped worker with no main
+        # site-packages). Restore bubble paths and load numpy from the bubble
+        # so torch/tensorflow can finish their C extension init.
+        sys.modules.update(_numpy_snapshot)
+        sys.path[:] = saved_path
+        return _original_import_func(name, globals, locals, fromlist, level)
     except Exception:
         # Import from main-env failed — restore bubble numpy and try again
         sys.modules.update(_numpy_snapshot)

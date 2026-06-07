@@ -208,7 +208,7 @@ class TestIsPortActuallyFree:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind(("127.0.0.1", 0))
-            _, port = sock.getsockname()
+            unused, port = sock.getsockname()
             # On Windows SO_REUSEADDR is weaker — may not block a second bind.
             # We skip rather than fail on that platform edge-case.
             if not fpf.is_windows():
@@ -284,14 +284,14 @@ SIMPLE_FLASK_APP = textwrap.dedent("""\
 
 class TestPatchFlaskCode:
     def test_port_injected_into_patched_code(self, fpf):
-        patched, port, _ = fpf.patch_flask_code(SIMPLE_FLASK_APP)
+        patched, port, unused = fpf.patch_flask_code(SIMPLE_FLASK_APP)
         assert f"port={port}" in patched, (
             f"port={port} not found in patched code:\n{patched}"
         )
         fpf.release_port(port)
 
     def test_debug_false_injected(self, fpf):
-        patched, port, _ = fpf.patch_flask_code(SIMPLE_FLASK_APP)
+        patched, port, unused = fpf.patch_flask_code(SIMPLE_FLASK_APP)
         assert "debug=False" in patched
         fpf.release_port(port)
 
@@ -300,7 +300,7 @@ class TestPatchFlaskCode:
         CRITICAL for Windows: use_reloader=True spawns a second process that
         cannot be cleanly killed on Windows. Must always be False.
         """
-        patched, port, _ = fpf.patch_flask_code(SIMPLE_FLASK_APP)
+        patched, port, unused = fpf.patch_flask_code(SIMPLE_FLASK_APP)
         assert "use_reloader=False" in patched, (
             f"use_reloader=False missing — Windows process cleanup will break!\n{patched}"
         )
@@ -308,13 +308,13 @@ class TestPatchFlaskCode:
 
     def test_code_without_app_run_returned_unchanged(self, fpf):
         code = "from flask import Flask\napp = Flask(__name__)\n"
-        patched, port, _ = fpf.patch_flask_code(code)
+        patched, port, unused = fpf.patch_flask_code(code)
         assert patched == code
         fpf.release_port(port)
 
     def test_port_is_unique_per_call(self, fpf):
-        _, p1, _ = fpf.patch_flask_code(SIMPLE_FLASK_APP)
-        _, p2, _ = fpf.patch_flask_code(SIMPLE_FLASK_APP)
+        unused, p1, unused = fpf.patch_flask_code(SIMPLE_FLASK_APP)
+        unused, p2, unused = fpf.patch_flask_code(SIMPLE_FLASK_APP)
         assert p1 != p2, f"Two patch_flask_code() calls returned same port {p1}"
         fpf.release_port(p1)
         fpf.release_port(p2)
@@ -325,7 +325,7 @@ class TestPatchFlaskCode:
         On Windows, Path objects stringify with backslashes. If any path ends up
         raw in the generated code string it will break the Python source.
         """
-        patched, port, _ = fpf.patch_flask_code(SIMPLE_FLASK_APP)
+        patched, port, unused = fpf.patch_flask_code(SIMPLE_FLASK_APP)
         # The patched source itself (the app.run line) should not have backslashes
         run_line = [l for l in patched.splitlines() if "app.run" in l]
         assert run_line, "No app.run line found in patched code"
@@ -755,7 +755,7 @@ class TestSubprocessEncoding:
         Spawn a subprocess that prints UTF-8 and verify the parent receives it
         without corruption. This is the integration version of the encoding test.
         """
-        code = "import sys; print('✅ こんにちは 🐍', flush=True)"
+        code = "import sys; safe_print('✅ こんにちは 🐍', flush=True)"
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         result = subprocess.run(

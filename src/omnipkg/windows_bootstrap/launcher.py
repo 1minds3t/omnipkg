@@ -24,7 +24,7 @@ def get_vs_env():
     env = os.environ.copy()
     for line in r.stdout.splitlines():
         if '=' in line:
-            k, _, v = line.partition('=')
+            k, unused, v = line.partition('=')
             env[k.strip()] = v.strip()
     return env
 

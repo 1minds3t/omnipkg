@@ -521,7 +521,7 @@ class TestEnsureNativeShims:
     def test_calling_twice_does_not_raise(self, dispatcher, tmp_path):
         """Calling _ensure_native_shims() twice must not raise any exception."""
         with patch.dict(os.environ, {"OMNIPKG_VENV_ROOT": str(tmp_path)}):
-            for _ in range(2):
+            for unused in range(2):
                 try:
                     dispatcher._ensure_native_shims()
                 except SystemExit:

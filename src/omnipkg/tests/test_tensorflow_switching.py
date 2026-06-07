@@ -536,16 +536,21 @@ def _get_tf_client_and_exe(config_manager):
         from omnipkg.isolation.worker_daemon import DaemonClient
         _TF_CLIENT = DaemonClient()
     if _TF_PYTHON_EXE is None:
-        import subprocess as _sp
+        import subprocess as _sp, os
+        env = {**os.environ, "OMNIPKG_NONINTERACTIVE": "1"}
         result = _sp.run(
             ["omnipkg", "info", "python"],
             capture_output=True, text=True,
-            encoding="utf-8", errors="replace"
+            encoding="utf-8", errors="replace",
+            env=env,
         )
         for line in result.stdout.splitlines():
-            if "Python 3.11:" in line:
-                _TF_PYTHON_EXE = line.split(":", 1)[1].strip().split()[0]
-                break
+            if "3.11" in line:
+                parts = line.split()
+                candidate = parts[-1]
+                if "/" in candidate and "python" in candidate.lower():
+                    _TF_PYTHON_EXE = candidate
+                    break
         if not _TF_PYTHON_EXE:
             raise RuntimeError("Python 3.11 not found in registry")
     return _TF_CLIENT, _TF_PYTHON_EXE
@@ -644,7 +649,7 @@ def phase_daemon_tf(config_manager) -> tuple[bool, dict, dict]:
                 ["8pkg", "daemon", "start"],
                 stdout=_sp.DEVNULL, stderr=_sp.DEVNULL
             )
-            for _ in range(60):
+            for unused in range(60):
                 time.sleep(0.5)
                 if client.status().get("success"):
                     break

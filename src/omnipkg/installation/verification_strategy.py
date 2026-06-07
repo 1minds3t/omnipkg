@@ -372,6 +372,24 @@ class SmartVerificationStrategy:
             if not any((Path(p) / n).exists() for n in _staged_names)
         ]
 
+        # Some packages (triton, pytorch-lightning) import setuptools at load time
+        # but don't declare it as a dep. Inject its location from main site-packages
+        # into safe_parent_paths so the sterile subprocess can find it.
+        _NEEDS_SETUPTOOLS = {"torch", "triton", "pytorch_lightning", "pytorch-lightning"}
+        _staged_pkg_names = {
+            d.name.split("-")[0].lower().replace("-", "_")
+            for d in Path(staging_path).iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        } if Path(staging_path).exists() else set()
+        if _staged_pkg_names & {n.replace("-", "_") for n in _NEEDS_SETUPTOOLS}:
+            try:
+                import setuptools as _st
+                _st_path = str(Path(_st.__file__).parent.parent)
+                if _st_path not in safe_parent_paths:
+                    safe_parent_paths = [_st_path] + safe_parent_paths
+            except ImportError:
+                pass
+
         worker_script = """
 import sys, json, importlib, traceback
 

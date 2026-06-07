@@ -158,7 +158,7 @@ class SharedWatchFlag:
             # WINDOWS FIX: If workers are still holding handles, unlink fails silently.
             # We just attach to the existing block and reset it.
             shm = shared_memory.SharedMemory(create=False, name=SHM_FLAG_NAME)
-            ver, _, _ = struct.unpack_from(_FLAG_STRUCT, shm.buf, 0)
+            ver, unused, unused = struct.unpack_from(_FLAG_STRUCT, shm.buf, 0)
             # Reset dirty=0, update watcher_pid=current PID, keep existing version
             struct.pack_into(_FLAG_STRUCT, shm.buf, 0, ver, 0, os.getpid())
 
@@ -184,21 +184,21 @@ class SharedWatchFlag:
         return struct.unpack_from(_FLAG_STRUCT, self._shm.buf, 0)
 
     def is_dirty(self) -> bool:
-        _, dirty, _ = self._read()
+        unused, dirty, unused = self._read()
         return dirty != 0
 
     def version(self) -> int:
-        ver, _, _ = self._read()
+        ver, unused, unused = self._read()
         return ver
 
     # ── writes (watcher side) ────────────────────────────────────────────────
 
     def mark_dirty(self):
-        ver, _, pid = self._read()
+        ver, unused, pid = self._read()
         struct.pack_into(_FLAG_STRUCT, self._shm.buf, 0, ver + 1, 1, pid)
 
     def mark_clean(self):
-        ver, _, pid = self._read()
+        ver, unused, pid = self._read()
         struct.pack_into(_FLAG_STRUCT, self._shm.buf, 0, ver + 1, 0, pid)
 
     # ── reads (FFI worker side) ───────────────────────────────────────────────
@@ -240,7 +240,7 @@ class SharedWatchFlag:
         grace-period check that remains as a secondary guard).
         """
         epoch_ms = int(time.monotonic() * 1000)
-        ver, dirty, _ = self._read()
+        ver, dirty, unused = self._read()
         # Negative epoch_ms = "our write" sentinel.  Watcher checks _is_our_write()
         # and clears the sentinel after suppressing exactly one event.
         struct.pack_into(_FLAG_STRUCT, self._shm.buf, 0, ver, dirty, -epoch_ms)
@@ -701,7 +701,7 @@ class MtimeFallbackWatcher:
                         continue
 
                     # Check grace period via flag's our_write sentinel
-                    _, _, pid_slot = struct.unpack_from(_FLAG_STRUCT, self._flag._shm.buf, 0)
+                    unused, unused, pid_slot = struct.unpack_from(_FLAG_STRUCT, self._flag._shm.buf, 0)
                     if pid_slot < 0:
                         our_write_ms = -pid_slot
                         now_ms = int(time.monotonic() * 1000)

@@ -723,6 +723,26 @@ def is_interactive_session():
     return True
 
 
+def is_verbose() -> bool:
+    """
+    Returns True if verbose output is enabled.
+
+    Set by any of:
+      - 8pkg --verbose / -V          (CLI flag — writes OMNIPKG_VERBOSE=1 to env)
+      - OMNIPKG_VERBOSE=1            (env var — set it directly in scripts/CI)
+      - OMNIPKG_DEBUG=1              (debug mode implies verbose)
+
+    Usage (anywhere, no args object needed):
+      from omnipkg.common_utils import is_verbose
+      if is_verbose():
+          print(f"[DETAIL] ...")
+    """
+    return (
+        os.environ.get("OMNIPKG_VERBOSE", "0") == "1"
+        or os.environ.get("OMNIPKG_DEBUG", "0") == "1"
+    )
+
+
 # ── Daemon stdin relay ────────────────────────────────────────────────────────
 # When the CLI runs inside a PersistentWorker the transport is plain
 # line-delimited text JSON — exactly what _reader_thread already consumes
@@ -932,6 +952,27 @@ def _relative_to_win(path: Path, base: Path) -> Path:
     if p.startswith(b):
         return Path(str(path.resolve())[len(str(base.resolve())):].lstrip('/\\'))
     raise ValueError(f"{path} is not relative to {base}")
+
+from packaging.utils import canonicalize_name as _canonicalize_name
+
+def pkg_canonical(name: str) -> str:
+    """Canonical package name for comparisons and storage keys (PEP 503)."""
+    return _canonicalize_name(name)
+
+def pkg_dist_info_stems(name: str, version: str) -> list[str]:
+    """
+    All plausible dist-info directory name stems for filesystem globs.
+    e.g. 'importlib-metadata-8.7.0' and 'importlib_metadata-8.7.0'
+    """
+    canonical = _canonicalize_name(name)
+    underscored = canonical.replace("-", "_")
+    stems = {f"{canonical}-{version}", f"{underscored}-{version}"}
+    return list(stems)
+
+def pkg_dir_stems(name: str) -> list[str]:
+    """All plausible bare directory name variants for site-packages globs."""
+    canonical = _canonicalize_name(name)
+    return list({canonical, canonical.replace("-", "_")})
 
 class ConfigGuard:
     """
