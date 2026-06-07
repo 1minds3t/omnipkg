@@ -149,12 +149,12 @@ def run_fast_test():
 
         print_header("FINAL RESULTS")
         for k, v in results.items():
-            print(f"{k:<15}: {'✅ PASSED' if v else '❌ FAILED'}")
+            safe_print(f"{k:<15}: {'✅ PASSED' if v else '❌ FAILED'}")
 
     except KeyboardInterrupt:
-        print("\n🛑 Interrupted.")
+        safe_print("\n🛑 Interrupted.")
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        safe_print(f"\n❌ Error: {e}")
         traceback.print_exc()
 
 if __name__ == "__main__":

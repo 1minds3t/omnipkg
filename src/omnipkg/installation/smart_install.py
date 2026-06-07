@@ -46,7 +46,7 @@ except ImportError:
 try:
     from omnipkg.i18n import _
 except ImportError:
-    _ = lambda s: s  # noqa: E731
+    unused = lambda s: s  # noqa: E731
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ class _BubbleLock:
             self._fd = None
             raise BubbleLockBusy(f"Another process is already creating bubble for {self.path}")
         return self
-    def __exit__(self, *_):
+    def __exit__(self, *unused):
         if self._fd:
             if _sys.platform != "win32":
                 fcntl.flock(self._fd, fcntl.LOCK_UN)
@@ -532,7 +532,7 @@ class SmartInstaller:
         versions = self.multiversion_base
 
         def _plan_callback(plan):
-            if any(a == 'remote' for _, _, a in plan):
+            if any(a == 'remote' for unused, unused, a in plan):
                 return False  # needs network, let uv handle it
 
             coming_in = [(n, v) for n, v, a in plan if a == 'cached']

@@ -350,7 +350,7 @@ class TestPlanEntryContract:
     def test_action_values_within_known_set(self) -> None:
         _header("Plan entry: action in known set")
         for entry in self._make_entries():
-            _, _, action = entry
+            unused, unused, action = entry
             if action in VALID_ACTIONS:
                 _ok(action)
             else:
@@ -627,7 +627,7 @@ class TestRealInstallPlanIntegration:
             return False  # let Rust proceed
 
         uv_ffi.set_plan_callback(capture_plan)
-        rc, _, stderr, _ = uv_ffi.run(
+        rc, unused, stderr, unused = uv_ffi.run(
             f"pip install rich==14.3.3 --target {bubble_dir} --quiet"
         )
 
@@ -662,7 +662,7 @@ class TestRealInstallPlanIntegration:
             return False
 
         uv_ffi.set_plan_callback(capture_plan)
-        rc, _, stderr, _ = uv_ffi.run(
+        rc, unused, stderr, unused = uv_ffi.run(
             f"pip install rich==15.0.0 --target {bubble_dir} --reinstall --quiet"
         )
 
@@ -689,7 +689,7 @@ class TestRealInstallPlanIntegration:
             pytest.skip("uv_ffi not available")
 
         uv_ffi.set_plan_callback(lambda e: False)
-        rc, _, stderr, _ = uv_ffi.run(
+        rc, unused, stderr, unused = uv_ffi.run(
             f"pip install rich==15.0.0 --target {bubble_dir} --quiet"
         )
         assert rc == 0, f"Install failed: {stderr}"
@@ -722,17 +722,6 @@ class TestRealInstallPlanIntegration:
         )
         _ok(f"dist-info present: {dist_infos[0].name}")
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "uv does not currently wipe stale package dirs (pkg dir present, "
-            "dist-info absent) before installing into --target.  "
-            "Fix requires either: (a) Rust-side check in execute_plan() before "
-            "uv_installer::Installer::new(), or (b) Python healer pre-scanning "
-            "target dir before calling run().  "
-            "Remove this xfail marker once the fix lands."
-        ),
-    )
     def test_stale_dir_healed_before_install(self, bubble_dir: Path) -> None:
         """
         Confirm that a stale package dir (rich/ exists, no dist-info) is wiped
@@ -752,7 +741,8 @@ class TestRealInstallPlanIntegration:
             print(list(Path('/tmp/stale_test/rich').iterdir()))
             "
         """
-        _header("Integration: stale-dir heal before fresh install [xfail until Rust fix]")
+        _header("Integration: stale-dir heal before fresh install")
+
         try:
             import uv_ffi
         except ImportError:
@@ -764,7 +754,7 @@ class TestRealInstallPlanIntegration:
         (stale / "STALE_MARKER.py").write_text("# should not survive")
 
         uv_ffi.set_plan_callback(lambda e: False)
-        rc, _, stderr, _ = uv_ffi.run(
+        rc, unused, stderr, unused = uv_ffi.run(
             f"pip install rich==15.0.0 --target {bubble_dir} --quiet"
         )
         assert rc == 0, f"Install failed: {stderr}"
@@ -780,7 +770,7 @@ class TestRealInstallPlanIntegration:
                 "and call fs::remove_dir_all / shutil.rmtree before installing."
             )
         else:
-            _ok("Stale dir cleaned — STALE_MARKER.py is gone (xfail unexpectedly passed!)")
+            _ok("Stale dir cleaned — STALE_MARKER.py is gone")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

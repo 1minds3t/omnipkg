@@ -341,10 +341,10 @@ def _do_kill(to_kill: list):
             else:
                 import signal as _sig
                 os.kill(int(p["pid"]), _sig.SIGTERM)
-            print(f"  ✅ Killed PID {p['pid']} ({format_memory(p['rss'])})")
+            safe_print(f"  ✅ Killed PID {p['pid']} ({format_memory(p['rss'])})")
             killed += 1
         except Exception as e:
-            print(f"  ❌ Failed PID {p['pid']}: {e}")
+            safe_print(f"  ❌ Failed PID {p['pid']}: {e}")
     return killed, len(to_kill)
 
 
@@ -411,7 +411,7 @@ def _menu_kill(workers: dict, idle_workers_by_version: dict):
             elif r in num_lookup:
                 to_kill.append(num_lookup[r])
             else:
-                print(f"  ⚠️  Unknown: {r}")
+                safe_print(f"  ⚠️  Unknown: {r}")
 
     if to_kill:
         killed, total = _do_kill(to_kill)
@@ -455,7 +455,7 @@ def _menu_idle_config(idle_workers_by_version: dict, idle_policy: dict):
         safe_print("    - 8 GB RAM machine    → 0 for everything, or 1 for your main version only")
         print("-" * 120)
         print(f"  {'#':<4} {'Version':<10} {'Target':>8}   {'Live workers':>14}   {'Est. idle RAM':>14}")
-        print(f"  {'─'*4} {'─'*10} {'─'*8}   {'─'*14}   {'─'*14}")
+        safe_print(f"  {'─'*4} {'─'*10} {'─'*8}   {'─'*14}   {'─'*14}")
         for i, ver in enumerate(all_versions):
             count, exe = idle_policy.get(ver, (0, ""))
             live = len(idle_workers_by_version.get(ver, []))
@@ -484,7 +484,7 @@ def _menu_idle_config(idle_workers_by_version: dict, idle_policy: dict):
             if confirm == "y":
                 changed = 0
                 for ver in all_versions:
-                    _, exe = idle_policy.get(ver, (0, ""))
+                    unused, exe = idle_policy.get(ver, (0, ""))
                     if exe and _set_idle_for_version(ver, exe, 0):
                         idle_policy[ver] = (0, exe)
                         changed += 1
@@ -498,7 +498,7 @@ def _menu_idle_config(idle_workers_by_version: dict, idle_policy: dict):
             own_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
             changed = 0
             for ver in all_versions:
-                _, exe = idle_policy.get(ver, (0, ""))
+                unused, exe = idle_policy.get(ver, (0, ""))
                 if not exe:
                     continue
                 new_count = 2 if ver == own_ver else 1
@@ -618,7 +618,7 @@ def print_stats(watch_mode=False):
     if gpu_summary:
         g = gpu_summary
         pct = (g["used_mb"] / g["total_mb"] * 100) if g["total_mb"] else 0
-        print(f"\n🎮 GPU: {g['util']}% util | VRAM {g['used_mb']}MB / {g['total_mb']}MB ({pct:.1f}%)")
+        safe_print(f"\n🎮 GPU: {g['util']}% util | VRAM {g['used_mb']}MB / {g['total_mb']}MB ({pct:.1f}%)")
 
     print()
     pid_map   = get_daemon_worker_info()

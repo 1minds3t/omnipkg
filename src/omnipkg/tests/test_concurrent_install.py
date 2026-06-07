@@ -439,7 +439,7 @@ def main():
     # Phase 1: Setup
     safe_print("\n📥 Phase 1: Setup")
     safe_print("-" * 100)
-    for version, _ in test_configs:
+    for version, unused in test_configs:
         if not adopt_if_needed(version):
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)
@@ -447,7 +447,7 @@ def main():
     # Resolve all interpreter paths AFTER adoption so daemon sees them all on start
     safe_print("\n🐍 Resolved interpreter paths:")
     interpreter_paths = []
-    for version, _ in test_configs:
+    for version, unused in test_configs:
         try:
             path = get_interpreter_path(version)
             interpreter_paths.append(path)

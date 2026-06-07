@@ -998,7 +998,7 @@ class omnipkgMetadataGatherer:
                         if dist.metadata.get("Name") and dist.version in (version, _base_ver):
                             found_dists.append(dist)
                             if _dbg:
-                                print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
+                                safe_print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
                             continue
                         if _dbg:
                             print(f"[FAST-DISC] P1: version mismatch {dist.version} != {version}", flush=True)
@@ -1037,7 +1037,7 @@ class omnipkgMetadataGatherer:
                                 _bubble_found = True
                             if _dbg:
                                 _display_ver = getattr(dist, '_omnipkg_local_version', dist.version)
-                                print(f"[FAST-DISC] P2: ✅ found via bubble, version={_display_ver}", flush=True)
+                                safe_print(f"[FAST-DISC] P2: ✅ found via bubble, version={_display_ver}", flush=True)
                             break
                         except Exception as e:
                             if _dbg:
@@ -1062,14 +1062,14 @@ class omnipkgMetadataGatherer:
                             found_dists.append(dist)
                             _main_found = True
                             if _dbg:
-                                print(f"[FAST-DISC] P3: ✅ found in main env: {match}", flush=True)
+                                safe_print(f"[FAST-DISC] P3: ✅ found in main env: {match}", flush=True)
                             break
                     except Exception as e:
                         if _dbg:
                             print(f"[FAST-DISC] P3: PathDistribution failed for {match}: {e}", flush=True)
                         continue
             if _dbg and not _main_found:
-                print(f"[FAST-DISC] P3: ❌ not found in main env (tried {len(name_variants)} variants)", flush=True)
+                safe_print(f"[FAST-DISC] P3: ❌ not found in main env (tried {len(name_variants)} variants)", flush=True)
 
             # PRIORITY 4: Only if not found, do limited recursive search in multiversion_base
             if not any(
@@ -1089,7 +1089,7 @@ class omnipkgMetadataGatherer:
                             dist = PathDistribution(matches[0])
                             found_dists.append(dist)
                             if _dbg:
-                                print(f"[FAST-DISC] P4: ✅ found nested: {matches[0]}", flush=True)
+                                safe_print(f"[FAST-DISC] P4: ✅ found nested: {matches[0]}", flush=True)
                             break
                         except Exception as e:
                             if _dbg:
@@ -1100,7 +1100,7 @@ class omnipkgMetadataGatherer:
                 canonicalize_name(d.metadata.get("Name", "")) == canonical_name and d.version == version
                 for d in found_dists
             ):
-                print(f"[FAST-DISC] ❌ MISSED {pkg_spec} — not found anywhere", flush=True)
+                safe_print(f"[FAST-DISC] ❌ MISSED {pkg_spec} — not found anywhere", flush=True)
 
         if verbose:
             safe_print(
@@ -2578,7 +2578,7 @@ class omnipkgMetadataGatherer:
         text_entry = sections.get('.text')
         if not text_entry:
             return None
-        _, text_vma, text_foff, text_size = text_entry
+        unused, text_vma, text_foff, text_size = text_entry
         text_data = data[text_foff:text_foff + text_size]
         all_hits = []
 
@@ -2587,7 +2587,7 @@ class omnipkgMetadataGatherer:
             if idx == -1:
                 continue
             str_vma = None
-            for _, (stype, vma, foff, size) in sections.items():
+            for unused, (stype, vma, foff, size) in sections.items():
                 if foff > 0 and foff <= idx < foff + size:
                     str_vma = vma + (idx - foff)
                     break
@@ -2610,7 +2610,7 @@ class omnipkgMetadataGatherer:
             idx = data.find(fail_str)
             if idx != -1:
                 str_vma = None
-                for _, (stype, vma, foff, size) in sections.items():
+                for unused, (stype, vma, foff, size) in sections.items():
                     if foff > 0 and foff <= idx < foff + size:
                         str_vma = vma + (idx - foff)
                         break
@@ -2892,7 +2892,7 @@ class omnipkgMetadataGatherer:
             wheel_abi_tag = self._get_wheel_abi_tag(dist)
             # Probe numpy ABI version — cheap ELF scan, result is None for pure-python
             # packages and for compiled packages that don't embed a numpy C-API check.
-            npy_abi_ver, _ = self._probe_numpy_abi(dist) if has_c_ext else (None, None)
+            npy_abi_ver, unused = self._probe_numpy_abi(dist) if has_c_ext else (None, None)
             fingerprint = json.dumps(
                 {
                     "name": name,

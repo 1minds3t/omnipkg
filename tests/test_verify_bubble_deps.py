@@ -1,193 +1,131 @@
 #!/usr/bin/env python3
-"""
-Absolute Ground Truth Bubble Dependencies Verifier
-
-This is the source of truth for verifying that resolved_bubble_deps in omnipkg
-match what's actually installed on disk (by reading METADATA files).
-"""
-
 import sqlite3
 import json
+import sys
 from pathlib import Path
 from packaging.utils import canonicalize_name
-import argparse
-import sys
-from typing import Dict, Tuple
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
-def parse_metadata_file(meta_path: Path) -> tuple[str | None, str | None]:
-    """Robustly extract Name and Version from METADATA or PKG-INFO.
-    Takes the FIRST occurrence only (the real ones are always at the top)."""
-    if not meta_path.exists():
-        return None, None
-    
-    try:
-        content = meta_path.read_text(encoding='utf-8', errors='ignore')
-    except Exception:
-        return None, None
+class KBSyncVerifier:
+    def __init__(self, env_id: str, config_dir: str):
+        self.env_id = env_id
+        self.config_dir = Path(config_dir)
+        self.total_bubbles_checked = 0
+        self.total_failures = 0
 
-    cur_name = None
-    cur_ver = None
-
-    for line in content.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-            
-        if line.startswith('Name:') and cur_name is None:   # only take first
-            cur_name = canonicalize_name(line.split(':', 1)[1].strip())
-        elif line.startswith('Version:') and cur_ver is None:  # only take first
-            cur_ver = line.split(':', 1)[1].strip()
-        
-        # Early exit once we have both (they are always near the top)
-        if cur_name is not None and cur_ver is not None:
-            break
-
-    return cur_name, cur_ver
-
-
-def verify_env(env_id: str, config_dir: Path):
-    print(f'🚀 ABSOLUTE GROUND TRUTH VERIFICATION for Env: {env_id}')
-    print(f'Scanning databases in: {config_dir}\n{"="*60}')
-
-    total_checked = 0
-    total_failures = 0
-    failures_by_py = {}
-
-    db_files = list(config_dir.glob(f'cache_{env_id}-py*.sqlite'))
-
-    if not db_files:
-        print(f"❌ No database files found for env {env_id}")
-        return 1
-
-    for db_path in sorted(db_files):
-        py_ver = db_path.name.split('-py')[1].split('.sqlite')[0]
-        print(f'🔍 Checking py{py_ver}...')
-
-        failures_in_this_py = 0
-
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
-            cursor.execute(
-                "SELECT key FROM hash_store WHERE field = 'install_type' AND value = 'bubble'"
-            )
-            bubble_keys = [row[0] for row in cursor.fetchall()]
-
-            for key in bubble_keys:
-                total_checked += 1
-
-                cursor.execute(
-                    "SELECT field, value FROM hash_store WHERE key = ? AND field IN ('path', 'resolved_bubble_deps')",
-                    (key,)
-                )
-                kv_pairs = dict(cursor.fetchall())
-
-                path_str = kv_pairs.get('path')
-                deps_json = kv_pairs.get('resolved_bubble_deps')
-                if not path_str or not deps_json:
-                    continue
-
+    def get_disk_state(self, bubble_root: Path):
+        """
+        Scans a bubble folder and returns the absolute truth of what is installed.
+        Returns: { 'canonical-name': 'version' }
+        """
+        actual_dists = {}
+        for dist_info in bubble_root.glob('*.dist-info'):
+            meta_file = dist_info / 'METADATA'
+            if meta_file.exists():
                 try:
-                    expected_deps: Dict[str, str] = {
-                        canonicalize_name(k): v 
-                        for k, v in json.loads(deps_json).items()
-                    }
+                    content = meta_file.read_text(errors='ignore')
+                    name, version = None, None
+                    for line in content.splitlines():
+                        if line.startswith('Name:'):
+                            name = canonicalize_name(line.split(':', 1)[1].strip())
+                        elif line.startswith('Version:'):
+                            version = line.split(':', 1)[1].strip()
+                        if name and version:
+                            break
+                    if name and version:
+                        actual_dists[name] = version
+                except Exception:
+                    continue
+        return actual_dists
 
-                    path_obj = Path(path_str)
+    def verify_all_interpreters(self):
+        safe_print(f"🚀 Starting Full-Symmetry Verification for Env: {self.env_id}")
+        print(f"Config Directory: {self.config_dir}\n" + "="*60)
+
+        db_files = list(self.config_dir.glob(f'cache_{self.env_id}-py*.sqlite'))
+        if not db_files:
+            safe_print(f"❌ No databases found for env {self.env_id}")
+            return False
+
+        for db_path in db_files:
+            py_ver = db_path.name.split('-py')[1].split('.sqlite')[0]
+            safe_print(f"🔍 Checking Interpreter py{py_ver}...")
+            
+            try:
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                
+                # Get all bubble keys
+                cursor.execute("SELECT key FROM hash_store WHERE field = 'install_type' AND value = 'bubble'")
+                bubble_keys = [row[0] for row in cursor.fetchall()]
+                
+                for key in bubble_keys:
+                    self.total_bubbles_checked += 1
+                    cursor.execute(
+                        "SELECT field, value FROM hash_store WHERE key = ? AND field IN ('path', 'resolved_bubble_deps')", 
+                        (key,)
+                    )
+                    kv = dict(cursor.fetchall())
                     
-                    # Smart bubble_root detection based on actual omnipkg layout
-                    if path_obj.suffix == '.dist-info' or path_obj.name.endswith('.dist-info'):
-                        # Case 1: path points to .dist-info → go up one level to the versioned bubble dir
-                        bubble_root = path_obj.parent
-                    elif '.omnipkg_versions' in str(path_obj):
-                        # Case 2: path is already inside a bubble or .omnipkg_versions
-                        if path_obj.name.startswith(tuple(p + '-' for p in expected_deps.keys())) or any(
-                            d in path_obj.name for d in ['dist-info', 'egg-info']
-                        ):
-                            bubble_root = path_obj.parent if path_obj.is_file() else path_obj
-                        else:
-                            bubble_root = path_obj
-                    else:
-                        bubble_root = path_obj.parent
-                    
-                    # Final safety: if we landed on .omnipkg_versions, go one level deeper if possible
-                    if bubble_root.name == '.omnipkg_versions':
-                        # Try to find the specific bubble dir by looking for the main package name
-                        main_pkg = list(expected_deps.keys())[0]  # usually the first one is the main package
-                        candidates = list(bubble_root.glob(f"{main_pkg}-*"))
-                        if candidates:
-                            bubble_root = candidates[0]
-                    
-                    print(f"   [DEBUG] For {key}: using bubble_root = {bubble_root}")
+                    path_str = kv.get('path')
+                    deps_json = kv.get('resolved_bubble_deps')
+                    if not path_str or not deps_json:
+                        continue
+                        
+                    try:
+                        # 1. Setup expected state from DB
+                        expected_deps = {canonicalize_name(k): v for k, v in json.loads(deps_json).items()}
+                        bubble_root = Path(path_str).parent
+                        
+                        # 2. Setup actual state from Disk
+                        actual_deps = self.get_disk_state(bubble_root)
+                        
+                        # --- FORWARD CHECK (DB -> Disk) ---
+                        for pkg, ver in expected_deps.items():
+                            if pkg not in actual_deps:
+                                safe_print(f"  ❌ MISSING: {key} | {pkg}=={ver} expected but not on disk")
+                                self.total_failures += 1
+                            elif actual_deps[pkg] != ver:
+                                safe_print(f"  ❌ MISMATCH: {key} | {pkg}: DB={ver}, Disk={actual_deps[pkg]}")
+                                self.total_failures += 1
+                        
+                        # --- INVERSE CHECK (Disk -> DB) ---
+                        for pkg, ver in actual_deps.items():
+                            if pkg not in expected_deps:
+                                safe_print(f"  ⚠️ ORPHAN: {key} | {pkg}=={ver} found on disk but NOT in DB")
+                                self.total_failures += 1
+                            elif expected_deps[pkg] != ver:
+                                # This is usually caught by the forward check, but kept for symmetry
+                                safe_print(f"  ❌ MISMATCH: {key} | {pkg}: Disk={ver}, DB={expected_deps[pkg]}")
+                                self.total_failures += 1
+                                
+                    except Exception as e:
+                        safe_print(f"  ⚠️ Error processing bubble {key}: {e}")
+                        self.total_failures += 1
+                
+                conn.close()
+            except Exception as e:
+                safe_print(f"❌ Database Error {db_path}: {e}")
 
-                    # Scan for metadata in the bubble_root
-                    actual_dists: Dict[str, str] = {}
-                    for pattern in ['*.dist-info', '*.egg-info']:
-                        for info_dir in bubble_root.glob(pattern):
-                            is_dist_info = info_dir.suffix == '.dist-info'
-                            meta_file = info_dir / ('METADATA' if is_dist_info else 'PKG-INFO')
-                            name, ver = parse_metadata_file(meta_file)
-                            if name and ver:
-                                actual_dists[name] = ver
-
-                    # Also check one level deeper in case of nested layout
-                    for info_dir in bubble_root.glob('**/*.dist-info'):
-                        name, ver = parse_metadata_file(info_dir / 'METADATA')
-                        if name and ver:
-                            actual_dists[name] = ver
-
-                    for pkg_name, exp_ver in expected_deps.items():
-                        actual_ver = actual_dists.get(pkg_name)
-                        if actual_ver is None:
-                            print(f'❌ MISSING: {key} | {pkg_name}=={exp_ver} not found on disk!')
-                            print(f'   → Scanned bubble_root: {bubble_root}')
-                            total_failures += 1
-                            failures_in_this_py += 1
-                        elif actual_ver != exp_ver:
-                            print(f'❌ MISMATCH: {key} | {pkg_name}: DB={exp_ver}, Disk={actual_ver}')
-                            total_failures += 1
-                            failures_in_this_py += 1
-
-                except Exception as e:
-                    print(f'⚠️ Error processing bubble {key}: {type(e).__name__}: {e}')
-                    total_failures += 1
-                    failures_in_this_py += 1
-
-                except Exception as e:
-                    print(f'⚠️ Error processing bubble {key}: {type(e).__name__}: {e}')
-                    total_failures += 1
-                    failures_in_this_py += 1
-
-            conn.close()
-
-        except Exception as e:
-            print(f'❌ DB Error for py{py_ver}: {e}')
-            failures_in_this_py += 1  # count the whole python version as problematic
-
-        failures_by_py[py_ver] = failures_in_this_py
-
-    print('\n' + '='*60)
-    print(f'FINAL RESULT: {total_checked} Bubbles Checked | {total_failures} Failures')
-
-    if total_failures == 0:
-        print('🎉 ABSOLUTE SUCCESS: Your resolved_bubble_deps are 100% accurate.')
-        return 0
-    else:
-        print('⚠️ Some real mismatches still exist.')
-        for pyv, cnt in failures_by_py.items():
-            if cnt > 0:
-                print(f'   py{pyv}: {cnt} failures')
-        return 1
-
+        print("\n" + "="*60)
+        print(f"FINAL RESULT: {self.total_bubbles_checked} Bubbles Checked | {self.total_failures} Issues Found")
+        return self.total_failures == 0
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--env-id', default='4db29431', help='Environment ID to verify')
-    parser.add_argument('--config-dir', type=Path, 
-                       default=Path('/home/minds3t/.config/omnipkg'),
-                       help='Path to omnipkg config directory')
+    # You can pass these as args if you want to integrate with a runner
+    # For now, using your specific environment constants
+    ENV_ID = '4db29431'
+    CONFIG_DIR = '/home/minds3t/.config/omnipkg'
     
-    args = parser.parse_args()
+    verifier = KBSyncVerifier(ENV_ID, CONFIG_DIR)
+    success = verifier.verify_all_interpreters()
     
-    sys.exit(verify_env(args.env_id, args.config_dir))
+    if not success:
+        safe_print("\n🔴 TEST FAILED: Disk and Database are out of sync.")
+        sys.exit(1)
+    else:
+        print("\n🟢 TEST PASSED: Perfect symmetry between KB and Disk.")
+        sys.exit(0)

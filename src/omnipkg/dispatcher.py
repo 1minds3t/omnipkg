@@ -79,7 +79,7 @@ def main():
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
 
     if debug_mode:
-        print(f'[DEBUG-DISPATCH] ════════════════════════════════════════════════', file=sys.stderr)
+        safe_print(f'[DEBUG-DISPATCH] ════════════════════════════════════════════════', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] omnipkg dispatcher startup', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] sys.argv           : {sys.argv}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] sys.executable     : {sys.executable}', file=sys.stderr)
@@ -112,7 +112,7 @@ def main():
             print(f'[DEBUG-DISPATCH] could not list argv[0] bin/: {_le}', file=sys.stderr)
         _reg = Path(sys.prefix) / ".omnipkg" / "interpreters" / "registry.json"
         print(f'[DEBUG-DISPATCH] registry @ sys.prefix  : {_reg} (exists={_reg.exists()})', file=sys.stderr)
-        print(f'[DEBUG-DISPATCH] ════════════════════════════════════════════════', file=sys.stderr)
+        safe_print(f'[DEBUG-DISPATCH] ════════════════════════════════════════════════', file=sys.stderr)
 
     # ═══════════════════════════════════════════════════════════
     # 🌍 STEP -1: PROPAGATE LANGUAGE BEFORE ANYTHING ELSE
@@ -227,17 +227,17 @@ def main():
         # Lazy import — only needed on this path
         import subprocess
         version_str = os.environ.get("OMNIPKG_PYTHON") or extract_version(target_python)
-        print(f'⚠️  Python {version_str} not adopted — adopting now...', file=sys.stderr)
+        safe_print(f'⚠️  Python {version_str} not adopted — adopting now...', file=sys.stderr)
         adopt_result = subprocess.call(
             [sys.executable, "-m", "omnipkg.cli", "python", "adopt", version_str]
         )
         if adopt_result != 0:
-            print(f'❌ Failed to adopt Python {version_str}.', file=sys.stderr)
+            safe_print(f'❌ Failed to adopt Python {version_str}.', file=sys.stderr)
             sys.exit(1)
         # Re-resolve after adoption and fall through to re-exec
         target_python = resolve_python_path(version_str)
         if not target_python.exists():
-            print(f'❌ Adoption succeeded but interpreter still not found.', file=sys.stderr)
+            safe_print(f'❌ Adoption succeeded but interpreter still not found.', file=sys.stderr)
             sys.exit(1)
 
     # Try daemon socket first (fast path)
@@ -711,7 +711,7 @@ def _maybe_install_c_dispatcher():
 
         if debug:
             print(f"[C-INSTALL] done. replaced={all_replaced}", file=sys.stderr)
-            print(f"[C-INSTALL] ⚡ NEXT invocation will use the C dispatcher — re-exec now to use it immediately", file=sys.stderr)
+            safe_print(f"[C-INSTALL] ⚡ NEXT invocation will use the C dispatcher — re-exec now to use it immediately", file=sys.stderr)
 
     except Exception as e:
         if debug:
@@ -1122,7 +1122,7 @@ def determine_target_python() -> Path:
                 version = sys.argv[idx + 1]
                 resolved = resolve_python_path(version)
                 if debug_mode:
-                    print(f'[DEBUG-DISPATCH] ✅ CLI flag: --python {version} -> {resolved}', file=sys.stderr)
+                    safe_print(f'[DEBUG-DISPATCH] ✅ CLI flag: --python {version} -> {resolved}', file=sys.stderr)
                 return resolved
         except (ValueError, IndexError):
             pass
@@ -1181,12 +1181,12 @@ def determine_target_python() -> Path:
 
                 if is_correct:
                     if debug_mode:
-                        print(f'[DEBUG-DISPATCH] ✅ Self-aware config is fully correct for native Python', file=sys.stderr)
+                        safe_print(f'[DEBUG-DISPATCH] ✅ Self-aware config is fully correct for native Python', file=sys.stderr)
                     return current_exe
 
                 # Config is stale or incomplete → fix it
                 if debug_mode:
-                    print(f'[DEBUG-DISPATCH] ⚠️  Stale/incomplete self-aware config detected. Fixing...', file=sys.stderr)
+                    safe_print(f'[DEBUG-DISPATCH] ⚠️  Stale/incomplete self-aware config detected. Fixing...', file=sys.stderr)
 
                 # Fully rewrite the root config for native Python
                 try:
@@ -1211,7 +1211,7 @@ def determine_target_python() -> Path:
                         json.dump(config, f, indent=2)
 
                     if debug_mode:
-                        print(f'[DEBUG-DISPATCH] ✅ Fully rewrote root config for native Python {native_version}', file=sys.stderr)
+                        safe_print(f'[DEBUG-DISPATCH] ✅ Fully rewrote root config for native Python {native_version}', file=sys.stderr)
                         print(f'[DEBUG-DISPATCH]    site_packages_path = {site_packages}', file=sys.stderr)
 
                 except Exception as fix_e:
@@ -1239,11 +1239,11 @@ def determine_target_python() -> Path:
         claimed_version = os.environ["OMNIPKG_PYTHON"]
         if os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
             if debug_mode:
-                print(f"[DEBUG-DISPATCH] ✅ _OMNIPKG_SWAP_ACTIVE set, trusting OMNIPKG_PYTHON={claimed_version}", file=sys.stderr)
+                safe_print(f"[DEBUG-DISPATCH] ✅ _OMNIPKG_SWAP_ACTIVE set, trusting OMNIPKG_PYTHON={claimed_version}", file=sys.stderr)
             return resolve_python_path(claimed_version)
         else:
             if debug_mode:
-                print(f"[DEBUG-DISPATCH] ⚠️  OMNIPKG_PYTHON={claimed_version} present but _OMNIPKG_SWAP_ACTIVE not set — leaked, ignoring", file=sys.stderr)
+                safe_print(f"[DEBUG-DISPATCH] ⚠️  OMNIPKG_PYTHON={claimed_version} present but _OMNIPKG_SWAP_ACTIVE not set — leaked, ignoring", file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Extra safety: If we reached here and we are running the native
@@ -1253,14 +1253,14 @@ def determine_target_python() -> Path:
     current = Path(sys.executable).absolute()  # absolute() not resolve() — venv symlink must not be dereferenced
     if ".omnipkg/interpreters" not in str(current).replace("\\", "/"):
         if debug_mode:
-            print(f'[DEBUG-DISPATCH] ✅ Running native venv Python → returning {current}', file=sys.stderr)
+            safe_print(f'[DEBUG-DISPATCH] ✅ Running native venv Python → returning {current}', file=sys.stderr)
         return current
 
     # ─────────────────────────────────────────────────────────────
     # Fallback: whatever Python is running this script
     # ─────────────────────────────────────────────────────────────
     if debug_mode:
-        print(f'[DEBUG-DISPATCH] ⚠️  All resolution strategies exhausted — fallback to sys.executable', file=sys.stderr)
+        safe_print(f'[DEBUG-DISPATCH] ⚠️  All resolution strategies exhausted — fallback to sys.executable', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    Cause: no --python flag, no self-aware config found, no active swap.', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    In CI this usually means adopt did not run or venv_root resolved wrong.', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    sys.executable: {sys.executable}', file=sys.stderr)
@@ -1370,7 +1370,7 @@ def handle_shim_execution(prog_name: str, debug: bool):
                               file=sys.stderr)
                     target_version = None
             elif debug:
-                print(f"[DEBUG-SHIM] ✅ Version {major_minor} confirmed from path (no subprocess)", file=sys.stderr)
+                safe_print(f"[DEBUG-SHIM] ✅ Version {major_minor} confirmed from path (no subprocess)", file=sys.stderr)
 
     # ─────────────────────────────────────────────
     # 2) If no valid swap, pass-through to real tool
@@ -1593,11 +1593,11 @@ def _ensure_interpreter_config(interpreter_path: Path, version: str, venv_root: 
             json.dump(config_data, f, indent=2)
 
         if debug_mode:
-            print(f"[DEBUG-DISPATCH] ✅ Config written to {config_path}", file=sys.stderr)
+            safe_print(f"[DEBUG-DISPATCH] ✅ Config written to {config_path}", file=sys.stderr)
 
     except Exception as e:
         if debug_mode:
-            print(f"[DEBUG-DISPATCH] ⚠️  Could not write config for {version}: {e}", file=sys.stderr)
+            safe_print(f"[DEBUG-DISPATCH] ⚠️  Could not write config for {version}: {e}", file=sys.stderr)
         # Non-fatal — _load_or_create_config will handle it via fallback
 
 def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
@@ -2061,7 +2061,7 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
         conda_root = Path(conda_prefix_env)
         if (conda_root / "conda-meta").is_dir():
             if debug_mode:
-                print(f'[DEBUG-DISPATCH] ✅ Conda env via $CONDA_PREFIX: {conda_root}', file=sys.stderr)
+                safe_print(f'[DEBUG-DISPATCH] ✅ Conda env via $CONDA_PREFIX: {conda_root}', file=sys.stderr)
             return conda_root
 
     # sys.prefix points at the conda env root for direct invocations
@@ -2069,14 +2069,14 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
     sys_prefix_path = Path(sys.prefix)
     if (sys_prefix_path / "conda-meta").is_dir():
         if debug_mode:
-            print(f'[DEBUG-DISPATCH] ✅ Conda env via sys.prefix/conda-meta: {sys_prefix_path}', file=sys.stderr)
+            safe_print(f'[DEBUG-DISPATCH] ✅ Conda env via sys.prefix/conda-meta: {sys_prefix_path}', file=sys.stderr)
         return sys_prefix_path
 
     # Only use sys.prefix as a last resort if all else fails.
     # In CI (GitHub Actions hostedtoolcache), there is no pyvenv.cfg so this
     # is the normal path — registry and symlinks will be under sys.prefix/.omnipkg/
     if debug_mode:
-        print(f'[DEBUG-DISPATCH] ⚠️  sys.prefix fallback — no pyvenv.cfg found walking up from argv[0]', file=sys.stderr)
+        safe_print(f'[DEBUG-DISPATCH] ⚠️  sys.prefix fallback — no pyvenv.cfg found walking up from argv[0]', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    Expected in CI / hostedtoolcache environments.', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    venv_root => sys.prefix = {sys.prefix}', file=sys.stderr)
         _reg_chk = Path(sys.prefix) / ".omnipkg" / "interpreters" / "registry.json"
@@ -2184,7 +2184,7 @@ def _ensure_all_version_shims(bin_dir: Path, debug_mode: bool = False) -> None:
                         break
                 if src_exe is None:
                     if debug_mode:
-                        print(f"[DEBUG-DISPATCH] ⚠️  No src_exe for {base_name} in {bin_dir} — skipping {base_name}{flat}.bat", file=sys.stderr)
+                        safe_print(f"[DEBUG-DISPATCH] ⚠️  No src_exe for {base_name} in {bin_dir} — skipping {base_name}{flat}.bat", file=sys.stderr)
                     continue
                 bat_path = bin_dir / f"{base_name}{flat}.bat"
                 bat_content = f'@echo off\r\n"{src_exe}" --python {ver} %*\r\n'
@@ -2199,13 +2199,13 @@ def _ensure_all_version_shims(bin_dir: Path, debug_mode: bool = False) -> None:
                             continue  # already correct — truly idempotent
                         # Content is stale (e.g. src_exe path changed) — rewrite below
                         if debug_mode:
-                            print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {bat_path.name} — rewriting", file=sys.stderr)
+                            safe_print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {bat_path.name} — rewriting", file=sys.stderr)
                     except Exception:
                         pass  # unreadable — fall through to overwrite
                 try:
                     bat_path.write_text(bat_content, encoding="ascii")
                     if debug_mode:
-                        print(f"[DEBUG-DISPATCH] ✅ Eager .bat shim: {bat_path.name}", file=sys.stderr)
+                        safe_print(f"[DEBUG-DISPATCH] ✅ Eager .bat shim: {bat_path.name}", file=sys.stderr)
                 except Exception as e:
                     # Always surface write failures — silent skip here is the primary
                     # reason shims appear to be created but are actually missing.
@@ -2280,7 +2280,7 @@ def _ensure_native_shims() -> None:
     interpreter_path = Path(sys.executable)
     install_versioned_entrypoints(interpreter_path, version, venv_root, debug_mode)
     if debug_mode:
-        print(f"[DEBUG-DISPATCH] _ensure_native_shims: ✅ shims installed for native Python {version}", file=sys.stderr)
+        safe_print(f"[DEBUG-DISPATCH] _ensure_native_shims: ✅ shims installed for native Python {version}", file=sys.stderr)
 
 
 def install_versioned_entrypoints(
@@ -2354,13 +2354,13 @@ def install_versioned_entrypoints(
                     if existing.replace('\r\n', '\n') == bat_content.replace('\r\n', '\n'):
                         continue  # already correct
                     if debug_mode:
-                        print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {link_bat.name} — rewriting", file=sys.stderr)
+                        safe_print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {link_bat.name} — rewriting", file=sys.stderr)
                 except Exception:
                     pass
             try:
                 link_bat.write_text(bat_content, encoding="ascii")
                 if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name} --python {_ver}", file=sys.stderr)
+                    safe_print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name} --python {_ver}", file=sys.stderr)
             except Exception as e:
                 print(f"[WARNING-DISPATCH] Could not create Windows shim {link_bat.name}: {e}", file=sys.stderr)
         else:
@@ -2376,10 +2376,10 @@ def install_versioned_entrypoints(
                     link.unlink()
                 link.symlink_to(src.name)
                 if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ✅ Symlink: {link} -> {src.name}", file=sys.stderr)
+                    safe_print(f"[DEBUG-DISPATCH] ✅ Symlink: {link} -> {src.name}", file=sys.stderr)
             except Exception as e:
                 if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create symlink {link}: {e}", file=sys.stderr)
+                    safe_print(f"[DEBUG-DISPATCH] ⚠️  Could not create symlink {link}: {e}", file=sys.stderr)
 
     # ── 1b. ALSO symlink next to the actual running entry point ─────────────────
     # When omnipkg is installed with `pip install --user`, the 8pkg entry point
@@ -2405,10 +2405,10 @@ def install_versioned_entrypoints(
                     link.unlink()
                 link.symlink_to(src.name)
                 if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ✅ Extra symlink (entry-point dir): {link} -> {src.name}", file=sys.stderr)
+                    safe_print(f"[DEBUG-DISPATCH] ✅ Extra symlink (entry-point dir): {link} -> {src.name}", file=sys.stderr)
             except Exception as e:
                 if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create extra symlink {link}: {e}", file=sys.stderr)
+                    safe_print(f"[DEBUG-DISPATCH] ⚠️  Could not create extra symlink {link}: {e}", file=sys.stderr)
     else:
         if debug_mode:
             print(f"[DEBUG-DISPATCH] Entry point dir == venv bin/ — no extra symlinks needed", file=sys.stderr)
@@ -2449,10 +2449,10 @@ def install_versioned_entrypoints(
     try:
         snippet_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         if debug_mode:
-            print(f"[DEBUG-DISPATCH] ✅ Profile snippet written: {snippet_path}", file=sys.stderr)
+            safe_print(f"[DEBUG-DISPATCH] ✅ Profile snippet written: {snippet_path}", file=sys.stderr)
     except Exception as e:
         if debug_mode:
-            print(f"[DEBUG-DISPATCH] ⚠️  Could not write profile snippet: {e}", file=sys.stderr)
+            safe_print(f"[DEBUG-DISPATCH] ⚠️  Could not write profile snippet: {e}", file=sys.stderr)
 
     # ── 3. Patch venv activate to source profile.d ───────────────────────────
     # Only needed once — idempotent.
@@ -2492,10 +2492,10 @@ def _patch_activate_script(bin_dir: Path, profile_dir: Path, debug_mode: bool) -
         with open(activate, "a", encoding="utf-8") as f:
             f.write(snippet)
         if debug_mode:
-            print(f"[DEBUG-DISPATCH] ✅ Patched activate script: {activate}", file=sys.stderr)
+            safe_print(f"[DEBUG-DISPATCH] ✅ Patched activate script: {activate}", file=sys.stderr)
     except Exception as e:
         if debug_mode:
-            print(f"[DEBUG-DISPATCH] ⚠️  Could not patch activate: {e}", file=sys.stderr)
+            safe_print(f"[DEBUG-DISPATCH] ⚠️  Could not patch activate: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

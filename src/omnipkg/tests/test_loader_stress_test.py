@@ -1472,7 +1472,7 @@ def chaos_test_11_tensorflow_resurrection():
             "    _np_ver = _ilm.version('numpy')\n"
             "except Exception:\n"
             "    _np_ver = 'NOT_FOUND'\n"
-            "print(_tag + ' ── WORKER STATE ──────────────────────────────────')\n"
+            "safe_print(_tag + ' ── WORKER STATE ──────────────────────────────────')\n"
             "print(_tag + ' numpy_importable_version : ' + str(_np_ver))\n"
             "print(_tag + ' numpy_so_already_mapped  : ' + str(_np_so))\n"
             "print(_tag + ' numpy_modules_in_memory  : ' + str(len(_np_mods)))\n"

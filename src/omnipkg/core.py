@@ -3295,7 +3295,7 @@ class ConfigManager:
                 _gc_exe = Path(_gc.get("python_executable", "")).resolve()
                 if _gc_exe != exe_path:
                     if debug_mode:
-                        print(f"[DEBUG-CONFIG] ⚠️  Global config points to {_gc_exe} but we are {exe_path} — ignoring stale global config", file=sys.stderr)
+                        safe_print(f"[DEBUG-CONFIG] ⚠️  Global config points to {_gc_exe} but we are {exe_path} — ignoring stale global config", file=sys.stderr)
                     self._write_interpreter_config(exe_path, f"{sys.version_info.major}.{sys.version_info.minor}")
                     return per_python_config
             except Exception:
@@ -6639,7 +6639,7 @@ class omnipkg:
                 _stamped_ver = _stamp.get("version")
                 if _stamped_ver:
                     # Get running version fast (toml first, then metadata)
-                    _running_ver, _ = self._get_master_version_ultra_fast()
+                    _running_ver, unused = self._get_master_version_ultra_fast()
                     if _running_ver == _stamped_ver:
                         # Already stamped at this exact version — nothing to do.
                         return

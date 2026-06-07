@@ -212,6 +212,10 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 SEP("DIAG 4: dist-info nuked mid-session")
 import io
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 NUKE_TARGET = TMP / "nuke_target"
 NUKE_TARGET.mkdir()
@@ -246,7 +250,7 @@ for line in cap.getvalue().strip().splitlines():
 C.print(f"  rc={r2[0]}  installed={r2[1]}")
 if r2[2]: C.print(f"  [red]err field:[/] {r2[2]}")
 dis_after = list(NUKE_TARGET.glob("rich-*.dist-info"))
-C.print(f"  [{'green' if dis_after else 'red'}]{'✓ retry succeeded — dist-info restored' if dis_after else '✗ retry failed — dist-info still missing'}[/]")
+safe_print(f"  [{'green' if dis_after else 'red'}]{'✓ retry succeeded — dist-info restored' if dis_after else '✗ retry failed — dist-info still missing'}[/]")
 
 C.print(f"\n  [bold]Step D:[/] orphan dir — dist-info nuked, pkg dir left intact (the xfail scenario)")
 ORPHAN_TARGET = TMP / "orphan_target"
@@ -278,7 +282,7 @@ stale_marker = ORPHAN_TARGET / "rich" / "STALE_MARKER.py"  # not planted here, s
 wipe_clean = has_15 and not has_14 and not stale_marker.exists()
 C.print(f"  rich-14.3.3.dist-info still present: [{'red]YES — old dist-info not removed' if has_14 else 'green]NO — correctly absent'}[/]")
 C.print(f"  rich-15.0.0.dist-info present:       [{'green]YES' if has_15 else 'red]NO — install failed'}[/]")
-C.print(f"  orphan wipe + reinstall clean:       [{'green]✓ PASS' if wipe_clean else 'red]✗ FAIL'}[/]")
+safe_print(f"  orphan wipe + reinstall clean:       [{'green]✓ PASS' if wipe_clean else 'red]✗ FAIL'}[/]")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DIAG 5: dependency chaos — nuke/confuse the transitive dep graph

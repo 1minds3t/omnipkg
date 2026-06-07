@@ -80,6 +80,10 @@ try:
 except ImportError:
     tomli_w = None
 
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 # ── cross-process registry lock (used by _update_global_lock_registry) ────────
 #
@@ -578,7 +582,7 @@ def _detect_host_profile() -> dict:
                 for line in f:
                     line = line.strip()
                     if "=" in line and not line.startswith("#"):
-                        k, _, v = line.partition("=")
+                        k, unused, v = line.partition("=")
                         os_release[k.strip()] = v.strip().strip('"')
             break
         except OSError:
@@ -816,7 +820,7 @@ def _print_lock_list(found: list[dict]) -> None:
         if env != current_env:
             if current_env is not None:
                 print()
-            print(f"  ── {env} ──")
+            safe_print(f"  ── {env} ──")
             current_env = env
         marker = "  ◀ most recent" if i == 1 else ""
         print(
@@ -837,7 +841,7 @@ def _manage_lock_files(found: list[dict], safe_input_fn) -> None:
         return
 
     while True:
-        print("\n🗂️  Manage lock files\n")
+        safe_print("\n🗂️  Manage lock files\n")
         _print_lock_list(found)
         print()
         print("  Enter number(s) to delete (comma-separated), or [q] to go back: ", end="")
@@ -859,9 +863,9 @@ def _manage_lock_files(found: list[dict], safe_input_fn) -> None:
                 if 0 <= idx < len(found):
                     to_delete.append(found[idx])
                 else:
-                    print(f"  ⚠️  {part} is out of range, skipping.")
+                    safe_print(f"  ⚠️  {part} is out of range, skipping.")
             except ValueError:
-                print(f"  ⚠️  '{part}' is not a valid number, skipping.")
+                safe_print(f"  ⚠️  '{part}' is not a valid number, skipping.")
 
         if not to_delete:
             print("  Nothing selected.")
@@ -886,10 +890,10 @@ def _manage_lock_files(found: list[dict], safe_input_fn) -> None:
         for entry in to_delete:
             try:
                 entry["path"].unlink()
-                print(f"  🗑️  Deleted: {entry['path']}")
+                safe_print(f"  🗑️  Deleted: {entry['path']}")
                 found.remove(entry)
             except Exception as e:
-                print(f"  ⚠️  Could not delete {entry['path']}: {e}")
+                safe_print(f"  ⚠️  Could not delete {entry['path']}: {e}")
 
         if not found:
             print("\n  No lock files remaining.")
@@ -906,7 +910,7 @@ def _interactive_lock_picker(
     If allow_manage=True, user can enter 'm' to manage/delete lock files.
     """
     while True:
-        print("\n📋 Found lock files:\n")
+        safe_print("\n📋 Found lock files:\n")
         _print_lock_list(found)
         print()
         hint = "  Enter number [1], [m] to manage/delete, or [q] to quit: " \
@@ -935,7 +939,7 @@ def _interactive_lock_picker(
         except ValueError:
             pass
 
-        print("  ⚠️  Invalid choice, try again.")
+        safe_print("  ⚠️  Invalid choice, try again.")
 
 
 def _pick_lock_file(
@@ -973,7 +977,7 @@ def _pick_lock_file(
                 except KeyboardInterrupt:
                     raise
             result = auto_value if auto_value is not None else default
-            print(f"🤖 Auto-selecting: {result}")
+            safe_print(f"🤖 Auto-selecting: {result}")
             return result
 
     print(
@@ -1029,7 +1033,7 @@ def _pick_lock_file(
 
     if not is_interactive_session():
         chosen = found[0]
-        print(f"🤖 Auto-selecting most recent lock file: {chosen['path']}")
+        safe_print(f"🤖 Auto-selecting most recent lock file: {chosen['path']}")
         return chosen["path"]
 
     chosen = _interactive_lock_picker(found, safe_input)
@@ -1078,7 +1082,7 @@ def _check_python_version_mismatch(
                 except KeyboardInterrupt:
                     raise
             result = auto_value if auto_value is not None else default
-            print(f"🤖 Auto-selecting: {result}")
+            safe_print(f"🤖 Auto-selecting: {result}")
             return result
 
     print(
@@ -1171,7 +1175,7 @@ def _save_global_registry(reg: dict) -> None:
         tmp.write_text(json.dumps(reg, indent=2))
         tmp.replace(_GLOBAL_REGISTRY_PATH)
     except Exception as e:
-        print(f"⚠️  Could not save global lock registry: {e}", file=sys.stderr)
+        safe_print(f"⚠️  Could not save global lock registry: {e}", file=sys.stderr)
         if tmp.exists():
             tmp.unlink(missing_ok=True)
 
@@ -1474,7 +1478,7 @@ def export_lock(
     if pythons:
         missing = [p for p in pythons if p not in interpreters]
         if missing:
-            print(f"⚠️  Warning: pythons not in registry: {missing}", file=sys.stderr)
+            safe_print(f"⚠️  Warning: pythons not in registry: {missing}", file=sys.stderr)
         interpreters = {k: v for k, v in interpreters.items() if k in pythons}
 
     # ── env identity ──────────────────────────────────────────────────────────
@@ -1818,7 +1822,7 @@ def sync_lock(
                 except KeyboardInterrupt:
                     raise
             result = auto_value if auto_value is not None else default
-            print(f"🤖 Auto-selecting: {result}")
+            safe_print(f"🤖 Auto-selecting: {result}")
             return result
 
     # ── resolve paths ─────────────────────────────────────────────────────────
@@ -1892,7 +1896,7 @@ def sync_lock(
             print(f"[SHA-CHECK] current_sha={current_sha!r}", file=sys.stderr)
             print(f"[SHA-CHECK] match={current_sha == lock_sha}", file=sys.stderr)
             if current_sha and current_sha == lock_sha:
-                print("\n✅ Environment already matches lock file (sha256:{sha}...).".format(
+                safe_print("\n✅ Environment already matches lock file (sha256:{sha}...).".format(
                     sha=lock_sha[:16]
                 ))
                 if not is_interactive_session():
@@ -1993,7 +1997,7 @@ def sync_lock(
                     f"here (native={current_native}) — adopting as managed interpreter..."
                 )
             else:
-                print(f"  📥 Auto-adopting {source}...")
+                safe_print(f"  📥 Auto-adopting {source}...")
             _run_cmd(["8pkg", "python", "adopt", ver])
             registry = _load_registry(venv_root)
             interp_map = registry.get("interpreters", {})
@@ -2009,7 +2013,7 @@ def sync_lock(
         )
 
         if not sp_path or not Path(sp_path).exists():
-            print(f"  ⚠️  Cannot locate site-packages for {ver} — skipping.")
+            safe_print(f"  ⚠️  Cannot locate site-packages for {ver} — skipping.")
             continue
 
         # Compatibility pre-check
@@ -2026,11 +2030,11 @@ def sync_lock(
             if pkg not in hard_skip
         }
         if hard_skip:
-            print(f"\n  ⏭️  Auto-skipping {len(hard_skip)} package(s) with no compatible version for Python {ver}:")
+            safe_print(f"\n  ⏭️  Auto-skipping {len(hard_skip)} package(s) with no compatible version for Python {ver}:")
             for pkg in sorted(hard_skip):
-                print(f"    ✗ {pkg}  ({compat_issues[pkg]})")
+                safe_print(f"    ✗ {pkg}  ({compat_issues[pkg]})")
         if soft_warn:
-            print(f"\n  ⚠️  Compatibility warnings for Python {ver}:")
+            safe_print(f"\n  ⚠️  Compatibility warnings for Python {ver}:")
             for pkg, msg in soft_warn.items():
                 print(f"    {pkg}: {msg}")
             if not yes:
@@ -2051,19 +2055,19 @@ def sync_lock(
         _plat = meta.get("platform", platform.system())
         _py_sha = _per_python_sha(ver, active, bubbles, _plat)
         if _per_python_sha_check(lock_path, ver, _py_sha):
-            print(f"  ✅ Python {ver} already synced (SHA match) — skipping.")
+            safe_print(f"  ✅ Python {ver} already synced (SHA match) — skipping.")
             continue
 
         # Skip if already matches lock (slower live pip freeze check)
         if _interp_matches_lock(py_path, active, bubbles):
-            print(f"  ✅ Python {ver} already matches lock — skipping.")
+            safe_print(f"  ✅ Python {ver} already matches lock — skipping.")
             _per_python_sha_write(lock_path, ver, _py_sha)  # cache for next run
             continue
 
-        print(f"\n  🧹 Clearing site-packages: {sp_path}")
+        safe_print(f"\n  🧹 Clearing site-packages: {sp_path}")
         _wipe_site_packages(Path(sp_path), keep_omnipkg=True)
         if mv_base and Path(mv_base).exists():
-            print(f"  🧹 Clearing bubbles: {mv_base}")
+            safe_print(f"  🧹 Clearing bubbles: {mv_base}")
             _wipe_dir_contents(Path(mv_base))
 
         # pip itself is never reconciled — ensurepip's version is fine and
@@ -2080,7 +2084,7 @@ def sync_lock(
                 f"{pkg}=={v}" for pkg, v in active.items()
                 if pkg not in _SYNC_SKIP and pkg not in hard_skip
             ]
-            print(f"\n  📦 Installing {len(pkgs)} active packages...")
+            safe_print(f"\n  📦 Installing {len(pkgs)} active packages...")
             if pkgs:
                 _install_with_skip_fallback(py_path, pkgs)
 
@@ -2098,23 +2102,23 @@ def sync_lock(
                     if _bootstrap_version_safe(pkg, v, core_constraints):
                         bootstrap_overrides.append(f"{pkg}=={v}")
                     else:
-                        print(f"  ⚠️  Skipping bootstrap pin {pkg}=={v} — "
+                        safe_print(f"  ⚠️  Skipping bootstrap pin {pkg}=={v} — "
                               f"conflicts with omnipkg's own constraint for Python {ver}, "
                               f"leaving bootstrap-installed version.")
                 if bootstrap_overrides:
-                    print(f"\n  🔧 Pinning {len(bootstrap_overrides)} bootstrap dep(s) to locked versions...")
+                    safe_print(f"\n  🔧 Pinning {len(bootstrap_overrides)} bootstrap dep(s) to locked versions...")
                     _install_with_skip_fallback(py_path, bootstrap_overrides)
 
         if bubbles:
             total = sum(len(vs) for vs in bubbles.values())
-            print(f"\n  🫧  Installing {total} bubble versions...")
+            safe_print(f"\n  🫧  Installing {total} bubble versions...")
             short = ver.replace(".", "")
             for pkg, versions in bubbles.items():
                 for bver in versions:
                     print(f"    {pkg}=={bver}")
                     _run_cmd([f"8pkg{short}", "install", f"{pkg}=={bver}"], check=False)
 
-        print(f"\n  ✅ Python {ver} synced.")
+        safe_print(f"\n  ✅ Python {ver} synced.")
         _per_python_sha_write(lock_path, ver, _py_sha)
 
     # Stop daemon only after all shim calls are done — keeping it alive during
@@ -2127,12 +2131,12 @@ def sync_lock(
 
     # Run doctor across every interpreter that was in the sync scope —
     # not just the native one. Each versioned shim targets the right site-packages.
-    print("\n\n🏥 Running doctor across all synced interpreters...")
+    safe_print("\n\n🏥 Running doctor across all synced interpreters...")
     for ver in lock_pythons:
         short = ver.replace(".", "")
-        print(f"\n  🩺 Python {ver}:")
+        safe_print(f"\n  🩺 Python {ver}:")
         _run_cmd([f"8pkg{short}", "doctor"], check=False)
-    print("\n✅ sync complete.")
+    safe_print("\n✅ sync complete.")
 
 
 # ── sync helpers ──────────────────────────────────────────────────────────────
@@ -2209,7 +2213,7 @@ def _print_sync_plan(
     lock_path: Path, dry_run: bool,
 ) -> None:
     tag = "[dry-run] " if dry_run else ""
-    print(f"\n{tag}📋 Sync plan")
+    safe_print(f"\n{tag}📋 Sync plan")
     print(f"  Lock file:      {lock_path}")
     raw_ts = meta.get("generated", "")
     try:
@@ -2322,7 +2326,7 @@ def _install_with_skip_fallback(py_path: Path, pkgs: list[str]) -> None:
         for p in remaining:
             if _normalize(p) in bad_names:
                 skipped.append(p)
-                print(f"  ⚠️  Skipping (failed to build/install): {p}")
+                safe_print(f"  ⚠️  Skipping (failed to build/install): {p}")
             else:
                 new_remaining.append(p)
 
@@ -2333,12 +2337,12 @@ def _install_with_skip_fallback(py_path: Path, pkgs: list[str]) -> None:
             )
 
         remaining = new_remaining
-        print(f"  🔄 Retrying with {len(remaining)} remaining packages...")
+        safe_print(f"  🔄 Retrying with {len(remaining)} remaining packages...")
 
     if skipped:
-        print(f"\n  📋 Skipped {len(skipped)} package(s) during install (build/compat failure):")
+        safe_print(f"\n  📋 Skipped {len(skipped)} package(s) during install (build/compat failure):")
         for s in skipped:
-            print(f"    ✗ {s}")
+            safe_print(f"    ✗ {s}")
 
 
 def _check_compat(py_path: Path, active: dict[str, str]) -> dict[str, str]:
@@ -2406,7 +2410,7 @@ def _wipe_site_packages(sp: Path, keep_omnipkg: bool = True) -> None:
         try:
             shutil.rmtree(item) if item.is_dir() else item.unlink()
         except Exception as e:
-            print(f"  ⚠️  Could not remove {item}: {e}", file=sys.stderr)
+            safe_print(f"  ⚠️  Could not remove {item}: {e}", file=sys.stderr)
 
 
 def _wipe_dir_contents(d: Path) -> None:
@@ -2424,7 +2428,7 @@ def _wipe_dir_contents(d: Path) -> None:
         try:
             shutil.rmtree(item) if item.is_dir() else item.unlink()
         except Exception as e:
-            print(f"  ⚠️  Could not remove {item}: {e}", file=sys.stderr)
+            safe_print(f"  ⚠️  Could not remove {item}: {e}", file=sys.stderr)
 
 
 def _run_cmd(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:

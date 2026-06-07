@@ -101,7 +101,7 @@ def _collect_host_info() -> dict:
                 fields = {}
                 for line in Path(osr).read_text().splitlines():
                     if "=" in line and not line.startswith("#"):
-                        k, _, v = line.partition("=")
+                        k, unused, v = line.partition("=")
                         fields[k.strip()] = v.strip().strip('"')
                 info["linux_distro_id"]      = fields.get("ID", "unknown").lower()
                 info["linux_distro_version"] = fields.get("VERSION_ID", "unknown")

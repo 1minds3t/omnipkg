@@ -649,7 +649,7 @@ def phase_daemon_tf(config_manager) -> tuple[bool, dict, dict]:
                 ["8pkg", "daemon", "start"],
                 stdout=_sp.DEVNULL, stderr=_sp.DEVNULL
             )
-            for _ in range(60):
+            for unused in range(60):
                 time.sleep(0.5)
                 if client.status().get("success"):
                     break

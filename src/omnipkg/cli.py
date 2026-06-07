@@ -2470,6 +2470,7 @@ def main():
                 safe_print(_("8. 🌠 Quantum Multiverse Warp (concurrent installs) — needs 3.11"))
                 safe_print(_("9. Flask Port Finder (auto-healing with Flask)"))
                 safe_print(_("10. CLI Healing Test (omnipkg run shell commands)"))
+                safe_print(_("11. Daemon IPC Showcase"))
                 safe_print(_("\nFor chaos/stress tests: 8pkg stress-test"))
 
                 from omnipkg.common_utils import safe_input
@@ -2478,7 +2479,7 @@ def main():
 
                 if args.demo_id is not None:
                     if not (1 <= args.demo_id <= 10):
-                        safe_print(_("❌ Invalid demo ID {}. Choose 1-10.").format(args.demo_id))
+                        safe_print(_("❌ Invalid demo ID {}. Choose 1-11.").format(args.demo_id))
                         return 1
                     response = str(args.demo_id)
                     safe_print(_('🎯 Running demo {}...').format(response))
@@ -2487,7 +2488,7 @@ def main():
                     safe_print(_('🤖 Non-interactive: auto-selecting demo {}').format(response))
                 else:
                     response = safe_input(
-                        _("Enter your choice (1-10): "),
+                        _("Enter your choice (1-11): "),
                         default="1",
                         auto_value=os.environ.get("OMNIPKG_DEMO_ID", "1"),
                     )
@@ -2503,6 +2504,7 @@ def main():
                     "8": ("Quantum Multiverse Warp", TESTS_DIR / "test_concurrent_install.py", "3.11"),
                     "9": ("Flask Port Finder", TESTS_DIR / "test_flask_port_finder.py", None),
                     "10": ("CLI Healing Test", TESTS_DIR / "test_cli_healing.py", None),
+                    "11": ("Daemon IPC Showcase", TESTS_DIR / "omnipkg_ipc_showcase.py", None),
                 }
 
                 if response not in demo_map:

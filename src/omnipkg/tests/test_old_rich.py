@@ -11,7 +11,7 @@ try:
     from omnipkg.i18n import _
     from omnipkg.common_utils import safe_print
 except ImportError:
-    _ = lambda s: s
+    unused = lambda s: s
     safe_print = print
 
 def _get_rich_version():

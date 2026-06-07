@@ -160,7 +160,7 @@ def _install_dispatcher_binary(install_dir=None):
 
         if replaced:
             binary_out.unlink(missing_ok=True)
-            print(f"  [dispatcher] ✅ Fast C dispatcher installed over: {replaced}")
+            safe_print(f"  [dispatcher] ✅ Fast C dispatcher installed over: {replaced}")
             installed_paths = []
             for name in replaced:
                 target = Path(install_dir) / (name + _exe)
@@ -276,7 +276,7 @@ def _build_uv_ffi(install_dir=None):
             import importlib.util, site
             sp = site.getsitepackages()
             sp0 = sp[0] if sp else "unknown"
-            print("  [uv-ffi] ✅ PyO3 FFI extension built and installed")
+            safe_print("  [uv-ffi] ✅ PyO3 FFI extension built and installed")
             print(f"  [uv-ffi]    site-packages : {sp0}")
             # Find the actual .so path for the manifest
             import glob as _uvg
@@ -375,7 +375,7 @@ def _collect_host_info() -> dict:
                 fields = {}
                 for line in Path(osr).read_text().splitlines():
                     if "=" in line and not line.startswith("#"):
-                        k, _, v = line.partition("=")
+                        k, unused, v = line.partition("=")
                         fields[k.strip()] = v.strip().strip('"')
                 info["linux_distro_id"]      = fields.get("ID", "unknown").lower()
                 info["linux_distro_version"] = fields.get("VERSION_ID", "unknown")
@@ -672,7 +672,7 @@ class OptionalBuildExt(build_ext):
         print(f"  [atomic]   output (.so)  : {Path(so_path).resolve()}")
         try:
             super().build_extension(ext)
-            print(f"  [atomic]   ✅ built to   : {Path(so_path).resolve()}")
+            safe_print(f"  [atomic]   ✅ built to   : {Path(so_path).resolve()}")
             self._atomic_result = {"status": "ok", "so_path": str(Path(so_path).resolve())}
         except Exception as e:
             print(f"\n{'!'*60}")

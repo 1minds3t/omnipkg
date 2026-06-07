@@ -78,7 +78,7 @@ def _import_loader():
 
 def _exec(client, spec: str, code: str, *, timeout: float = 30.0) -> dict:
     """Execute code in a daemon worker and return the result dict."""
-    DaemonClient, DaemonProxy, _ = _import_daemon()
+    DaemonClient, DaemonProxy, unused = _import_daemon()
     proxy = DaemonProxy(client, spec)
     result = proxy.execute(code)
     return result
@@ -114,7 +114,7 @@ def daemon_client():
     The fixture does NOT stop the daemon at the end — it is expected to already
     be running (as it is in production) or the test environment manages it.
     """
-    DaemonClient, _, WorkerPoolDaemon = _import_daemon()
+    DaemonClient, unused, WorkerPoolDaemon = _import_daemon()
 
     client = DaemonClient()
     status = client.status()
@@ -184,7 +184,7 @@ class TestVersionIsolation:
         Two workers with different numpy versions must coexist and each report
         the correct version independently.
         """
-        DaemonClient, DaemonProxy, _ = _import_daemon()
+        DaemonClient, DaemonProxy, unused = _import_daemon()
 
         code = "import numpy as np; print(np.__version__)"
         results = {}
@@ -282,7 +282,7 @@ class TestWorkerPersistence:
         After a worker is warm, repeated calls to the same spec should complete
         in under 100 ms.  This validates that the worker is reused, not re-spawned.
         """
-        DaemonClient, DaemonProxy, _ = _import_daemon()
+        DaemonClient, DaemonProxy, unused = _import_daemon()
 
         spec = "numpy==1.26.4"
         code = "import numpy as np; print(np.__version__)"
@@ -295,7 +295,7 @@ class TestWorkerPersistence:
         # Subsequent calls must be fast
         RUNS = 10
         latencies = []
-        for _ in range(RUNS):
+        for unused in range(RUNS):
             t = time.perf_counter()
             res = proxy.execute(code)
             latencies.append((time.perf_counter() - t) * 1000)
@@ -319,7 +319,7 @@ class TestWorkerPersistence:
         A persistent worker must preserve Python-level state between calls on
         the same proxy (i.e. the process is truly persistent).
         """
-        DaemonClient, DaemonProxy, _ = _import_daemon()
+        DaemonClient, DaemonProxy, unused = _import_daemon()
         proxy = DaemonProxy(daemon_client, "numpy==1.26.4")
 
         # Write state
@@ -354,7 +354,7 @@ class TestThreadSafety:
         Every single result must match np.sum([1,2,3]) == 6 for the correct version.
         No result may leak into a different version's worker.
         """
-        DaemonClient, DaemonProxy, _ = _import_daemon()
+        DaemonClient, DaemonProxy, unused = _import_daemon()
 
         VERSIONS = ["1.24.3", "1.26.4", "2.3.5"]
         REPS = 5
@@ -364,7 +364,7 @@ class TestThreadSafety:
         def worker_fn(ver):
             proxy = DaemonProxy(daemon_client, f"numpy=={ver}")
             code = "import numpy as np; print(np.__version__, int(np.sum(np.array([1,2,3]))))"
-            for _ in range(REPS):
+            for unused in range(REPS):
                 res = proxy.execute(code)
                 if not res.get("success"):
                     with lock:
@@ -393,7 +393,7 @@ class TestThreadSafety:
         200 rapid-fire requests to the same worker (4 threads × 50 reps) must
         all succeed with no errors.  Validates internal locking in the daemon.
         """
-        DaemonClient, DaemonProxy, _ = _import_daemon()
+        DaemonClient, DaemonProxy, unused = _import_daemon()
 
         THREADS = 4
         REPS = 50
@@ -403,7 +403,7 @@ class TestThreadSafety:
         def hammerer(thread_id, spec):
             proxy = DaemonProxy(daemon_client, spec)
             code = "x = 1 + 1"
-            for _ in range(REPS):
+            for unused in range(REPS):
                 res = proxy.execute(code)
                 if not res.get("success"):
                     with lock:
@@ -1020,7 +1020,7 @@ class TestDaemonLifecycle:
         to serve the next request correctly.  The worker must NOT be killed or
         corrupted by user-code errors.
         """
-        DaemonClient, DaemonProxy, _ = _import_daemon()
+        DaemonClient, DaemonProxy, unused = _import_daemon()
         spec = "numpy==1.26.4"
         proxy = DaemonProxy(daemon_client, spec)
 

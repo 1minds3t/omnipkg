@@ -1576,9 +1576,17 @@ _patch_opt_einsum_worker()
 # Loader works because it physically cloaks main env site-packages from sys.path.
 # Daemon doesn't cloak, so TF C++ linker sees main env numpy (1.26.4) alongside
 # bubble numpy (2.4.5) and picks the wrong ABI -> dtype size mismatch crash.
+_fw_in_bubble = False
+_is_main_env_pkg = False
+_pkg_fw_name = ''
 if any(fw in PKG_SPEC for fw in ('tensorflow', 'torch')):
     _bubble_sp_paths = [p for p in sys.path if '.omnipkg_versions' in p]
-    if _bubble_sp_paths:
+    _pkg_fw_name = next((fw for fw in ('tensorflow', 'torch') if fw in PKG_SPEC), '')
+    _fw_in_bubble = _pkg_fw_name and any(
+        os.path.isdir(os.path.join(p, _pkg_fw_name))
+        for p in _bubble_sp_paths
+    )
+    if _bubble_sp_paths and _fw_in_bubble:
         sys.path[:] = [
             p for p in sys.path
             if 'site-packages' not in p or '.omnipkg_versions' in p
@@ -1586,7 +1594,12 @@ if any(fw in PKG_SPEC for fw in ('tensorflow', 'torch')):
         sys.stderr.write('[DAEMON] Stripped main site-packages for ABI isolation' + chr(10))
         sys.stderr.write('[DAEMON] sys.path now: ' + str(sys.path) + chr(10))
         sys.stderr.flush()
-
+    elif _bubble_sp_paths and not _fw_in_bubble:
+        sys.stderr.write('[DAEMON] Skipping strip — ' + _pkg_fw_name + ' not in bubble, using main env' + chr(10))
+        sys.stderr.flush()
+    elif _is_main_env_pkg:
+        sys.stderr.write('[DAEMON] Main env package detected — skipping site-packages strip' + chr(10))
+        sys.stderr.flush()
 # ── numpy bubble selection helper ─────────────────────────────────────────
 # Reads numpy_abi_range from the KB and picks the highest available bubble
 # whose version falls in range.  Falls back to highest-available if the KB
@@ -1697,7 +1710,7 @@ def _select_numpy_bubble(versions_dir, pkg_spec, pre_core=None):
 
 # Inject numpy bubble path before torch/tensorflow import so their C extensions
 # find numpy on sys.path. Path-only — no import — avoids the torch._C binding issue.
-if any(fw in PKG_SPEC for fw in ('torch', 'tensorflow')):
+if 'torch' in PKG_SPEC and _fw_in_bubble:
     _bubble_sp_paths = [p for p in sys.path if '.omnipkg_versions' in p]
     if _bubble_sp_paths:
         _versions_dir = os.path.dirname(_bubble_sp_paths[0])
@@ -2022,7 +2035,7 @@ sys.stderr.flush()
 # Must happen AFTER torch init — injecting before causes torch._C binding failure.
 # UniversalGpuIpc.load() needs numpy importable for __cuda_array_interface__ path.
 # Priority: KB-guided numpy bubble → main site-packages numpy → error (but don't crash worker).
-if any(fw in PKG_SPEC for fw in ('torch', 'tensorflow')):
+if 'torch' in PKG_SPEC:
     try:
         _bubble_p = next((p for p in sys.path if '.omnipkg_versions' in p), None)
         if _bubble_p:

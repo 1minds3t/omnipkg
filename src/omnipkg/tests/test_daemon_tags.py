@@ -34,6 +34,10 @@ call_id = {call_id!r}
 
 if '_BOOT_CALL' not in globals():
     import numpy as np
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
     globals()['_BOOT_CALL']  = call_id
     globals()['_BOOT_TIME']  = time.time()
     globals()['_np']         = np
@@ -77,25 +81,25 @@ SEP = "─" * 72
 
 def row(label, ms, d, want_status=None, want_pid=None):
     if d is None:
-        print(f"  {label:<34} {fmt(ms)}  ❌ ERROR"); return
+        safe_print(f"  {label:<34} {fmt(ms)}  ❌ ERROR"); return
     ok = ((want_status is None or d['boot_status']==want_status) and
           (want_pid    is None or d['worker_pid'] ==want_pid))
     note = f"{d['boot_status']}  pid={d['worker_pid']}  calls={d['call_count']}"
     if want_status and d['boot_status'] != want_status: note += f"  (wanted {want_status})"
     if want_pid    and d['worker_pid']  != want_pid:    note += "  (wanted same PID)"
-    print(f"  {label:<34} {fmt(ms)}  {'✅' if ok else '❌'} {note}")
+    safe_print(f"  {label:<34} {fmt(ms)}  {'✅' if ok else '❌'} {note}")
 
 def run_fresh(spec, python_exe):
     run_id = uuid.uuid4().hex[:8]
     tag_a, tag_b = f"bench-{run_id}-A", f"bench-{run_id}-B"
     client = DaemonClient()
 
-    print(f"\n{'═'*72}")
+    safe_print(f"\n{'═'*72}")
     print(f"  omnipkg daemon — tag reuse benchmark  (run-id: {run_id})")
     print(f"  spec      : {spec}")
     print(f"  tag A     : {tag_a}  ← unique, guaranteed cold")
     print(f"  tag B     : {tag_b}  ← unique, guaranteed cold")
-    print(f"{'═'*72}\n")
+    safe_print(f"{'═'*72}\n")
 
     print("Round 1 — COLD BOOT  (tag A, brand new tag, must spawn worker)")
     ms1, d1 = do_call(client, spec, tag_a, "r1-cold", python_exe)
@@ -107,8 +111,8 @@ def run_fresh(spec, python_exe):
     if d2:
         same = d1 and d2['worker_pid']==d1['worker_pid']
         hot  = d2['boot_status']=='HOT_REUSED'
-        print(f"  PID={d2['worker_pid']}  {'✅ same PID' if same else '❌ DIFFERENT PID'}")
-        print(f"  {'✅ HOT_REUSED — globals persisted!' if hot else '❌ COLD_BOOT — globals were reset!'}")
+        safe_print(f"  PID={d2['worker_pid']}  {'✅ same PID' if same else '❌ DIFFERENT PID'}")
+        safe_print(f"  {'✅ HOT_REUSED — globals persisted!' if hot else '❌ COLD_BOOT — globals were reset!'}")
         print(f"  boot_call={d2['boot_call']}  (should be 'r1-cold')")
     print(f"  ⏱  {fmt(ms2)}\n"); time.sleep(0.3)
 
@@ -117,8 +121,8 @@ def run_fresh(spec, python_exe):
     if d3:
         diff = d1 and d3['worker_pid']!=d1['worker_pid']
         cold = d3['boot_status']=='COLD_BOOT'
-        print(f"  PID={d3['worker_pid']}  {'✅ different PID' if diff else '❌ SAME PID — tags not isolated!'}")
-        print(f"  {'✅ COLD_BOOT — fresh isolated worker' if cold else '❌ HOT_REUSED — leaked globals from tag A!'}")
+        safe_print(f"  PID={d3['worker_pid']}  {'✅ different PID' if diff else '❌ SAME PID — tags not isolated!'}")
+        safe_print(f"  {'✅ COLD_BOOT — fresh isolated worker' if cold else '❌ HOT_REUSED — leaked globals from tag A!'}")
     print(f"  ⏱  {fmt(ms3)}\n"); time.sleep(0.3)
 
     print("Round 4 — HOT REUSE  (tag A again, must still be warm after tag B was created)")
@@ -126,8 +130,8 @@ def run_fresh(spec, python_exe):
     if d4:
         same = d1 and d4['worker_pid']==d1['worker_pid']
         hot  = d4['boot_status']=='HOT_REUSED'
-        print(f"  PID={d4['worker_pid']}  {'✅ same' if same else '❌ DIFFERENT'}  call #{d4['call_count']} for this worker")
-        print(f"  {'✅ HOT_REUSED — still warm' if hot else '❌ COLD_BOOT — was evicted while tag B ran!'}")
+        safe_print(f"  PID={d4['worker_pid']}  {'✅ same' if same else '❌ DIFFERENT'}  call #{d4['call_count']} for this worker")
+        safe_print(f"  {'✅ HOT_REUSED — still warm' if hot else '❌ COLD_BOOT — was evicted while tag B ran!'}")
     print(f"  ⏱  {fmt(ms4)}\n")
 
     print(SEP)
@@ -154,12 +158,12 @@ def run_fresh(spec, python_exe):
 
     print()
     if r2ok and r3ok and r4ok:
-        print("  🎉 PASS — tag isolation and globals persistence confirmed.")
+        safe_print("  🎉 PASS — tag isolation and globals persistence confirmed.")
         print(f"\n  To also verify workers survive a full script restart, run:")
         print(f"    python bench_tag_reuse.py --reuse-tag {tag_a} --spec {spec}")
         return 0
     else:
-        print("  ❌ FAIL")
+        safe_print("  ❌ FAIL")
         if not r2ok: print("     R2: expected HOT_REUSED on same PID — globals not persisting between calls")
         if not r3ok: print("     R3: expected COLD_BOOT on different PID — tags not isolated")
         if not r4ok: print("     R4: expected HOT_REUSED on same PID — worker was evicted")
@@ -167,32 +171,32 @@ def run_fresh(spec, python_exe):
 
 def run_reuse(spec, python_exe, existing_tag):
     client = DaemonClient()
-    print(f"\n{'═'*72}")
+    safe_print(f"\n{'═'*72}")
     print(f"  omnipkg daemon — cross-invocation persistence check")
     print(f"  spec      : {spec}")
     print(f"  reuse-tag : {existing_tag}")
     print(f"  Expecting HOT_REUSED if the daemon kept the worker alive.")
-    print(f"{'═'*72}\n")
+    safe_print(f"{'═'*72}\n")
 
     print("Call 1 — was the worker kept alive since the previous script run?")
     ms1, d1 = do_call(client, spec, existing_tag, "xrun-1", python_exe)
     if d1:
         hot = d1['boot_status']=='HOT_REUSED'
         print(f"  PID={d1['worker_pid']}  boot_status={d1['boot_status']}")
-        print(f"  {'✅ HOT_REUSED — worker survived script restart!' if hot else '⚠️  COLD_BOOT — worker was recycled (daemon restart / idle timeout)'}")
+        safe_print(f"  {'✅ HOT_REUSED — worker survived script restart!' if hot else '⚠️  COLD_BOOT — worker was recycled (daemon restart / idle timeout)'}")
         print(f"  boot_call={d1['boot_call']}  call_count={d1['call_count']}")
     print(f"  ⏱  {fmt(ms1)}\n")
 
     print("Call 2 — same session, must be HOT_REUSED")
     ms2, d2 = do_call(client, spec, existing_tag, "xrun-2", python_exe)
     if d2:
-        print(f"  {'✅' if d2['boot_status']=='HOT_REUSED' else '❌'} {d2['boot_status']}  call #{d2['call_count']}")
+        safe_print(f"  {'✅' if d2['boot_status']=='HOT_REUSED' else '❌'} {d2['boot_status']}  call #{d2['call_count']}")
     print(f"  ⏱  {fmt(ms2)}\n")
 
     if d1 and d1['boot_status']=='HOT_REUSED':
-        print("  🎉 CONFIRMED — globals persisted across separate Python process invocations.")
+        safe_print("  🎉 CONFIRMED — globals persisted across separate Python process invocations.")
     else:
-        print("  ⚠️  Worker was cold — it was recycled since the last run.")
+        safe_print("  ⚠️  Worker was cold — it was recycled since the last run.")
         print("      Normal if: daemon was restarted, or idle timeout was hit.")
 
 def main():

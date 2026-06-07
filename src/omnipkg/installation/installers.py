@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from ..i18n import _
 
 # ---------------------------------------------------------------------------
 # Thread-local storage for plan-callback intercept results
@@ -132,7 +133,6 @@ class ModularInstaller:
 
         # ── safe_print / i18n helpers live on the core module namespace ──
         _safe_print = self._core_attr("safe_print", print)
-        _           = self._core_attr("_",           lambda x: x)
 
         if not packages:
             return 0, {"stdout": "", "stderr": ""}
@@ -424,7 +424,7 @@ class ModularInstaller:
     #  PATH 4 — pip subprocess (always-available final fallback)          #
     # ------------------------------------------------------------------ #
 
-    def _try_pip(self, req: _Req, sp, _) -> Tuple[InstallOutcome, Optional[Tuple]]:
+    def _try_pip(self, req: _Req, sp, unused) -> Tuple[InstallOutcome, Optional[Tuple]]:
         cmd = [
             self._config["python_executable"],
             "-u", "-m", "pip", "install", "--no-cache-dir",
@@ -657,7 +657,7 @@ class ModularInstaller:
     #  Index auto-detection (torch cuda builds etc.)                      #
     # ------------------------------------------------------------------ #
 
-    def _detect_index(self, packages, index_url, extra_index_url, sp, _):
+    def _detect_index(self, packages, index_url, extra_index_url, sp, unused):
         if index_url or extra_index_url:
             return index_url, extra_index_url
         if not hasattr(self._core, "package_index_registry"):
@@ -720,7 +720,7 @@ class ModularInstaller:
     #  numpy ABI fixup (pip path only, --target installs)                 #
     # ------------------------------------------------------------------ #
 
-    def _fix_numpy_abi(self, req: _Req, sp, _):
+    def _fix_numpy_abi(self, req: _Req, sp, unused):
         try:
             from omnipkg.installation.dependency_constraints import get_numpy_constraint
         except ImportError:

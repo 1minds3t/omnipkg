@@ -41,6 +41,7 @@ import sys
 import time
 import json
 import textwrap
+from omnipkg.common_utils import safe_print
 
 # ── make `8pkg info python` non-interactive ─────────────────────────────────
 os.environ.setdefault("OMNIPKG_NONINTERACTIVE", "1")
@@ -64,22 +65,22 @@ passed = failed = skipped = 0
 
 
 def section(title):
-    print(f"\n{BOLD}{CYAN}{'─'*60}{RESET}")
+    safe_print(f"\n{BOLD}{CYAN}{'─'*60}{RESET}")
     print(f"{BOLD}{CYAN}  {title}{RESET}")
-    print(f"{BOLD}{CYAN}{'─'*60}{RESET}")
+    safe_print(f"{BOLD}{CYAN}{'─'*60}{RESET}")
 
 
 def ok(label, ms, extra=""):
     global passed
     passed += 1
     tail = f"  {YELLOW}{extra}{RESET}" if extra else ""
-    print(f"  {GREEN}✅ PASS{RESET}  {label:<46} {YELLOW}{ms:>7.2f} ms{RESET}{tail}")
+    safe_print(f"  {GREEN}✅ PASS{RESET}  {label:<46} {YELLOW}{ms:>7.2f} ms{RESET}{tail}")
 
 
 def fail(label, reason):
     global failed
     failed += 1
-    print(f"  {RED}❌ FAIL{RESET}  {label:<46}  {reason}")
+    safe_print(f"  {RED}❌ FAIL{RESET}  {label:<46}  {reason}")
 
 
 def skip(label, reason):
@@ -99,14 +100,14 @@ def daemon_restart():
     Kill all workers and wait for the daemon to be back up.
     We suppress output – only print if it fails.
     """
-    print(f"  {DIM}⟳  8pkg daemon restart …{RESET}", end="", flush=True)
+    safe_print(f"  {DIM}⟳  8pkg daemon restart …{RESET}", end="", flush=True)
     try:
         result = subprocess.run(
             ["8pkg", "daemon", "restart"],
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
-            print(f"\n  {YELLOW}⚠  daemon restart non-zero exit ({result.returncode}){RESET}")
+            safe_print(f"\n  {YELLOW}⚠  daemon restart non-zero exit ({result.returncode}){RESET}")
             if result.stderr.strip():
                 print(f"  {DIM}{result.stderr.strip()[:200]}{RESET}")
         else:
@@ -114,9 +115,9 @@ def daemon_restart():
             time.sleep(0.5)
             print(f"  {DIM}done{RESET}")
     except FileNotFoundError:
-        print(f"\n  {YELLOW}⚠  '8pkg' not on PATH – skipping daemon restart{RESET}")
+        safe_print(f"\n  {YELLOW}⚠  '8pkg' not on PATH – skipping daemon restart{RESET}")
     except subprocess.TimeoutExpired:
-        print(f"\n  {YELLOW}⚠  daemon restart timed out{RESET}")
+        safe_print(f"\n  {YELLOW}⚠  daemon restart timed out{RESET}")
 
 
 def cold_warm_header():
@@ -339,7 +340,7 @@ arr_out[:] = np.linalg.inv(arr_in + np.eye(4))
                 output_shape=(4, 4),
                 output_dtype="float32",
             ))
-            result_arr, _ = res
+            result_arr, unused = res
             ok(f"[{run_label}] execute_zero_copy 4×4 matrix invert", ms,
                f"result[0,0]={result_arr[0,0]:.4f}")
         except Exception as e:
@@ -542,12 +543,12 @@ try:
                 rc1 = client.execute_zero_copy("scipy==1.10.0", s1_cpu_code, input_array=cpu_in, output_shape=_PIPELINE_SHAPE, output_dtype="float32")
                 ms_c1 = (time.perf_counter() - t_cpu0) * 1000
                 
-                c1_out, _ = rc1
+                c1_out, unused = rc1
                 t_cpu0 = time.perf_counter()
                 rc2 = client.execute_zero_copy("scipy==1.12.0", s2_cpu_code, input_array=c1_out, output_shape=_PIPELINE_SHAPE, output_dtype="float32")
                 ms_c2 = (time.perf_counter() - t_cpu0) * 1000
                 
-                c2_out, _ = rc2
+                c2_out, unused = rc2
                 t_cpu0 = time.perf_counter()
                 rc3 = client.execute_zero_copy("scipy==1.15.3", s3_cpu_code, input_array=c2_out, output_shape=_PIPELINE_SHAPE, output_dtype="float32")
                 ms_c3 = (time.perf_counter() - t_cpu0) * 1000
@@ -564,13 +565,13 @@ try:
                         f"cu{s.split('+cu')[1]}" if "+cu" in s else s
                         for s in _CUDA_SPECS
                     )
-                    print(f"  {BOLD}  ┌─ Pipeline comparison (warm, {_PIPELINE_SHAPE[0]}×{_PIPELINE_SHAPE[1]} float32) ──────────────{RESET}")
-                    print(f"  {BOLD}  │  CPU SHM  (scipy 1.10 → 1.12 → 1.15) : {total_cpu:>7.2f} ms{RESET}")
-                    print(f"  {BOLD}  │  GPU IPC  ({_cu_labels})   : {total_gpu:>7.2f} ms{RESET}")
+                    safe_print(f"  {BOLD}  ┌─ Pipeline comparison (warm, {_PIPELINE_SHAPE[0]}×{_PIPELINE_SHAPE[1]} float32) ──────────────{RESET}")
+                    safe_print(f"  {BOLD}  │  CPU SHM  (scipy 1.10 → 1.12 → 1.15) : {total_cpu:>7.2f} ms{RESET}")
+                    safe_print(f"  {BOLD}  │  GPU IPC  ({_cu_labels})   : {total_gpu:>7.2f} ms{RESET}")
                     if total_gpu < total_cpu:
                         _sp = total_cpu / total_gpu
-                        print(f"  {BOLD}  │  → GPU is {_sp:.1f}× faster! (tensor never left the VRAM){RESET}")
-                    print(f"  {BOLD}  └──────────────────────────────────────────────────────{RESET}")
+                        safe_print(f"  {BOLD}  │  → GPU is {_sp:.1f}× faster! (tensor never left the VRAM){RESET}")
+                    safe_print(f"  {BOLD}  └──────────────────────────────────────────────────────{RESET}")
                     print()
 
             except Exception as e:
@@ -676,7 +677,7 @@ for run_label in ("COLD", "WARM"):
                 _TORCH_SPEC, model_a_code, shm_in={}, shm_out={},
                 worker_tag="model-A"
             ))
-            rb, _ = t(lambda: client.execute_shm(
+            rb, unused = t(lambda: client.execute_shm(
                 _TORCH_SPEC, model_b_code, shm_in={}, shm_out={},
                 worker_tag="model-B"
             ))
@@ -892,6 +893,10 @@ result = {{
 # Stage 2: receives tensor_in from omnipkg's IPC layer, runs relu→norm→tanh.
 _stage16_2 = """
 import torch, sys
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 t       = tensor_in   # GPU tensor, delivered by omnipkg — no ctypes needed
 t_relu  = torch.relu(t)
