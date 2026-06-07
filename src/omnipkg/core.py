@@ -13744,10 +13744,11 @@ class omnipkg:
                     bubble_dir = dist_info_path.parent
 
                     # A critical sanity check to ensure we're deleting the correct directory.
+                    def _norm(s): return s.replace('-', '_').lower()
                     expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
                     expected_bubble_name_alt = f"{item_name}-{item_version}"
                     expected_bubble_name_underscored = f"{item_name.replace('-', '_')}-{item_version}"
-                    if bubble_dir.name in (expected_bubble_name, expected_bubble_name_alt, expected_bubble_name_underscored) and bubble_dir.is_dir():
+                    if _norm(bubble_dir.name) in (_norm(expected_bubble_name), _norm(expected_bubble_name_alt), _norm(expected_bubble_name_underscored)) and bubble_dir.is_dir():
                         safe_print(_("🗑️  Deleting bubble directory: {}").format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
                     else:
