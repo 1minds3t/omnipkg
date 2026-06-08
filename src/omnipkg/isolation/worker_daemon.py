@@ -2203,6 +2203,52 @@ while True:
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
 
+        # NATIVE PYTORCH IPC — OUTPUT side
+        # Reconstruct the pre-allocated output tensor from the client-provided IPC handle
+        # so exec_scope['tensor_out'] exists before user code runs.
+        if (is_cuda_request and _native_ipc_mode
+                and out_meta and 'ipc_data' in out_meta
+                and 'tensor_out' not in exec_scope):
+            try:
+                _out_ipc = out_meta['ipc_data']
+                _ocls = _out_ipc['storage_cls']
+                if _ocls == 'TypedStorage':
+                    _ocls = {'float32':'FloatStorage','float64':'DoubleStorage',
+                             'float16':'HalfStorage','int32':'IntStorage',
+                             'int64':'LongStorage','int8':'CharStorage',
+                             'uint8':'ByteStorage','bool':'BoolStorage',
+                             'bfloat16':'BFloat16Storage'}.get(_out_ipc['dtype'],'FloatStorage')
+                _storage_cls = getattr(torch, _ocls, torch.FloatStorage)
+                _storage = _storage_cls._new_shared_cuda(
+                    _out_ipc['storage_device'],
+                    base64.b64decode(_out_ipc['storage_handle']),
+                    _out_ipc['storage_size_bytes'],
+                    _out_ipc['storage_offset_bytes'],
+                    base64.b64decode(_out_ipc['ref_counter_handle']),
+                    _out_ipc['ref_counter_offset'],
+                    base64.b64decode(_out_ipc['event_handle']) if _out_ipc.get('event_handle') else b\'\',
+                    _out_ipc['event_sync_required'],
+                )
+                _dtype_map = {
+                    'float32':torch.float32,'float64':torch.float64,'float16':torch.float16,
+                    'int32':torch.int32,'int64':torch.int64,'int8':torch.int8,
+                    'uint8':torch.uint8,'bool':torch.bool,'bfloat16':torch.bfloat16,
+                }
+                _out_dtype = _dtype_map.get(_out_ipc['dtype'], torch.float32)
+                _tensor_out = torch.tensor([], dtype=_out_dtype,
+                                           device=torch.device(f"cuda:{out_meta['device']}"))
+                _tensor_out.set_(_storage, _out_ipc['tensor_offset'],
+                                 tuple(_out_ipc['tensor_size']),
+                                 tuple(_out_ipc['tensor_stride']))
+                exec_scope['tensor_out'] = _tensor_out
+                exec_scope['arr_out']    = _tensor_out
+                sys.stderr.write(f' [TASK {task_id}] NATIVE IPC output reconstructed\\n')
+                sys.stderr.flush()
+            except Exception as _e:
+                sys.stderr.write(f'  [TASK {task_id}] Native IPC output failed: {_e}\\n')
+                sys.stderr.write(traceback.format_exc())
+                sys.stderr.flush()
+
         # HYBRID PATH (SHM + GPU copy)
         # INPUT side: attach shm_in → arr_in (only for tensor descriptors with shape+dtype)
         # Plain dict shm_in (no shape/dtype) is already in input_data['shm_in'] - skip
@@ -6778,7 +6824,9 @@ class DaemonClient:
         Args:
             ipc_mode: 'auto', 'universal', 'pytorch_native', 'cpu_shm', or 'hybrid'
         """
-        import torch
+        torch = sys.modules.get("torch")
+        if torch is None:
+            import torch
 
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA not available")
@@ -6856,7 +6904,9 @@ class DaemonClient:
         but 1.34x FASTER than Hybrid mode!
         """
         import numpy as np
-        import torch
+        torch = sys.modules.get("torch")
+        if torch is None:
+            import torch
 
         safe_print("    Using CPU SHM mode (zero-copy, no GPU transfers)")
 
@@ -6907,7 +6957,9 @@ class DaemonClient:
         self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None
     ):
         """Universal CUDA IPC - client pre-allocates both buffers, worker just opens handles."""
-        import torch
+        torch = sys.modules.get("torch")
+        if torch is None:
+            import torch
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
 
         try:
