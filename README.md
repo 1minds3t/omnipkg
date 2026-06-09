@@ -63,18 +63,20 @@
     <img src="https://img.shields.io/badge/uv-2512%20Failures-red?logo=python&logoColor=white" alt="uv failures">
   </a>
 </p>
-
-*Multi-version installation tests run every 3 hours. [Live results.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
+<p align="center">
+  <em>Multi-version installation tests run every 3 hours. <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">Live results.</a></em>
+</p>
 <!-- COMPARISON_STATS_END -->
 
 ---
+
 
 ## ⚡ Startup: 237µs
 
 `8pkg` doesn't spawn a Python interpreter for every command. A custom C dispatcher
 built on `uint64_t` word-loads connects to the daemon socket in under 100µs.
 
-​```text
+```text
 $ hyperfine '8pkg --help' 'bun --help' 'uv --help'
 
 8pkg --help    237.5 µs ± 30.9 µs    [2976 runs]
@@ -83,18 +85,18 @@ uv --help        4.1 ms ±  0.1 ms     [656 runs]
 
   8pkg ran  2.88x faster than bun
   8pkg ran 17.12x faster than uv
-​```
+```
 
-(`--help` is served from a compiled static header — zero Python. For real daemon work:)
+`--help` is served from a compiled static header — zero Python. For real daemon work:
 
-​```text
+```text
 $ hyperfine '8pkg swap rich' 'uv pip install rich'  # both are no-ops, package already satisfied
 
 8pkg swap rich       1.5 ms ± 0.1 ms    [1337 runs]
 uv pip install rich  9.0 ms ± 0.2 ms    [305 runs]   (prints "Checked 1 package in 2ms" internally)
 
   8pkg ran 6.01x faster than uv
-​```
+```
 
 Both commands find the package already satisfied and do nothing. The 7.5ms gap is
 **pure overhead that omnipkg eliminated**: uv spawns a process, parses its CLI via clap,
@@ -106,7 +108,7 @@ callback before any file I/O runs. Python performs an atomic `os.rename()` to sw
 the package directories (~0.1ms), returns `True` to short-circuit uv's installer, then
 uv does ~2ms of cleanup. The version swap itself is essentially free once the plan arrives.
 
----
+--- 
 
 ## What omnipkg is
 
