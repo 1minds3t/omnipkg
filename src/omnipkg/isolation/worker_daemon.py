@@ -584,6 +584,61 @@ def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
         data_buffer.extend(chunk)
     return json.loads(data_buffer.decode("utf-8"))
 
+# ────────────────────────────────────────────────────────────────────────
+# IPC DISPATCH PERFORMANCE LOGGER  (active only when OMNIPKG_DEBUG=1)
+# One JSONL record per call -> /tmp/omnipkg/perf_<UTC_ts>.jsonl
+# ────────────────────────────────────────────────────────────────────────
+import datetime as _dt_mod
+
+class DispatchPerfLogger:
+    """
+    Singleton perf logger. Activated by OMNIPKG_DEBUG=1.
+
+    Usage:
+        _perf = DispatchPerfLogger.get()
+        if _perf:
+            _perf.record('client._send', spec='...', t_connect_ms=0.21, ...)
+    """
+
+    _instance = None
+    _log_path: str = ""
+
+    @classmethod
+    def get(cls):
+        if os.environ.get("OMNIPKG_DEBUG") != "1":
+            return None
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        ts = _dt_mod.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        log_dir = os.path.join(tempfile.gettempdir(), "omnipkg")
+        os.makedirs(log_dir, exist_ok=True)
+        self._path = os.path.join(log_dir, f"perf_{ts}.jsonl")
+        DispatchPerfLogger._log_path = self._path
+        self._lock = threading.Lock()
+        header = json.dumps({
+            "_note": "omnipkg IPC dispatch perf log",
+            "_pid": os.getpid(),
+            "_started": ts,
+        })
+        with open(self._path, "w", encoding="utf-8") as _f:
+            _f.write(header + "\n")
+
+    def record(self, site, **fields):
+        """Append one JSONL record. Thread-safe, non-blocking."""
+        rec = {"ts": time.time(), "site": site}
+        rec.update(fields)
+        line = json.dumps(rec, default=str) + "\n"
+        try:
+            with self._lock:
+                with open(self._path, "a", encoding="utf-8") as _f:
+                    _f.write(line)
+        except Exception:
+            pass  # never crash on debug instrumentation
+
+
 class UniversalGpuIpc:
     """
     Pure CUDA IPC using ctypes - works WITHOUT PyTorch!
@@ -3162,8 +3217,13 @@ class PersistentWorker:
                 safe_print(f" [DAEMON] Sending task {task_id} to worker (package_spec={self.package_spec})", file=sys.stderr)
                 safe_print(f" [DAEMON] Command: {json.dumps(command)[:200]}...", file=sys.stderr)
 
-                self.process.stdin.write(json.dumps(command) + "\n")
+                _est_t0 = time.perf_counter()
+                _cmd_json = json.dumps(command)
+                _est_t_encoded = time.perf_counter()
+
+                self.process.stdin.write(_cmd_json + "\n")
                 self.process.stdin.flush()
+                _est_t_flushed = time.perf_counter()
 
                 safe_print(f" [DAEMON] Task sent, waiting for response (timeout={timeout}s)...", file=sys.stderr)
 
@@ -3178,6 +3238,19 @@ class PersistentWorker:
                     response_line = self.stdout_queue.get(timeout=timeout)
                 except queue.Empty:
                     response_line = None
+                _est_t_got = time.perf_counter()
+                _est_perf = DispatchPerfLogger.get()
+                if _est_perf:
+                    _est_perf.record(
+                        "worker.execute_shm_task",
+                        spec=self.package_spec,
+                        task_id=task_id,
+                        payload_bytes=len(_cmd_json),
+                        t_encode_ms=(_est_t_encoded - _est_t0) * 1000,
+                        t_write_flush_ms=(_est_t_flushed - _est_t_encoded) * 1000,
+                        t_queue_get_ms=(_est_t_got - _est_t_flushed) * 1000,
+                        total_ms=(_est_t_got - _est_t0) * 1000,
+                    )
 
                 if not response_line:
                     safe_print(f" [DAEMON] No response received within {timeout}s", file=sys.stderr)
@@ -4029,6 +4102,7 @@ class WorkerPoolDaemon:
     def _handle_client(self, conn: socket.socket):
         """Handle client request with timeout protection."""
         conn.settimeout(30.0)
+        _hc_t0 = time.perf_counter()
         try:
             # 1. Receive Request
             try:
@@ -4037,6 +4111,7 @@ class WorkerPoolDaemon:
                 # Client disconnected abruptly (common on Windows during teardown)
                 # Just return silently to avoid log noise.
                 return
+            _hc_t_recvd = time.perf_counter()
 
             self.stats["total_requests"] += 1
 
@@ -4217,11 +4292,24 @@ class WorkerPoolDaemon:
                 res = {"success": False, "error": f"Unknown type: {req['type']}"}
 
             # 3. Send Response
+            _hc_t_dispatched = time.perf_counter()
+            _perf = DispatchPerfLogger.get()
             try:
                 send_json(conn, res)
             except (ConnectionResetError, BrokenPipeError):
                 # Client disconnected before we could send response - ignore
                 pass
+            _hc_t_sent = time.perf_counter()
+            if _perf:
+                _perf.record(
+                    "daemon._handle_client",
+                    req_type=req.get("type", "?"),
+                    spec=req.get("spec", "?"),
+                    t_recv_ms=(_hc_t_recvd - _hc_t0) * 1000,
+                    t_dispatch_ms=(_hc_t_dispatched - _hc_t_recvd) * 1000,
+                    t_send_ms=(_hc_t_sent - _hc_t_dispatched) * 1000,
+                    total_ms=(_hc_t_sent - _hc_t0) * 1000,
+                )
 
         except Exception as e:
             # 4. Handle Actual Logic Errors (Log these!)
@@ -5337,7 +5425,9 @@ class WorkerPoolDaemon:
            Workers idle longer than ``max_idle_time`` are reaped.
         """
         while self.running:
-            time.sleep(60)
+            # 5s poll: fast enough for max_memory_mb to fire within a benchmark
+            # window. Was 60s which caused test 13 to appear stuck (never evicted).
+            time.sleep(5)
             now = time.time()
 
             try:
@@ -6566,6 +6656,9 @@ class DaemonClient:
         while attempts < max_attempts:
             attempts += 1
             try:
+                _perf = DispatchPerfLogger.get()
+                _t0 = time.perf_counter()
+
                 # Get platform-appropriate connection info
                 sock_family, address = self._get_connection_info()
 
@@ -6573,11 +6666,27 @@ class DaemonClient:
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.settimeout(self.timeout)
                 sock.connect(address)
+                _t_connected = time.perf_counter()
 
                 # Send request and receive response
                 send_json(sock, req, timeout=self.timeout)
+                _t_sent = time.perf_counter()
+
                 res = recv_json(sock, timeout=self.timeout)
+                _t_recvd = time.perf_counter()
+
                 sock.close()
+
+                if _perf:
+                    _perf.record(
+                        "client._send",
+                        req_type=req.get("type", "?"),
+                        spec=req.get("spec", req.get("type", "?")),
+                        t_connect_ms=(_t_connected - _t0) * 1000,
+                        t_send_ms=(_t_sent - _t_connected) * 1000,
+                        t_recv_ms=(_t_recvd - _t_sent) * 1000,
+                        total_ms=(_t_recvd - _t0) * 1000,
+                    )
                 return res
 
             except (ConnectionRefusedError, FileNotFoundError):

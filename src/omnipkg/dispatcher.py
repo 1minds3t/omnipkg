@@ -1611,7 +1611,7 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     """
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
 
-    from omnipkg.common_utils import _safe_print
+    from omnipkg.common_utils import safe_print
     from omnipkg.i18n import _
 
     # ── 1. Ensure shims dir exists ────────────────────────────────────────────
