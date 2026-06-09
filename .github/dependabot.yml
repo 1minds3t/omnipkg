@@ -6,11 +6,6 @@ updates:
       interval: "monthly"
     ignore:
       - dependency-name: "*"
-  - package-ecosystem: "pip"
-    directory: "/docker"
-    schedule:
-      interval: "monthly"
-    ignore:
-      - dependency-name: "*"
     exclude-paths:
-          - "licenses/**"
+      - "licenses/**"
+      - "docker/**"

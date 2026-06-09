@@ -2563,7 +2563,7 @@ def main():
                 non_interactive = not is_interactive_session()
 
                 if args.demo_id is not None:
-                    if not (1 <= args.demo_id <= 10):
+                    if not (1 <= args.demo_id <= 11):
                         safe_print(_("❌ Invalid demo ID {}. Choose 1-11.").format(args.demo_id))
                         return 1
                     response = str(args.demo_id)

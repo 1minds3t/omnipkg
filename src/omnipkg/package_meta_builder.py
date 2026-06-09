@@ -1,6 +1,6 @@
 from __future__ import annotations  # Python 3.6+ compatibility
 
-from omnipkg.common_utils import safe_print, _is_relative_to_win, _relative_to_win
+from omnipkg.common_utils import safe_print, _is_relative_to_win, _relative_to_win, is_interactive_session
 from omnipkg.i18n import _
 
 try:

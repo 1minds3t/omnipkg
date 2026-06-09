@@ -210,6 +210,9 @@ src/omnipkg/_vendor/wheels/
 ci-wheel-cache/
 build/
 
+# help text artifact
+/home/minds3t/omnipkg/src/omnipkg/help.toml
+
 # Python cache
 __pycache__/
 *.pyc

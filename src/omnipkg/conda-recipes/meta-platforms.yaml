@@ -65,26 +65,22 @@ about:
   license: AGPL-3.0-only
   license_family: AGPL
   license_file: LICENSE
-  summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
+  summary: 'Zero-overhead Python runtime hypervisor for concurrent, multi-version orchestration.'
   description: |
-    OmniPkg is a distributed Python runtime hypervisor that enables concurrent,
-    zero-copy multi-framework orchestration across multiple Python versions and toolchains.
+    omnipkg is a persistent Python runtime hypervisor that executes conflicting package 
+    and interpreter versions concurrently within a single environment—in milliseconds.
 
-    Platform Support:
-    - Linux: x86_64, aarch64/ARM64, ppc64le
-    - macOS: x86_64 (Intel), arm64 (Apple Silicon)
-    - Windows: x86_64, ARM64
+    By separating the filesystem packaging structure from a persistent, memory-mapped 
+    runtime layer, omnipkg bypasses standard OS process-spawn constraints. 
 
     Key Features:
-    - Reproducible State Engine with deterministic environment lockfiles (export/sync exact states)
-    - Native C-Dispatcher: sub-millisecond command routing that bypasses Python startup overhead
-    - Microsecond package activation via warm daemon workers (~50μs)
-    - Persistent model tagging: keep full models loaded in memory and route commands repeatedly without reloads or 5-minute timeouts
-    - Support for Python 3.7 through 3.15 in a single environment (far beyond Conda’s typical 3.10–3.13/3.14 range)
-    - Concurrent multi-version package and interpreter loading
-    - True zero-copy tensor passing across different Python versions, PyTorch/CUDA versions, and frameworks — no JSON serialization or process boundaries required
+    - Zero-Overhead C-Dispatcher: Replaces the Python startup tax with a compiled C binary, routing commands via uint64_t word-loads in ~230µs.
+    - True Zero-Copy GPU IPC ("God Mode"): Passes raw cudaIpcMemHandle pointers between isolated PyTorch workers. Move tensors across PyTorch 1.x and 2.x instances in ~4.5ms without data ever leaving VRAM.
+    - Atomic Stash-Swaps via Rust FFI: Intercepts the `uv` installer's internal plan callbacks to atomically os.rename() directories in <1ms, creating instantly reversible environments.
+    - Deep ABI Parsing: Natively parses .so ELF sections to extract NPY_FEATURE_VERSION, automatically injecting the correct NumPy ABI bubble before C-extension initialization.
+    - Concurrent Python Interpreters: Hot-swap and execute across Python 3.7 through 3.15 simultaneously without containers or separate virtual environments.
 
-    Perfect for scientific computing, large model serving, and heterogeneous Python/CUDA workflows where maximum flexibility and minimal latency matter.
+    Perfect for scientific computing, heterogeneous PyTorch/CUDA workflows, and AI infrastructure where maximum dependency flexibility and minimal latency matter.
   doc_url: https://omnipkg.readthedocs.io/en/latest/
   dev_url: https://github.com/1minds3t/omnipkg
 
