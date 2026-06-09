@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.1] — 2026-06-08
+
+IPC telemetry, Native PyTorch shared memory, and Windows ARM64
+
+Welcome to **omnipkg v3.4.1**! This release brings deep telemetry to the daemon IPC layer, implements native PyTorch shared memory reconstructions, and paves the way for Windows ARM64 support.
+
+*   **Native PyTorch IPC Outputs:** Re-engineered the CUDA fallback paths to properly extract and reconstruct `TypedStorage` representations from PyTorch 1.x IPC handles, allowing massive GPU tensor outputs to jump boundaries with zero extra copies.
+*   **Multi-Package CLI Swaps:** Upgraded `8pkg swap` to handle multiple packages at once with native passthrough of standard `pip` flags (`--no-deps`, `--pre`, `--no-cache-dir`).
+*   **IPC Dispatch Telemetry:** Added the `DispatchPerfLogger` (`OMNIPKG_DEBUG=1`) to emit microsecond-resolution JSONL telemetry. Track exact encode, flush, queue-wait, and decode latencies across the client ↔ daemon boundary.
+*   **Warm-Worker Transport Benchmarks:** Introduced `benchmark_transport.py` to directly compare `omnipkg`'s managed SHM vs raw POSIX SHM, `msgpack`, and `pickle`.
+*   **Faster Idle Reaping:** Lowered the daemon idle eviction interval from 60s to 5s, resolving stall conditions during extreme stress tests.
+
+*   **Windows ARM64 CI:** Configured Azure pipelines to officially cross-compile the C dispatcher to Windows ARM64 (`win_arm64`) on `conda-forge`.
+*   **Documentation:** Massively overhauled the README and `conda-forge` descriptions to center on our sub-millisecond C-dispatcher metrics, "God Mode" GPU IPC, and Rust FFI atomic swaps.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/cli.py (103 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (2 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (171 lines changed)
+- UPDATE: src/omnipkg/loader.py (60 lines changed)
+- UPDATE: src/omnipkg/package_meta_builder.py (2 lines changed)
+
+**🧪 Tests:**
+- NEW: src/omnipkg/tests/benchmark_transport.py (1166 lines)
+- UPDATE: src/omnipkg/tests/test_loader_stress_test.py (127 lines)
+
+**📚 Documentation:**
+- README.md (1635 lines)
+
+**⚙️ Configuration:**
+- .github/dependabot.yml (9 lines)
+- pyproject.toml (3 lines)
+- src/omnipkg/conda-recipes/conda-forge-platforms.yml
+- src/omnipkg/conda-recipes/meta-noarch.yaml (35 lines)
+- src/omnipkg/conda-recipes/meta-platforms.yaml (29 lines)
+
+**Additional Changes:**
+- perf: add IPC dispatch telemetry and transport benchmarks
+- ci(win): attempt to build win arm 64 on conda-forge
+- docs: improve conda forge descriptions
+- docs: revamp README with hardware benchmarks and fix release packaging
+- feat(isolation): implement native PyTorch IPC output reconstruction and multi-package cli swaps
+
+_19 files changed, 1786 insertions(+), 1593 deletions(-)_
+
 ## [3.4.0] — 2026-06-07
 
 The Modular Installation & IPC Engine Update
