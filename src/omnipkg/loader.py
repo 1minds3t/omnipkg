@@ -2255,12 +2255,16 @@ class omnipkgLoader:
         except ValueError:
             raise ValueError(_("Invalid package_spec format: '{}'").format(self._current_package_spec))
 
-        # ── DAEMON WORKER NESTED OVERLAY FAST PATH ────────────────────────────
-        # When running inside a daemon worker in overlay mode, the process is
-        # already isolated. Nested omnipkgLoader calls only need to swap
-        # sys.path[0] — skip ALL filesystem ops, locking, purging, and scanning.
+        # ── WORKER PROCESS NESTED OVERLAY FAST PATH ───────────────────────────
+        # When running inside any isolated worker process (daemon worker or
+        # PersistentWorker) in overlay mode, the process is already isolated.
+        # Nested omnipkgLoader calls only need to swap sys.path[0] — skip ALL
+        # filesystem ops, locking, purging, and scanning.
         # This drops per-level cost from ~125ms to <1ms.
-        _in_daemon = bool(os.environ.get("OMNIPKG_IS_DAEMON_WORKER"))  # ← ADD THIS LINE
+        _in_daemon = bool(
+            os.environ.get("OMNIPKG_IS_DAEMON_WORKER")
+            or os.environ.get("OMNIPKG_IS_WORKER_PROCESS")
+        )
         if _in_daemon and self.isolation_mode == "overlay":
             from packaging.version import Version
             canonical_version = str(Version(requested_version))
@@ -2268,29 +2272,48 @@ class omnipkgLoader:
 
             if bubble_path.is_dir():
                 bubble_path_str = str(bubble_path)
+                _t0 = time.perf_counter_ns()
+
+                if not self.quiet:
+                    with omnipkgLoader._nesting_lock:
+                        _preview_depth = omnipkgLoader._nesting_depth + 1
+                    safe_print(f"   ⚡ [fast-path] Activating {pkg_name}=={requested_version} (depth={_preview_depth})")
+                    safe_print(f"   📂 Bubble: {bubble_path_str}")
 
                 # Fast module purge — no get_version() disk hit, no GC
                 # Just remove the Python layer entries from sys.modules directly
                 _pkg_norm = pkg_name.lower().replace("-", "_")
                 _to_purge = [k for k in sys.modules 
                             if k == _pkg_norm or k.startswith(_pkg_norm + ".")]
-                # For numpy specifically: preserve C extensions, only purge Python layer
-                if pkg_name == "numpy":
-                    _c_exts = {k for k in _to_purge 
-                            if getattr(sys.modules.get(k), "__file__", "").endswith(".so")}
-                    _to_purge = [k for k in _to_purge if k not in _c_exts]
+                # For numpy in any worker process: full purge — never partial.
+                # Preserving C extension entries leaves stale __spec__ objects that
+                # cause "Importing the numpy C-extensions failed" on the next import
+                # because numpy's __init__.py finds the partially-initialized sentinel
+                # in sys.modules mid-reimport.  The .so stays mapped at the OS level
+                # regardless of whether its sys.modules entry exists; dlopen() returns
+                # the cached handle on the next import, so full purge is always safe.
+                if _to_purge and not self.quiet:
+                    safe_print(f"   🧹 Fast-purging {len(_to_purge)} '{pkg_name}' module(s) from sys.modules")
                 for k in _to_purge:
                     sys.modules.pop(k, None)
 
                 # Swap sys.path atomically — remove any other bubble for this pkg, prepend ours
                 _mvbase = str(self.multiversion_base)
                 _pkg_prefix = f"{pkg_name}-"
+                _removed_paths = [p for p in sys.path
+                                  if _mvbase in p
+                                  and os.path.basename(p).startswith(_pkg_prefix)
+                                  and p != bubble_path_str]
                 sys.path[:] = [p for p in sys.path
                             if not (_mvbase in p 
                                     and os.path.basename(p).startswith(_pkg_prefix)
                                     and p != bubble_path_str)]
                 if bubble_path_str not in sys.path:
                     sys.path.insert(0, bubble_path_str)
+
+                if not self.quiet and _removed_paths:
+                    for _rp in _removed_paths:
+                        safe_print(f"   🔀 Displaced bubble: {os.path.basename(_rp)}")
 
                 # Instead of full invalidate_caches() — only clear the FileFinder
                 # cache for the specific paths that changed, not all of sys.path
@@ -2319,6 +2342,11 @@ class omnipkgLoader:
                 with omnipkgLoader._nesting_lock:
                     omnipkgLoader._nesting_depth += 1
                     self._is_nested = omnipkgLoader._nesting_depth > 1
+
+                _elapsed_us = (time.perf_counter_ns() - _t0) / 1_000
+                if not self.quiet:
+                    safe_print(f"   ✅ [fast-path] {pkg_name}=={requested_version} active ({_elapsed_us:.1f} μs)")
+
                 return self
 
             # Bubble not found — fall through to normal path which will install it
@@ -4722,7 +4750,7 @@ class omnipkgLoader:
 
             _anchor_reachable = _so_reachable("numpy.core._multiarray_umath")
 
-            # Inside a daemon worker, ALWAYS do a full purge of all numpy modules
+            # Inside ANY worker process, ALWAYS do a full purge of all numpy modules
             # when switching versions — even if the anchor .so is still reachable.
             # In overlay mode the old bubble stays on disk (protected from cloaking),
             # so _so_reachable returns True and we'd normally do a partial purge.
@@ -4732,11 +4760,19 @@ class omnipkgLoader:
             # Python finds the partially-initialized sys.modules["numpy"] sentinel
             # and raises a circular import error.
             #
+            # This applies to both OMNIPKG_IS_DAEMON_WORKER (the main daemon worker)
+            # AND OMNIPKG_IS_WORKER_PROCESS (PersistentWorker subprocesses used in
+            # nested overlay tests). Both are isolated processes with their own dlopen
+            # namespace; the stale __spec__ issue is identical in both cases.
+            #
             # Full purge is safe here: the .so stays mapped at the OS level regardless
             # of whether its module object is in sys.modules. dlopen() caches the
             # handle, so the next import simply gets the already-mapped .so back.
             # The C exts are re-registered in sys.modules cleanly by the fresh import.
-            _in_worker = bool(os.environ.get("OMNIPKG_IS_DAEMON_WORKER"))
+            _in_worker = bool(
+                os.environ.get("OMNIPKG_IS_DAEMON_WORKER")
+                or os.environ.get("OMNIPKG_IS_WORKER_PROCESS")
+            )
             _force_full_purge = _in_worker or not _anchor_reachable
 
             if _force_full_purge:

@@ -1087,12 +1087,78 @@ def create_parser():
         "target", nargs="?",
         help=_('What to swap: "python" or a package spec like "numpy==1.26.4"'),
     )
-    swap_parser.add_argument("version", nargs="?", help=_("Specific version to swap to"))
+    swap_parser.add_argument(
+        "extra_packages", nargs="*",
+        help=_("Additional package specs (for swapping multiple packages at once)"),
+    )
     swap_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
         help=_("Skip confirmation prompt"),
+    )
+    swap_parser.add_argument(
+        "--no-deps",
+        action="store_true",
+        dest="no_deps",
+        help=_("Don't install package dependencies"),
+    )
+    swap_parser.add_argument(
+        "--pre",
+        action="store_true",
+        help=_("Include pre-release and development versions"),
+    )
+    swap_parser.add_argument(
+        "--no-cache-dir",
+        action="store_true",
+        dest="no_cache_dir",
+        help=_("Disable the cache"),
+    )
+    swap_parser.add_argument("--index-url", "-i", metavar="URL", help=_("Base URL of the Python Package Index"))
+    swap_parser.add_argument("--extra-index-url", metavar="URL", help=_("Extra URLs of package indexes to use"))
+    swap_parser.add_argument(
+        "--find-links",
+        dest="find_links",
+        metavar="URL",
+        help=_("If a URL or path to an html file, then parse for links to archives"),
+    )
+    swap_parser.add_argument(
+        "--trusted-host",
+        dest="trusted_host",
+        metavar="HOST",
+        help=_("Mark this host or host:port pair as trusted"),
+    )
+    swap_parser.add_argument(
+        "--timeout",
+        dest="timeout",
+        type=int,
+        metavar="SECS",
+        help=_("Set the socket timeout (default 15 seconds)"),
+    )
+    swap_parser.add_argument(
+        "--retries",
+        dest="retries",
+        type=int,
+        metavar="N",
+        help=_("Maximum number of retries each connection should attempt (default 5 times)"),
+    )
+    swap_parser.add_argument(
+        "--no-binary",
+        dest="no_binary",
+        metavar="PKG",
+        help=_("Do not use binary packages"),
+    )
+    swap_parser.add_argument(
+        "--only-binary",
+        dest="only_binary",
+        metavar="PKG",
+        help=_("Do not use source packages"),
+    )
+    swap_parser.add_argument(
+        "--ignore-installed", "--ignore-requires-python",
+        dest="ignore_installed",
+        action="store_true",
+        help=_("Ignore the installed packages, overwriting them"),
     )
     swap_parser.add_argument(
         "--verbose", "-V",
@@ -2361,8 +2427,8 @@ def main():
             if args.target.lower().startswith("python"):
                 if "==" in args.target:
                     version = args.target.split("==")[1]
-                elif args.version:
-                    version = args.version
+                elif args.extra_packages:
+                    version = args.extra_packages[0]
                 else:
                     # Interactive picker
                     interpreters = pkg_instance.config_manager.list_available_pythons()
@@ -2436,12 +2502,31 @@ def main():
                     return result
 
             else:
-                package_spec = args.target
-                if args.version:
-                    package_spec = f"{package_spec}=={args.version}"
-                safe_print(_("🔄 Swapping main environment package to '{}'...").format(package_spec))
+                # Package swap: collect all specs and install with latest-active strategy.
+                # args.target is the first spec; args.extra_packages holds any additional ones.
+                # Do NOT join them with "==" — they are already full specs (e.g. rich==14.3.3).
+                packages_to_swap = [args.target] + (args.extra_packages or [])
+                safe_print(_("🔄 Swapping main environment package(s): {}...").format(
+                    ", ".join(f"'{s}'" for s in packages_to_swap)
+                ))
+                _extra_flags = []
+                if getattr(args, "no_deps",          False): _extra_flags.append("--no-deps")
+                if getattr(args, "pre",              False): _extra_flags.append("--pre")
+                if getattr(args, "no_cache_dir",     False): _extra_flags.append("--no-cache-dir")
+                if getattr(args, "ignore_installed", False): _extra_flags.append("--ignore-installed")
+                if getattr(args, "find_links",       None):  _extra_flags += ["-f", args.find_links]
+                if getattr(args, "trusted_host",     None):  _extra_flags += ["--trusted-host", args.trusted_host]
+                if getattr(args, "timeout",          None):  _extra_flags += ["--timeout", str(args.timeout)]
+                if getattr(args, "retries",          None):  _extra_flags += ["--retries", str(args.retries)]
+                if getattr(args, "no_binary",        None):  _extra_flags += ["--no-binary", args.no_binary]
+                if getattr(args, "only_binary",      None):  _extra_flags += ["--only-binary", args.only_binary]
                 with temporary_install_strategy(pkg_instance, "latest-active"):
-                    return pkg_instance.smart_install(packages=[package_spec])
+                    return pkg_instance.smart_install(
+                        packages=packages_to_swap,
+                        extra_flags=_extra_flags or None,
+                        index_url=getattr(args, "index_url", None),
+                        extra_index_url=getattr(args, "extra_index_url", None),
+                    )
 
         elif args.command == "upgrade":
             return upgrade(args, pkg_instance)
@@ -2478,7 +2563,7 @@ def main():
                 non_interactive = not is_interactive_session()
 
                 if args.demo_id is not None:
-                    if not (1 <= args.demo_id <= 10):
+                    if not (1 <= args.demo_id <= 11):
                         safe_print(_("❌ Invalid demo ID {}. Choose 1-11.").format(args.demo_id))
                         return 1
                     response = str(args.demo_id)

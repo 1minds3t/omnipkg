@@ -21,3 +21,7 @@ recursive-include src/tests *.py
 # Top-level module list
 include top_level.txt
 include build_hooks.py
+
+# help text
+include src/omnipkg/_help.py
+include src/omnipkg/_help.h

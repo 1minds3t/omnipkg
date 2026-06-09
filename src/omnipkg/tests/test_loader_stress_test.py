@@ -2524,10 +2524,27 @@ if main_sp not in sys.path:
 
 log('     \U0001f504 Starting nested overlay stack...')
 
+def _ver_from(r, label):
+    \"\"\"Extract version/output from an execute() result dict regardless of key name.
+    Logs the full dict shape so we can see which key is actually populated.\"\"\"
+    # Try every key that loader implementations have been seen to use
+    for key in ('stdout', 'output', 'result', 'out', 'text'):
+        val = r.get(key, '')
+        if val and str(val).strip():
+            return str(val).strip()
+    # Nothing found — dump the whole dict for diagnosis
+    log(f'     [DBG] {label} execute() returned empty for all known keys.')
+    log(f'     [DBG] {label} full result dict keys: {list(r.keys())}')
+    for k, v in r.items():
+        snippet = repr(v)[:120]
+        log(f'     [DBG]   {k!r}: {snippet}')
+    return ''
+
 # Layer 1: NumPy 1.24.3
 with omnipkgLoader('numpy==1.24.3', quiet=False, isolation_mode='overlay') as np_loader:
     r = np_loader.execute('import numpy as np; print(np.__version__)')
-    np_ver = r.get('stdout', '').strip()
+    log(f'     [DBG] Layer 1 (numpy) result keys: {list(r.keys())}')
+    np_ver = _ver_from(r, 'numpy')
     log(f'     \u2705 Layer 1 numpy: {np_ver}')
 
     # Layer 2: SciPy — may ABI-delegate; use execute() so result lands in worker
@@ -2537,19 +2554,22 @@ with omnipkgLoader('numpy==1.24.3', quiet=False, isolation_mode='overlay') as np
             'val = scipy.linalg.norm([1, 2, 3])\\n'
             'print(f"{scipy.__version__}|{val:.4f}")'
         )
-        sp_out = r.get('stdout', '').strip()
+        log(f'     [DBG] Layer 2 (scipy) result keys: {list(r.keys())}')
+        sp_out = _ver_from(r, 'scipy')
         log(f'     \u2705 Layer 2 scipy: {sp_out}')
 
         # Layer 3: Pandas
         with omnipkgLoader('pandas==2.0.3', quiet=False, isolation_mode='overlay') as pd_loader:
             r = pd_loader.execute('import pandas as pd; print(pd.__version__)')
-            pd_ver = r.get('stdout', '').strip()
+            log(f'     [DBG] Layer 3 (pandas) result keys: {list(r.keys())}')
+            pd_ver = _ver_from(r, 'pandas')
             log(f'     \u2705 Layer 3 pandas: {pd_ver}')
 
             # Layer 4: Scikit-Learn
             with omnipkgLoader('scikit-learn==1.3.2', quiet=False, isolation_mode='overlay') as sk_loader:
                 r = sk_loader.execute('import sklearn; print(sklearn.__version__)')
-                sk_ver = r.get('stdout', '').strip()
+                log(f'     [DBG] Layer 4 (sklearn) result keys: {list(r.keys())}')
+                sk_ver = _ver_from(r, 'sklearn')
                 log(f'     \u2705 Layer 4 sklearn: {sk_ver}')
 
                 # Layer 5: PyTorch — ABI-heavy, must use execute()
@@ -2560,7 +2580,8 @@ with omnipkgLoader('numpy==1.24.3', quiet=False, isolation_mode='overlay') as np
                         'torch_t = torch.tensor([1, 2, 3])\\n'
                         'print(f"torch={torch.__version__}|tf={tf_t.shape}|t={torch_t.shape}")'
                     )
-                    torch_out = r.get('stdout', '').strip()
+                    log(f'     [DBG] Layer 5 (torch) result keys: {list(r.keys())}')
+                    torch_out = _ver_from(r, 'torch')
                     log(f'     \u2705 Layer 5 torch+tf: {torch_out}')
                     log('     \u2705 ALL LAYERS LOADED!')
                     log(
@@ -4267,35 +4288,14 @@ def chaos_test_23_grand_unified_benchmark():
     SHAPE = (1000, 1000)
     DTYPE = "float32"
 
-    # Generate Input Data
-    try:
-        from omnipkg.loader import omnipkgLoader
+    # CPU data for Mode 1 and 2 — no torch needed
+    input_cpu = np.random.randn(*SHAPE).astype(np.float32)
+    safe_print(f"   📦 Payload: {SHAPE} Matrix ({input_cpu.nbytes/1024/1024:.2f} MB)")
+    safe_print(_("   🌊 Pipeline: {} → {} → {}\n").format(STAGES[0]["spec"], STAGES[1]["spec"], STAGES[2]["spec"]))
 
-        with omnipkgLoader("torch==1.13.1+cu116", quiet=True):
-            import torch
-
-            if not torch.cuda.is_available():
-                return {"success": False, "reason": "No CUDA"}
-
-            # CPU Data for Baselines
-            input_cpu = np.random.randn(*SHAPE).astype(np.float32)
-            # GPU Data for God Mode
-            device = torch.device("cuda:0")
-            input_gpu = torch.as_tensor(input_cpu, device=device)
-
-            safe_print(
-                f"   📦 Payload: {SHAPE} Matrix ({input_cpu.nbytes/1024/1024:.2f} MB)"
-            )
-            safe_print(
-                _('   🌊 Pipeline: {} → {} → {}\n').format(STAGES[0]['spec'], STAGES[1]['spec'], STAGES[2]['spec'])
-            )
-    except Exception as e:
-        safe_print(_('❌ Setup failed: {}').format(e))
-        return {"success": False}
 
     results = {}
 
-    # ═══════════════════════════════════════════════════════════
     # MODE 1: TRADITIONAL SUBPROCESS (The "Lame" Way)
     # ═══════════════════════════════════════════════════════════
     safe_print("🐢 MODE 1: TRADITIONAL SUBPROCESS (Pickle + Fork)")
@@ -4421,31 +4421,44 @@ with omnipkgLoader("{stage['spec']}", quiet=True):
     safe_print(f"   🚀 Speedup vs Lame: {results['lame']/avg_cpu:.1f}x")
 
     # ═══════════════════════════════════════════════════════════
-    # MODE 3: UNIVERSAL CUDA IPC (The "God" Mode)
-    # ═══════════════════════════════════════════════════════════
-    safe_print("\n🔥 MODE 3: UNIVERSAL CUDA IPC (God Mode)")
-    safe_print("   - Strategy: GPU Pointers via Ctypes -> NV Driver")
-    safe_print("   - Data: STAYS ON VRAM. ZERO PCIe TRANSFERS.")
-    safe_print("   " + "─" * 60)
-
-    gpu_times = []
-
-    gpu_code_map = {
-        "relu": "tensor_out[:] = torch.relu(tensor_in)",
-        "sigmoid": "tensor_out[:] = torch.sigmoid(tensor_in)",
-        "tanh": "tensor_out[:] = torch.tanh(tensor_in)",
-    }
-
-    # Ensure input is on GPU in the main process context
+    # MODE 3: UNIVERSAL CUDA IPC — loader scoped to this block only
     with omnipkgLoader("torch==1.13.1+cu116", quiet=True):
+
+        # MODE 3: UNIVERSAL CUDA IPC (The "God" Mode)
+        # ═══════════════════════════════════════════════════════════
+        safe_print("\n🔥 MODE 3: UNIVERSAL CUDA IPC (God Mode)")
+        safe_print("   - Strategy: GPU Pointers via Ctypes -> NV Driver")
+        safe_print("   - Data: STAYS ON VRAM. ZERO PCIe TRANSFERS.")
+        safe_print("   " + "─" * 60)
+    
+        gpu_times = []
+    
+        gpu_code_map = {
+            "relu": "tensor_out[:] = torch.relu(tensor_in)",
+            "sigmoid": "tensor_out[:] = torch.sigmoid(tensor_in)",
+            "tanh": "tensor_out[:] = torch.tanh(tensor_in)",
+        }
+    
+        # Create GPU tensor from input_cpu inside the loader context
         import torch
+        device = torch.device("cuda:0")
+        gpu_tensor = torch.as_tensor(input_cpu, device=device)
+    
+        # Warmup: 3 runs to init CUDA context and warm IPC handles
+        for _warmup in range(3):
+            curr = gpu_tensor
+            for stage in STAGES:
+                curr, _wm = client.execute_cuda_ipc(
+                    stage["spec"], gpu_code_map[stage["op"]],
+                    input_tensor=curr, output_shape=SHAPE, output_dtype=DTYPE,
+                    python_exe=sys.executable, ipc_mode="universal",
+                )
+            torch.cuda.synchronize()
 
-        gpu_tensor = input_gpu
-
-        for run in range(10):  # 10 runs because it's so fast
+        for run in range(10):  # 10 timed runs
             t_start = time.perf_counter()
             curr = gpu_tensor
-
+    
             for stage in STAGES:
                 curr, meta = client.execute_cuda_ipc(
                     stage["spec"],
@@ -4456,15 +4469,15 @@ with omnipkgLoader("{stage['spec']}", quiet=True):
                     python_exe=sys.executable,
                     ipc_mode="universal",
                 )
-
+    
             torch.cuda.synchronize()  # Wait for GPU to finish for fair timing
             gpu_times.append((time.perf_counter() - t_start) * 1000)
-
-    avg_gpu = sum(gpu_times) / len(gpu_times)
-    results["gpu"] = avg_gpu
-    safe_print(f"   ✅ Average: {avg_gpu:.3f}ms")
-    safe_print(f"   🚀 Speedup vs Lame: {results['lame']/avg_gpu:.1f}x")
-    safe_print(f"   🚀 Speedup vs CPU:  {results['cpu']/avg_gpu:.1f}x")
+    
+        avg_gpu = sum(gpu_times) / len(gpu_times)
+        results["gpu"] = avg_gpu
+        safe_print(f"   ✅ Average: {avg_gpu:.3f}ms")
+        safe_print(f"   🚀 Speedup vs Lame: {results['lame']/avg_gpu:.1f}x")
+        safe_print(f"   🚀 Speedup vs CPU:  {results['cpu']/avg_gpu:.1f}x")
 
     # ═══════════════════════════════════════════════════════════
     # 🏆 FINAL SCOREBOARD

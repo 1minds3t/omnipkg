@@ -584,6 +584,61 @@ def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
         data_buffer.extend(chunk)
     return json.loads(data_buffer.decode("utf-8"))
 
+# ────────────────────────────────────────────────────────────────────────
+# IPC DISPATCH PERFORMANCE LOGGER  (active only when OMNIPKG_DEBUG=1)
+# One JSONL record per call -> /tmp/omnipkg/perf_<UTC_ts>.jsonl
+# ────────────────────────────────────────────────────────────────────────
+import datetime as _dt_mod
+
+class DispatchPerfLogger:
+    """
+    Singleton perf logger. Activated by OMNIPKG_DEBUG=1.
+
+    Usage:
+        _perf = DispatchPerfLogger.get()
+        if _perf:
+            _perf.record('client._send', spec='...', t_connect_ms=0.21, ...)
+    """
+
+    _instance = None
+    _log_path: str = ""
+
+    @classmethod
+    def get(cls):
+        if os.environ.get("OMNIPKG_DEBUG") != "1":
+            return None
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        ts = _dt_mod.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        log_dir = os.path.join(tempfile.gettempdir(), "omnipkg")
+        os.makedirs(log_dir, exist_ok=True)
+        self._path = os.path.join(log_dir, f"perf_{ts}.jsonl")
+        DispatchPerfLogger._log_path = self._path
+        self._lock = threading.Lock()
+        header = json.dumps({
+            "_note": "omnipkg IPC dispatch perf log",
+            "_pid": os.getpid(),
+            "_started": ts,
+        })
+        with open(self._path, "w", encoding="utf-8") as _f:
+            _f.write(header + "\n")
+
+    def record(self, site, **fields):
+        """Append one JSONL record. Thread-safe, non-blocking."""
+        rec = {"ts": time.time(), "site": site}
+        rec.update(fields)
+        line = json.dumps(rec, default=str) + "\n"
+        try:
+            with self._lock:
+                with open(self._path, "a", encoding="utf-8") as _f:
+                    _f.write(line)
+        except Exception:
+            pass  # never crash on debug instrumentation
+
+
 class UniversalGpuIpc:
     """
     Pure CUDA IPC using ctypes - works WITHOUT PyTorch!
@@ -2203,6 +2258,52 @@ while True:
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
 
+        # NATIVE PYTORCH IPC — OUTPUT side
+        # Reconstruct the pre-allocated output tensor from the client-provided IPC handle
+        # so exec_scope['tensor_out'] exists before user code runs.
+        if (is_cuda_request and _native_ipc_mode
+                and out_meta and 'ipc_data' in out_meta
+                and 'tensor_out' not in exec_scope):
+            try:
+                _out_ipc = out_meta['ipc_data']
+                _ocls = _out_ipc['storage_cls']
+                if _ocls == 'TypedStorage':
+                    _ocls = {'float32':'FloatStorage','float64':'DoubleStorage',
+                             'float16':'HalfStorage','int32':'IntStorage',
+                             'int64':'LongStorage','int8':'CharStorage',
+                             'uint8':'ByteStorage','bool':'BoolStorage',
+                             'bfloat16':'BFloat16Storage'}.get(_out_ipc['dtype'],'FloatStorage')
+                _storage_cls = getattr(torch, _ocls, torch.FloatStorage)
+                _storage = _storage_cls._new_shared_cuda(
+                    _out_ipc['storage_device'],
+                    base64.b64decode(_out_ipc['storage_handle']),
+                    _out_ipc['storage_size_bytes'],
+                    _out_ipc['storage_offset_bytes'],
+                    base64.b64decode(_out_ipc['ref_counter_handle']),
+                    _out_ipc['ref_counter_offset'],
+                    base64.b64decode(_out_ipc['event_handle']) if _out_ipc.get('event_handle') else b\'\',
+                    _out_ipc['event_sync_required'],
+                )
+                _dtype_map = {
+                    'float32':torch.float32,'float64':torch.float64,'float16':torch.float16,
+                    'int32':torch.int32,'int64':torch.int64,'int8':torch.int8,
+                    'uint8':torch.uint8,'bool':torch.bool,'bfloat16':torch.bfloat16,
+                }
+                _out_dtype = _dtype_map.get(_out_ipc['dtype'], torch.float32)
+                _tensor_out = torch.tensor([], dtype=_out_dtype,
+                                           device=torch.device(f"cuda:{out_meta['device']}"))
+                _tensor_out.set_(_storage, _out_ipc['tensor_offset'],
+                                 tuple(_out_ipc['tensor_size']),
+                                 tuple(_out_ipc['tensor_stride']))
+                exec_scope['tensor_out'] = _tensor_out
+                exec_scope['arr_out']    = _tensor_out
+                sys.stderr.write(f' [TASK {task_id}] NATIVE IPC output reconstructed\\n')
+                sys.stderr.flush()
+            except Exception as _e:
+                sys.stderr.write(f'  [TASK {task_id}] Native IPC output failed: {_e}\\n')
+                sys.stderr.write(traceback.format_exc())
+                sys.stderr.flush()
+
         # HYBRID PATH (SHM + GPU copy)
         # INPUT side: attach shm_in → arr_in (only for tensor descriptors with shape+dtype)
         # Plain dict shm_in (no shape/dtype) is already in input_data['shm_in'] - skip
@@ -3116,8 +3217,13 @@ class PersistentWorker:
                 safe_print(f" [DAEMON] Sending task {task_id} to worker (package_spec={self.package_spec})", file=sys.stderr)
                 safe_print(f" [DAEMON] Command: {json.dumps(command)[:200]}...", file=sys.stderr)
 
-                self.process.stdin.write(json.dumps(command) + "\n")
+                _est_t0 = time.perf_counter()
+                _cmd_json = json.dumps(command)
+                _est_t_encoded = time.perf_counter()
+
+                self.process.stdin.write(_cmd_json + "\n")
                 self.process.stdin.flush()
+                _est_t_flushed = time.perf_counter()
 
                 safe_print(f" [DAEMON] Task sent, waiting for response (timeout={timeout}s)...", file=sys.stderr)
 
@@ -3132,6 +3238,19 @@ class PersistentWorker:
                     response_line = self.stdout_queue.get(timeout=timeout)
                 except queue.Empty:
                     response_line = None
+                _est_t_got = time.perf_counter()
+                _est_perf = DispatchPerfLogger.get()
+                if _est_perf:
+                    _est_perf.record(
+                        "worker.execute_shm_task",
+                        spec=self.package_spec,
+                        task_id=task_id,
+                        payload_bytes=len(_cmd_json),
+                        t_encode_ms=(_est_t_encoded - _est_t0) * 1000,
+                        t_write_flush_ms=(_est_t_flushed - _est_t_encoded) * 1000,
+                        t_queue_get_ms=(_est_t_got - _est_t_flushed) * 1000,
+                        total_ms=(_est_t_got - _est_t0) * 1000,
+                    )
 
                 if not response_line:
                     safe_print(f" [DAEMON] No response received within {timeout}s", file=sys.stderr)
@@ -3983,6 +4102,7 @@ class WorkerPoolDaemon:
     def _handle_client(self, conn: socket.socket):
         """Handle client request with timeout protection."""
         conn.settimeout(30.0)
+        _hc_t0 = time.perf_counter()
         try:
             # 1. Receive Request
             try:
@@ -3991,6 +4111,7 @@ class WorkerPoolDaemon:
                 # Client disconnected abruptly (common on Windows during teardown)
                 # Just return silently to avoid log noise.
                 return
+            _hc_t_recvd = time.perf_counter()
 
             self.stats["total_requests"] += 1
 
@@ -4171,11 +4292,24 @@ class WorkerPoolDaemon:
                 res = {"success": False, "error": f"Unknown type: {req['type']}"}
 
             # 3. Send Response
+            _hc_t_dispatched = time.perf_counter()
+            _perf = DispatchPerfLogger.get()
             try:
                 send_json(conn, res)
             except (ConnectionResetError, BrokenPipeError):
                 # Client disconnected before we could send response - ignore
                 pass
+            _hc_t_sent = time.perf_counter()
+            if _perf:
+                _perf.record(
+                    "daemon._handle_client",
+                    req_type=req.get("type", "?"),
+                    spec=req.get("spec", "?"),
+                    t_recv_ms=(_hc_t_recvd - _hc_t0) * 1000,
+                    t_dispatch_ms=(_hc_t_dispatched - _hc_t_recvd) * 1000,
+                    t_send_ms=(_hc_t_sent - _hc_t_dispatched) * 1000,
+                    total_ms=(_hc_t_sent - _hc_t0) * 1000,
+                )
 
         except Exception as e:
             # 4. Handle Actual Logic Errors (Log these!)
@@ -5291,7 +5425,9 @@ class WorkerPoolDaemon:
            Workers idle longer than ``max_idle_time`` are reaped.
         """
         while self.running:
-            time.sleep(60)
+            # 5s poll: fast enough for max_memory_mb to fire within a benchmark
+            # window. Was 60s which caused test 13 to appear stuck (never evicted).
+            time.sleep(5)
             now = time.time()
 
             try:
@@ -6520,6 +6656,9 @@ class DaemonClient:
         while attempts < max_attempts:
             attempts += 1
             try:
+                _perf = DispatchPerfLogger.get()
+                _t0 = time.perf_counter()
+
                 # Get platform-appropriate connection info
                 sock_family, address = self._get_connection_info()
 
@@ -6527,11 +6666,27 @@ class DaemonClient:
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.settimeout(self.timeout)
                 sock.connect(address)
+                _t_connected = time.perf_counter()
 
                 # Send request and receive response
                 send_json(sock, req, timeout=self.timeout)
+                _t_sent = time.perf_counter()
+
                 res = recv_json(sock, timeout=self.timeout)
+                _t_recvd = time.perf_counter()
+
                 sock.close()
+
+                if _perf:
+                    _perf.record(
+                        "client._send",
+                        req_type=req.get("type", "?"),
+                        spec=req.get("spec", req.get("type", "?")),
+                        t_connect_ms=(_t_connected - _t0) * 1000,
+                        t_send_ms=(_t_sent - _t_connected) * 1000,
+                        t_recv_ms=(_t_recvd - _t_sent) * 1000,
+                        total_ms=(_t_recvd - _t0) * 1000,
+                    )
                 return res
 
             except (ConnectionRefusedError, FileNotFoundError):
@@ -6778,7 +6933,9 @@ class DaemonClient:
         Args:
             ipc_mode: 'auto', 'universal', 'pytorch_native', 'cpu_shm', or 'hybrid'
         """
-        import torch
+        torch = sys.modules.get("torch")
+        if torch is None:
+            import torch
 
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA not available")
@@ -6856,7 +7013,9 @@ class DaemonClient:
         but 1.34x FASTER than Hybrid mode!
         """
         import numpy as np
-        import torch
+        torch = sys.modules.get("torch")
+        if torch is None:
+            import torch
 
         safe_print("    Using CPU SHM mode (zero-copy, no GPU transfers)")
 
@@ -6907,7 +7066,9 @@ class DaemonClient:
         self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None
     ):
         """Universal CUDA IPC - client pre-allocates both buffers, worker just opens handles."""
-        import torch
+        torch = sys.modules.get("torch")
+        if torch is None:
+            import torch
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
 
         try:

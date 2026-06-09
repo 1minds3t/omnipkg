@@ -11,9 +11,11 @@ provider:
   linux_aarch64: azure
   linux_ppc64le: azure
   win: azure
-  osx_arm64: azure  # <--- ENABLE THIS
+  osx_arm64: azure
+  win_arm64: azure
 
 build_platform:
   linux_aarch64: linux_64
   linux_ppc64le: linux_64
-  osx_arm64: osx_64  # <--- ADD THIS (Forces Cross-Compilation on Intel Runner)
+  osx_arm64: osx_64  # (Forces Cross-Compilation on Intel Runner)
+  win_arm64: win_64  # (Forces MSVC Cross-Compilation on Windows x64 Runner)
