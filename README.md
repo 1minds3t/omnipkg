@@ -51,22 +51,7 @@
   </a>
 </p>
 
-<!-- COMPARISON_STATS_START -->
-<p align="center">
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">
-    <img src="https://img.shields.io/badge/omnipkg-2509%20Wins-brightgreen?logo=python&logoColor=white" alt="omnipkg wins">
-  </a>
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">
-    <img src="https://img.shields.io/badge/pip-2512%20Failures-red?logo=pypi&logoColor=white" alt="pip failures">
-  </a>
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">
-    <img src="https://img.shields.io/badge/uv-2512%20Failures-red?logo=python&logoColor=white" alt="uv failures">
-  </a>
-</p>
-<p align="center">
-  <em>Multi-version installation tests run every 3 hours. <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">Live results.</a></em>
-</p>
-<!-- COMPARISON_STATS_END -->
+
 
 ---
 
@@ -198,6 +183,23 @@ Each universe gets its own interpreter binary and torch CUDA build. Data moves b
 [![omnipkg](https://img.shields.io/badge/omnipkg-2509%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-2512%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-2512%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 pip and uv can only have one version of a package active at a time. omnipkg runs conflicting versions simultaneously in isolated workers. The test matrix above runs every 3 hours against real packages on real PyPI.
+
+<!-- COMPARISON_STATS_START -->
+<p align="center">
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">
+    <img src="https://img.shields.io/badge/omnipkg-2509%20Wins-brightgreen?logo=python&logoColor=white" alt="omnipkg wins">
+  </a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">
+    <img src="https://img.shields.io/badge/pip-2512%20Failures-red?logo=pypi&logoColor=white" alt="pip failures">
+  </a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">
+    <img src="https://img.shields.io/badge/uv-2512%20Failures-red?logo=python&logoColor=white" alt="uv failures">
+  </a>
+</p>
+<p align="center">
+  <em>Multi-version installation tests run every 3 hours. <a href="https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml">Live results.</a></em>
+</p>
+<!-- COMPARISON_STATS_END -->
 
 ---
 
